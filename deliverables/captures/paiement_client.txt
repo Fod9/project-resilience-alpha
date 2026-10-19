@@ -1,0 +1,34 @@
+ALPHAPAY
+PROJECT RESILIENCE-ALPHA — plateforme fictive
+PAIEMENT
+SALLE D'OPÉRATIONS
+Effectuer un paiement
+
+Plateforme de paiement fictive. Aucune donnée réelle n'est traitée.
+
+COMPTE ÉMETTEUR
+CUST-000001 — 2 500,00 €
+CUST-000002 — 1 200,00 €
+CUST-000003 — 850,00 €
+COMPTE DESTINATAIRE
+MONTANT (EUR)
+RÉFÉRENCE
+PAYER
+INTÉGRITÉ DU GRAND LIVRE
+
+Invariant comptable respecté
+
+COMPTES DE DÉMONSTRATION
+CUST-000001
+2 500,00 €
+CUST-000002
+1 200,00 €
+CUST-000003
+850,00 €
+COMPTES DE DÉMONSTRATION
+
+client01 / AlphaPay-Client-2026!
+
+operateur / AlphaPay-Ops-2026!
+
+Le solde est relu après chaque paiement : la cohérence entre le solde affiché et le journal des écritures fait partie de la démonstration.

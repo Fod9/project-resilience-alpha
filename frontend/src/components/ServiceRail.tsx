@@ -113,7 +113,7 @@ export function composantsAttendus(etat: EtatSupervision | null): EtatComposant[
     { nom: "grafana", role: "tableaux de bord", colonne: "infra", sante: "ok" },
     { nom: "loki", role: "journaux centralisés", colonne: "infra", sante: "ok" },
     { nom: "alertmanager", role: "routage d'alertes", colonne: "infra", sante: "ok" },
-    { nom: "policies", role: "8 politiques actives", colonne: "gouvernance", sante: "ok" },
-    { nom: "playbooks", role: "6 playbooks déclaratifs", colonne: "gouvernance", sante: "ok" },
+    { nom: "politiques", role: `${etat?.registry?.policies ?? 0} politiques actives`, colonne: "gouvernance", sante: "ok" },
+    { nom: "playbooks", role: `${etat?.registry?.playbooks ?? 0} playbooks declaratifs`, colonne: "gouvernance", sante: "ok" },
   ];
 }

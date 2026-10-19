@@ -103,7 +103,12 @@ function Bande({
  * événements : le jury doit pouvoir lire où en est la reprise même si deux
  * actions ont été exécutées dans un ordre inattendu.
  */
-const PHASES = ["CONTAINING", "ERADICATING", "RECOVERING", "VERIFYING"] as const;
+const PHASES = [
+  { cle: "CONTAINING", libelle: "Confinement" },
+  { cle: "ERADICATING", libelle: "Éradication" },
+  { cle: "RECOVERING", libelle: "Remise en état" },
+  { cle: "VERIFYING", libelle: "Vérification" },
+] as const;
 
 export function PlaybookPanel({
   detail,
@@ -125,15 +130,18 @@ export function PlaybookPanel({
 
       <div className="p-3 space-y-3 overflow-y-auto">
         <div className="flex items-center gap-2">
-          {PHASES.map((phase) => {
-            const faites = actions.some((a) => a.status === "ok");
-            const atteinte = indexPhase(etat) >= indexPhase(phase);
+          {/* `engage` distingue un playbook qui n'a rien fait d'un playbook qui
+              a commencé : la barre passe alors du gris au laiton. */}
+          {(() => {
+            const engage = actions.some((action) => action.status === "ok");
+            return PHASES.map((phase) => {
+            const atteinte = indexPhase(etat) >= indexPhase(phase.cle);
             return (
-              <div key={phase} className="flex-1">
+              <div key={phase.cle} className="flex-1">
                 <div
                   className={[
                     "h-1 rounded-full",
-                    atteinte ? "bg-nominal" : faites ? "bg-brass/40" : "bg-surface-2",
+                    atteinte ? "bg-nominal" : engage ? "bg-brass/40" : "bg-surface-2",
                   ].join(" ")}
                 />
                 <div
@@ -141,11 +149,12 @@ export function PlaybookPanel({
                     atteinte ? "text-nominal" : "text-ink-dim/60"
                   }`}
                 >
-                  {phase.slice(0, 5)}
+                  {phase.libelle}
                 </div>
               </div>
             );
-          })}
+            });
+          })()}
         </div>
 
         {actions.length === 0 && (

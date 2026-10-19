@@ -54,6 +54,7 @@ from common.security import verify_admin_token, verify_webhook
 
 from .connectors import Connecteurs, Resultat
 from .policies import (
+    ACTIONS_AUTORISEES,
     ErreurDeConfiguration,
     Playbook,
     Politique,
@@ -719,6 +720,14 @@ async def etat_courant() -> dict[str, Any]:
         "action_limit": MAX_ACTIONS_PAR_FENETRE,
         "incident": dict(incident) if incident else None,
         "targets": {"mttd_seconds": MTTD_TARGET, "mttr_seconds": MTTR_TARGET},
+        # Le registre est exposé ici plutôt que figé dans l'interface : une
+        # salle d'opérations qui affiche « 8 politiques » alors que le moteur en
+        # charge 12 est une salle d'opérations qui ment au jury.
+        "registry": {
+            "policies": len(_etat["politiques"]),
+            "playbooks": len(_etat["playbooks"]),
+            "allowed_actions": len(ACTIONS_AUTORISEES),
+        },
     }
 
 

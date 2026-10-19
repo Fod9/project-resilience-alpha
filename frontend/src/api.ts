@@ -87,6 +87,9 @@ export interface EtatSupervision {
   action_limit: number;
   incident: Incident | null;
   targets: { mttd_seconds: number; mttr_seconds: number };
+  /** Contenu réellement chargé par le moteur : politiques, playbooks et
+   *  actions autorisées. Affiché tel quel, jamais figé dans l'interface. */
+  registry?: { policies: number; playbooks: number; allowed_actions: number };
 }
 
 export interface EvenementChronologie {

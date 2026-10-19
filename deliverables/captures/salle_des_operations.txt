@@ -1,0 +1,107 @@
+ALPHAPAY
+PROJECT RESILIENCE-ALPHA — plateforme fictive
+PAIEMENT
+SALLE D'OPÉRATIONS
+ÉTAT DE LA PLATEFORME
+NOMINAL
+INCIDENT EN COURS DEPUIS
+—
+CIBLE DE DÉTECTION
+60 s
+CIBLE DE RÉTABLISSEMENT
+180 s
+ACTIONS SUR LA FENÊTRE
+0 / 6
+SCORE D'ANOMALIE (30 DERNIÈRES FENÊTRES)
+COMPOSANTS
+19
+DÉVELOPPEMENT
+web
+interface React
+api-auth
+authentification
+api-payment
+orchestration paiement
+api-ledger
+grand livre partie double
+postgres
+PostgreSQL + pgvector
+INFRASTRUCTURE
+prometheus
+métriques
+grafana
+tableaux de bord
+loki
+journaux centralisés
+alertmanager
+routage d'alertes
+IA / DONNÉES
+telemetry
+agrégation des journaux
+detector
+modèle Isolation Forest
+assistant
+assistant RAG local
+ollama
+modèle de langage local
+CYBERSÉCURITÉ
+edge
+WAF ModSecurity + CRS
+remediation
+moteur de reprise
+vault
+coffre de secrets
+falco
+détection d'exécution
+GOUVERNANCE
+politiques
+12 politiques actives
+playbooks
+7 playbooks declaratifs
+SCORE D'ANOMALIE ET SEUIL CALIBRÉ
+0.0837
+seuil 0.2510 · dépassement ×0.33
+TRAFIC OBSERVÉ
+0.2 req/s
+19 événements · 1 adresses
+LATENCE P99 MESURÉE À LA BORDURE
+4 ms
+p95 4 ms
+SIGNATURES HOSTILES INTERCEPTÉES
+0.0 %
+XSS 0.0 % · blocages WAF 0.0 %
+MODÈLE
+isolation-forest-trafic-reel
+aucune règle codée en dur
+FENÊTRES CONSÉCUTIVES
+0 / 2
+confirmation avant qualification
+ORIGINE DOMINANTE
+192.168.64.3
+1 adresses distinctes
+VARIABLES LES PLUS DÉVIANTES
+avg_payload_bytes ×4.1σ · payload_bytes_stddev ×3.4σ
+CIBLE PROBABLE
+api-ledger
+indice de lecture, la décision vient de la politique
+BANDE-ENREGISTREUR
+derniers événements · 3 jalons
+attaque 11:01:48
+attaque 10:58:33
+attaque 10:46:10
+10:46:02
+maintenant
+PLAYBOOK DE REPRISE
+en attente
+CONFINEMENT
+ÉRADICATION
+REMISE EN ÉTAT
+VÉRIFICATION
+
+Aucune action engagée. Le panneau se remplit dès la sélection d'une politique.
+
+ASSISTANT DOCUMENTAIRE
+lecture seule · sans capacité d'action
+DEMANDER
+
+Les réponses proviennent exclusivement de la documentation du dépôt, via un modèle local. Aucune donnée ne quitte le poste hôte.
