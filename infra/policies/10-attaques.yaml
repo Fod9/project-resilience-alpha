@@ -1,0 +1,104 @@
+# =============================================================================
+#  AlphaPay — Politiques de réaction aux anomalies détectées
+# =============================================================================
+#  Une politique ne décide pas qu'il y a attaque : elle n'est évaluée que sur un
+#  signalement déjà qualifié par le détecteur (ou par une alerte
+#  d'exploitation). Elle répond à la question « cette situation anormale
+#  correspond-elle à un scénario connu, et que déclenche-t-on ? ».
+#
+#  Les seuils ci-dessous sont volontairement placés AU-DESSUS de la plage de
+#  trafic nominal mesurée à l'entraînement (jusqu'à environ 36 requêtes par
+#  seconde en pointe, 9 % d'échecs d'authentification ordinaires). Une politique
+#  qui se déclencherait sur un pic d'activité légitime serait un faux positif de
+#  remédiation : c'est un risque explicitement traité.
+#
+#  `priority` : la politique de plus forte priorité qui correspond l'emporte.
+#  `cooldown_seconds` : délai minimal avant qu'une même politique puisse se
+#  redéclencher, pour éviter qu'une situation persistante ne boucle.
+# =============================================================================
+
+policies:
+
+  # ---------------------------------------------------------------------------
+  #  A3 — Injection applicative et tentative d'exfiltration
+  #  Le WAF a bloqué des charges utiles hostiles et le volume sortant dévie.
+  #  La priorité la plus haute : ce scénario suppose une compromission avérée.
+  # ---------------------------------------------------------------------------
+  - id: POL-A3-INJECTION
+    title: "Injection applicative et tentative d'exfiltration de données"
+    severity: critical
+    priority: 300
+    sources: [detector, alertmanager]
+    match: any
+    cooldown_seconds: 240
+    conditions:
+      - signal: feature
+        name: injection_token_ratio
+        op: ">="
+        value: 0.04
+      - signal: feature
+        name: xss_token_ratio
+        op: ">="
+        value: 0.04
+      - signal: feature
+        name: waf_block_ratio
+        op: ">="
+        value: 0.30
+      - signal: feature
+        name: outgoing_bytes_ratio
+        op: ">="
+        value: 6.0
+    playbook: PB-A3-CONFINER-ET-REPARER
+
+  # ---------------------------------------------------------------------------
+  #  A2 — Compromission d'identité : bourrage d'identifiants ou jetons volés
+  #  Beaucoup d'échecs d'authentification et beaucoup d'identités distinctes
+  #  depuis une même origine : signature d'un bourrage d'identifiants.
+  # ---------------------------------------------------------------------------
+  - id: POL-A2-IDENTITES
+    title: "Bourrage d'identifiants ou usage de jetons compromis"
+    severity: critical
+    priority: 200
+    sources: [detector, alertmanager]
+    match: any
+    cooldown_seconds: 240
+    conditions:
+      - signal: feature
+        name: auth_failure_ratio
+        op: ">="
+        value: 0.45
+      - signal: feature
+        name: auth_attempts_per_identity
+        op: ">="
+        value: 12.0
+      - signal: feature
+        name: unique_identities
+        op: ">="
+        value: 25.0
+    playbook: PB-A2-ROTATION-DE-CLES
+
+  # ---------------------------------------------------------------------------
+  #  A1 — Rafale volumétrique (déni de service)
+  #  Volumétrie très supérieure à la pointe légitime, taux d'erreur élevé.
+  # ---------------------------------------------------------------------------
+  - id: POL-A1-RAFALE
+    title: "Rafale volumétrique sur la plateforme de paiement"
+    severity: critical
+    priority: 100
+    sources: [detector, alertmanager]
+    match: any
+    cooldown_seconds: 180
+    conditions:
+      - signal: feature
+        name: requests_per_second
+        op: ">="
+        value: 70.0
+      - signal: feature
+        name: error_ratio
+        op: ">="
+        value: 0.45
+      - signal: feature
+        name: latency_p99_ms
+        op: ">="
+        value: 2500.0
+    playbook: PB-A1-CONFINER-ET-REDEMARRER

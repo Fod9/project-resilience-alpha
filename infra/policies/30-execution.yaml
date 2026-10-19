@@ -1,0 +1,58 @@
+# =============================================================================
+#  AlphaPay — Politiques de détection d'exécution (SIEM)
+# =============================================================================
+#  Falco observe les appels système des conteneurs. Ces règles ne remplacent pas
+#  le détecteur d'anomalies : elles couvrent des comportements dont la
+#  malveillance est intrinsèque (exécution d'un shell dans un conteneur de
+#  service, écriture dans un binaire système), que le modèle statistique n'a pas
+#  vocation à qualifier.
+#
+#  Ces politiques ne bloquent jamais la bordure : elles confinent le conteneur,
+#  ce qui est la bonne réponse à une exécution suspecte.
+# =============================================================================
+
+policies:
+
+  - id: POL-SIEM-CONTAINER
+    title: "Exécution suspecte dans un conteneur de service"
+    severity: critical
+    priority: 250
+    sources: [falco]
+    match: any
+    cooldown_seconds: 300
+    conditions:
+      - signal: event
+        name: kind
+        op: "contains"
+        value: Shell
+      - signal: event
+        name: kind
+        op: "contains"
+        value: Container
+      - signal: event
+        name: kind
+        op: "contains"
+        value: Privilege
+      - signal: event
+        name: severity
+        op: "=="
+        value: critical
+    playbook: PB-SIEM-CONFINER-CONTENEUR
+
+  - id: POL-SIEM-ECRITURE
+    title: "Écriture dans un binaire système depuis un conteneur"
+    severity: critical
+    priority: 249
+    sources: [falco]
+    match: any
+    cooldown_seconds: 300
+    conditions:
+      - signal: event
+        name: kind
+        op: "=="
+        value: Write below binary dir
+      - signal: event
+        name: kind
+        op: "=="
+        value: Write below etc
+    playbook: PB-SIEM-CONFINER-CONTENEUR

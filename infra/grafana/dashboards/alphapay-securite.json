@@ -1,0 +1,244 @@
+{
+  "uid": "alphapay-securite",
+  "title": "AlphaPay — Securite",
+  "description": "Decisions du WAF, regles declenchees, adresses filtrees et evenements de detection d'execution.",
+  "tags": [
+    "alphapay",
+    "securite"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Blocages du WAF",
+      "description": "Cadence des requetes rejetees a la bordure.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(alphapay_http_requests_total{service=\"edge\",status=\"403\"}[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "blocages"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Part de requetes rejetees",
+      "description": "Ratio de requetes refusees par le WAF.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(alphapay_http_requests_total{service=\"edge\",status=\"403\"}[1m])) / clamp_min(sum(rate(alphapay_http_requests_total{service=\"edge\"}[1m])), 0.001)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "part"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.3
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Jetons revoques",
+      "description": "Cadence de revocation : traduit une action de confinement.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(alphapay_tokens_revoked_total[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "revoques"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Decisions du WAF",
+      "description": "Chaque entree correspond a une transaction inspectee et bloquee.",
+      "datasource": {
+        "type": "loki",
+        "uid": "alphapay-loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"alphapay-waf\", decision=\"bloque\"}",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "alphapay-loki"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 7
+      },
+      "type": "logs",
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Evenements de detection d'execution",
+      "description": "Alertes Falco remontees par le SOC.",
+      "datasource": {
+        "type": "loki",
+        "uid": "alphapay-loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"alphapay-evenements\"} |= \"falco\"",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "alphapay-loki"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 6
+      },
+      "type": "logs",
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ],
+  "version": 1,
+  "graphTooltip": 1
+}

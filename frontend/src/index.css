@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   AlphaPay — socle de style
+   Jetons et règles issues de docs/DESIGN-SYSTEM.md
+   ============================================================================= */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-base text-ink font-sans antialiased;
+    /* La salle d'opérations est un écran d'exploitation : on supprime le
+       défilement élastique et on garde un fond uniforme. */
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    @apply bg-brass/30;
+  }
+
+  /* Chiffres tabulaires partout où des mesures sont affichées : sans cela, les
+     valeurs tressautent à chaque rafraîchissement et deviennent illisibles. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  /* --- Mot d'état : la signature visuelle du tableau de bord -----------------
+     Un seul mot, très grand, lisible à trois mètres par le jury. C'est
+     l'information que l'on doit pouvoir lire sans s'approcher de l'écran. */
+  .mot-etat {
+    @apply font-display font-bold uppercase tracking-etat leading-[0.85];
+    font-size: clamp(2.75rem, 6vw, 5rem);
+  }
+
+  .etiquette {
+    @apply font-display uppercase tracking-marque text-[0.6875rem] text-ink-dim;
+  }
+
+  .carte {
+    @apply bg-surface border border-line rounded-sm;
+  }
+
+  .carte-entete {
+    @apply flex items-center justify-between px-3 py-2 border-b border-line;
+  }
+
+  /* --- Pastille d'état de service -------------------------------------------
+     Forme et couleur combinées : la couleur seule serait inaccessible à une
+     partie du jury, la forme seule serait illisible de loin. */
+  .pastille {
+    @apply inline-block h-2.5 w-2.5 rounded-full shrink-0;
+  }
+
+  /* --- Bande-enregistreur ---------------------------------------------------
+     La chronologie horizontale est l'élément qui encode la thèse du projet :
+     avant, pendant, après. Elle se lit d'un seul regard, là où une liste
+     verticale d'événements obligerait à défiler. */
+  .bande-enregistreur {
+    @apply relative h-[132px] w-full;
+  }
+
+  .jalon {
+    @apply absolute top-0 bottom-0 w-px;
+  }
+
+  .jalon-etiq {
+    @apply absolute whitespace-nowrap text-[0.625rem] font-mono text-ink-dim;
+  }
+}
+
+@layer utilities {
+  /* Barre de progression d'une étape de remédiation. */
+  .barre {
+    @apply h-1 rounded-full bg-surface-2 overflow-hidden;
+  }
+}

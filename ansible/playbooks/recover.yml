@@ -1,0 +1,87 @@
+# =============================================================================
+#  AlphaPay — reprise manuelle d'un service
+# =============================================================================
+#  Ce playbook est le recours lorsqu'une reprise autonome n'a pas abouti, ou
+#  lorsqu'un opérateur veut reprendre la main. Il ne remplace jamais le moteur de
+#  remédiation : il l'utilise, en déclenchant le playbook de reprise par son API,
+#  de sorte que l'action reste tracée dans la salle d'opérations comme n'importe
+#  quelle autre.
+#
+#      ansible-playbook -i inventory.ini playbooks/recover.yml -e service=api-payment
+#      ansible-playbook -i inventory.ini playbooks/recover.yml -e scenario=A1
+# =============================================================================
+
+- name: Reprendre un service de la plateforme
+  hosts: plateforme
+  gather_facts: false
+  vars:
+    service: "api-payment"
+    scenario: ""
+
+  tasks:
+    - name: Lire le jeton d'administration
+      ansible.builtin.command:
+        cmd: sed -n 's/^ADMIN_API_TOKEN=//p' {{ racine_projet }}/.env
+      register: jeton_admin
+      changed_when: false
+
+    - name: Lire le secret partagé
+      ansible.builtin.command:
+        cmd: sed -n 's/^HMAC_SECRET=//p' {{ racine_projet }}/.env
+      register: secret_partage
+      changed_when: false
+
+    - name: Déclencher la reprise par l'interface d'administration
+      ansible.builtin.uri:
+        url: "{{ url_publique }}/api/ops/actions/run"
+        method: POST
+        body_format: json
+        validate_certs: false
+        headers:
+          X-Admin-Token: "{{ jeton_admin.stdout }}"
+        body:
+          playbook: PB-ALERTE-REPRISE
+          params:
+            service: "{{ service }}"
+        status_code: [200, 202]
+      register: declenchement
+      when: scenario == ""
+
+    - name: Déclencher un scénario complet par injection d'un signalement
+      ansible.builtin.command:
+        cmd: >-
+          bash {{ racine_projet }}/tests/scenario.sh {{ scenario }}
+        chdir: "{{ racine_projet }}"
+      register: declenchement_scenario
+      when: scenario != ""
+      changed_when: true
+
+    - name: Attendre la fin de la remédiation
+      ansible.builtin.uri:
+        url: "{{ url_publique }}/api/supervision/state"
+        validate_certs: false
+        status_code: 200
+      register: etat
+      until: >-
+        etat.json.state == 'RECOVERED'
+        or etat.json.state == 'FAILED'
+        or etat.json.state == 'NOMINAL'
+      retries: 60
+      delay: 5
+      changed_when: false
+
+    - name: Résultat de la reprise
+      ansible.builtin.debug:
+        msg:
+          - "État final      : {{ etat.json.state }}"
+          - "Délai détection : {{ etat.json.last_incident.mttd_ms | default('—') }} ms"
+          - "Délai reprise   : {{ etat.json.last_incident.mttr_ms | default('—') }} ms"
+          - "Source filtrée  : {{ etat.json.blocked_ips | default([]) }}"
+
+    - name: Échouer si la reprise n'est pas confirmée
+      ansible.builtin.fail:
+        msg: >-
+          La reprise n'est pas confirmée : l'état final est {{ etat.json.state }}.
+          Consultez la salle d'opérations et le journal du moteur de remédiation
+          avant de relancer une tentative.
+      when: etat.json.state == 'FAILED'

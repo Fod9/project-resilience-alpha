@@ -1,0 +1,409 @@
+{
+  "uid": "alphapay-vue-ensemble",
+  "title": "AlphaPay — Vue d'ensemble",
+  "description": "Etat general de la plateforme de paiement : disponibilite, debit, latence et transactions.",
+  "tags": [
+    "alphapay",
+    "exploitation"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Composants collectes",
+      "description": "Nombre de composants repondant a la collecte, sur 25 attendus.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(up{job=\"alphapay-services\"} == 1)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "type": "stat",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "green",
+                "value": 25
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Debit",
+      "description": "Requetes par seconde, par service.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (service) (rate(alphapay_http_requests_total[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Taux d'erreur serveur",
+      "description": "Part des reponses en erreur 5xx.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(alphapay_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(alphapay_http_requests_total[1m])), 0.001)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "erreurs"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 8
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.15
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Latence p95",
+      "description": "Quatre-vingt-quinzieme centile de duree de traitement, par service.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(alphapay_http_request_duration_seconds_bucket[1m])))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Transactions reglees",
+      "description": "Cadence de reglement des transactions du grand livre.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(alphapay_ledger_transactions_total{status=\"settled\"}[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "reglees"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Deséquilibre comptable",
+      "description": "Somme des ecritures non nulle = integrite rompue.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(alphapay_ledger_imbalance_cents)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 4,
+        "h": 6
+      },
+      "type": "stat",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Echecs d'authentification",
+      "description": "Cadence des echecs et verrouillages de compte.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(alphapay_auth_attempts_total{outcome=~\"failure|locked\"}[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "echecs"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        }
+      }
+    }
+  ],
+  "version": 1,
+  "graphTooltip": 1
+}

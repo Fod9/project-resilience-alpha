@@ -1,0 +1,64 @@
+# =============================================================================
+#  AlphaPay — Playbook de reprise déclenché par les alertes de supervision
+# =============================================================================
+#  Ce playbook ne confine pas : une alerte Prometheus ne transporte pas
+#  l'adresse d'origine de l'attaque. Il remet le service en état et le vérifie.
+#  Sa valeur est la redondance : il agit même si le modèle d'anomalie est
+#  indisponible.
+#
+#  Le service visé provient de l'étiquette `service` de l'alerte. Les
+#  connecteurs acceptent le nom court (`api-payment`) et le traduisent en nom de
+#  conteneur (`alphaplat-api-payment`), après contrôle du périmètre autorisé.
+# =============================================================================
+
+playbooks:
+  - id: PB-ALERTE-REPRISE
+    title: "Reprise vérifiée d'un service signalé par la supervision"
+    description: >-
+      Prend un instantané du grand livre, redémarre le service visé, attend
+      qu'il redevienne sain, puis exécute la suite de vérification de bout en
+      bout. Aucune action destructive : un service sain est simplement redémarré.
+    verification_required: true
+    steps:
+      - id: instantane
+        action: ledger.snapshot
+        phase: ERADICATING
+        description: "Point de retour avant toute manipulation d'état."
+        timeout_seconds: 30
+        on_failure: continue_anyway
+
+      - id: redemarrage
+        action: docker.restart
+        phase: RECOVERING
+        description: "Redémarrage du service signalé : ${event.service}"
+        params:
+          container: "${event.service}"
+          grace_seconds: 5
+        timeout_seconds: 45
+        on_failure: abort
+
+      - id: attente-sante
+        action: docker.wait_healthy
+        phase: RECOVERING
+        description: "Attente du retour à un état sain."
+        params:
+          container: "${event.service}"
+          timeout_seconds: 120
+        timeout_seconds: 130
+        on_failure: abort
+
+      - id: verification
+        action: verify.recovery_suite
+        phase: VERIFYING
+        description: "Transaction synthétique de bout en bout et contrôle comptable."
+
+      - id: notification
+        action: notify.operator
+        phase: VERIFYING
+        description: "Trace de la reprise dans la salle d'opérations."
+        params:
+          message: >-
+            Reprise déclenchée par la supervision sur ${event.service}
+            (alerte ${event.kind}).
+        timeout_seconds: 10
+        on_failure: continue_anyway

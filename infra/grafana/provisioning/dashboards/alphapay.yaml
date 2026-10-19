@@ -1,0 +1,21 @@
+# =============================================================================
+#  AlphaPay — chargement automatique des tableaux de bord
+# =============================================================================
+#  Les fichiers JSON sont embarqués dans l'image : le volume Grafana peut être
+#  détruit sans que les tableaux de bord disparaissent.
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: AlphaPay
+    orgId: 1
+    folder: AlphaPay
+    folderUid: alphapay
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

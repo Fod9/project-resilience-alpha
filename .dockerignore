@@ -1,0 +1,43 @@
+# =============================================================================
+#  Fichiers exclus des contextes de construction Docker.
+# =============================================================================
+#  Sans ce fichier, `docker build` expédie l'intégralité du répertoire au démon,
+#  y compris `.env` — donc les secrets générés localement. Les exclure évite
+#  toute fuite d'un secret vers une couche d'image ou un journal de construction.
+# =============================================================================
+
+.env
+.env.*
+!.env.example
+
+secrets/
+!secrets/.gitkeep
+
+.git
+.gitignore
+*.md
+!README.md
+
+deliverables/
+docs/*.pdf
+docs/*.pptx
+docs/*.mp4
+
+*.log
+logs/
+
+node_modules
+frontend/node_modules
+frontend/dist
+
+__pycache__/
+*.pyc
+*.pyo
+.venv
+.venv*/
+uv.lock
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+tests/fixtures/

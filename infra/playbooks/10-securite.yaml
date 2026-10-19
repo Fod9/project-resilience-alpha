@@ -1,0 +1,249 @@
+# =============================================================================
+#  AlphaPay — Playbooks de sécurité
+# =============================================================================
+#  Un playbook est une suite ordonnée d'actions élémentaires. Chaque étape est
+#  rattachée à une phase de la reprise, ce qui alimente directement la
+#  progression affichée dans la salle d'opérations.
+#
+#  `on_failure` gouverne la conduite en cas d'échec d'une étape :
+#    abort            -> interrompt le playbook (défaut)
+#    continue         -> poursuit, mais l'incident sera marqué en échec
+#    continue_anyway  -> poursuit en considérant l'étape comme non bloquante
+#
+#  Les substitutions `${event.*}` sont résolues depuis le signalement
+#  déclencheur. `verify.recovery_suite` est toujours exécutée en dernier par le
+#  moteur, sur l'état final.
+# =============================================================================
+
+playbooks:
+
+  # ---------------------------------------------------------------------------
+  #  A1 — Rafale volumétrique
+  # ---------------------------------------------------------------------------
+  - id: PB-A1-CONFINER-ET-REDEMARRER
+    title: "Confinement d'une rafale et remise en service du paiement"
+    description: >-
+      On coupe la source à la bordure, on invalide les jetons qu'elle a obtenus,
+      puis on remet le service de paiement dans un état sain. Le confinement
+      précède la remise en service : redémarrer sans bloquer la source revient à
+      inviter l'attaque à recommencer.
+    verification_required: true
+    steps:
+      - id: bloquer-source
+        phase: CONTAINING
+        action: edge.block_ip
+        description: "Blocage de l'adresse d'origine à la bordure (liste appliquée sans redémarrage)"
+        timeout_seconds: 15
+        on_failure: abort
+        critical: true
+        params:
+          ip: "${event.source_ip}"
+          ttl_seconds: 900
+          reason: "rafale volumétrique détectée par le modèle d'anomalie"
+
+      - id: revoquer-jetons
+        phase: CONTAINING
+        action: auth.revoke_by_source
+        description: "Révocation des jetons émis depuis cette adresse"
+        timeout_seconds: 15
+        on_failure: continue_anyway
+        params:
+          source_ip: "${event.source_ip}"
+          reason: "incident POL-A1-RAFALE"
+
+      - id: redemarrer-paiement
+        phase: RECOVERING
+        action: docker.restart
+        description: "Redémarrage contrôlé du service de paiement"
+        timeout_seconds: 90
+        on_failure: continue
+        params:
+          container: alphaplat-api-payment
+          grace_seconds: 5
+
+      - id: attendre-sante
+        phase: RECOVERING
+        action: docker.wait_healthy
+        description: "Attente du retour à un état sain du service de paiement"
+        timeout_seconds: 120
+        on_failure: continue
+        params:
+          container: alphaplat-api-payment
+          timeout_seconds: 90
+
+      - id: verifier
+        phase: VERIFYING
+        action: verify.recovery_suite
+        description: "Exigence des cinq preuves de rétablissement"
+
+  # ---------------------------------------------------------------------------
+  #  A2 — Compromission d'identité
+  # ---------------------------------------------------------------------------
+  - id: PB-A2-ROTATION-DE-CLES
+    title: "Confinement et remplacement de la clé de signature"
+    description: >-
+      Un bourrage d'identifiants suppose que des identifiants circulent. Au-delà
+      du blocage immédiat, on retire toute valeur aux jetons déjà émis : la
+      rotation de la clé de signature les invalide tous, instantanément et sans
+      énumération. C'est la réponse la plus forte disponible, et elle est
+      choisie ici parce que le coût pour l'activité reste borné (reconnexion).
+    verification_required: true
+    steps:
+      - id: bloquer-source
+        phase: CONTAINING
+        action: edge.block_ip
+        description: "Blocage de l'adresse d'origine à la bordure"
+        timeout_seconds: 15
+        on_failure: abort
+        critical: true
+        params:
+          ip: "${event.source_ip}"
+          ttl_seconds: 1800
+          reason: "bourrage d'identifiants détecté par le modèle d'anomalie"
+
+      - id: revoquer-jetons
+        phase: CONTAINING
+        action: auth.revoke_by_source
+        description: "Révocation des jetons de rafraîchissement issus de cette adresse"
+        timeout_seconds: 15
+        on_failure: continue_anyway
+        params:
+          source_ip: "${event.source_ip}"
+          reason: "incident POL-A2-IDENTITES"
+
+      - id: rotation-cle
+        phase: ERADICATING
+        action: auth.rotate_signing_key
+        description: "Remplacement de la clé de signature : tous les jetons émis deviennent invalides"
+        timeout_seconds: 20
+        on_failure: abort
+        critical: true
+
+      - id: instantane
+        phase: RECOVERING
+        action: ledger.snapshot
+        description: "Instantané du grand livre après confinement, avant remise en service"
+        timeout_seconds: 30
+        on_failure: continue_anyway
+
+      - id: redemarrer-auth
+        phase: RECOVERING
+        action: docker.restart
+        description: "Redémarrage du service d'authentification sur la nouvelle clé"
+        timeout_seconds: 90
+        on_failure: continue
+        params:
+          container: alphaplat-api-auth
+          grace_seconds: 5
+
+      - id: attendre-sante
+        phase: RECOVERING
+        action: docker.wait_healthy
+        description: "Attente du retour à un état sain du service d'authentification"
+        timeout_seconds: 120
+        on_failure: continue
+        params:
+          container: alphaplat-api-auth
+          timeout_seconds: 90
+
+      - id: verifier
+        phase: VERIFYING
+        action: verify.recovery_suite
+        description: "Exigence des cinq preuves de rétablissement"
+
+  # ---------------------------------------------------------------------------
+  #  A3 — Injection applicative et exfiltration
+  # ---------------------------------------------------------------------------
+  - id: PB-A3-CONFINER-ET-REPARER
+    title: "Confinement d'une injection et contrôle comptable"
+    description: >-
+      Le WAF a intercepté les charges utiles hostiles ; l'incertitude porte sur
+      ce qui a pu sortir. On bloque la source, on gèle le compte exposé, puis on
+      contrôle l'intégrité comptable. Le gel est préféré à la correction
+      automatique d'un solde : on n'écrit pas dans les comptes tant qu'un humain
+      n'a pas statué.
+    verification_required: true
+    steps:
+      - id: bloquer-source
+        phase: CONTAINING
+        action: edge.block_ip
+        description: "Blocage de l'adresse d'origine à la bordure"
+        timeout_seconds: 15
+        on_failure: abort
+        critical: true
+        params:
+          ip: "${event.source_ip}"
+          ttl_seconds: 3600
+          reason: "injection applicative détectée par le modèle d'anomalie"
+
+      - id: instantane
+        phase: CONTAINING
+        action: ledger.snapshot
+        description: "Instantané du grand livre immédiatement après confinement"
+        timeout_seconds: 30
+        on_failure: continue_anyway
+
+      - id: geler-compte
+        phase: ERADICATING
+        action: ledger.freeze_account
+        description: "Gel du compte exposé, dans l'attente d'un contrôle humain"
+        timeout_seconds: 20
+        on_failure: continue_anyway
+        params:
+          account_code: CUST-000001
+          frozen: true
+          reason: "exposition suspectée lors de l'incident POL-A3-INJECTION"
+
+      - id: reconcilier
+        phase: RECOVERING
+        action: ledger.reconcile
+        description: "Recalcul des soldes depuis le journal des jambes"
+        timeout_seconds: 30
+        on_failure: continue
+        params: {}
+
+      - id: verifier
+        phase: VERIFYING
+        action: verify.recovery_suite
+        description: "Exigence des cinq preuves de rétablissement"
+
+  # ---------------------------------------------------------------------------
+  #  SIEM — exécution suspecte dans un conteneur
+  # ---------------------------------------------------------------------------
+  - id: PB-SIEM-CONFINER-CONTENEUR
+    title: "Quarantaine réseau d'un conteneur au comportement suspect"
+    description: >-
+      Un shell lancé dans un conteneur de service est un signal fort. On retire
+      le conteneur du réseau applicatif plutôt que de le redémarrer : redémarrer
+      détruirait les preuves, la quarantaine les préserve tout en coupant la
+      capacité de nuisance. La remise en service exige une décision humaine.
+    verification_required: false
+    steps:
+      - id: isoler
+        phase: CONTAINING
+        action: docker.isolate
+        description: "Retrait du conteneur du réseau applicatif"
+        timeout_seconds: 20
+        on_failure: abort
+        critical: true
+        params:
+          container: "${event.container}"
+
+      - id: informer
+        phase: CONTAINING
+        action: notify.operator
+        description: "Information de l'opérateur de permanence"
+        timeout_seconds: 5
+        on_failure: continue_anyway
+        params:
+          severity: critical
+          message: "Conteneur ${event.container} placé en quarantaine : ${event.message}"
+
+      - id: escalader
+        phase: VERIFYING
+        action: escalate.human
+        description: "La levée de quarantaine exige une décision humaine"
+        timeout_seconds: 5
+        on_failure: continue_anyway
+        params:
+          reason: "quarantaine d'exécution suspecte : analyse forensique requise"

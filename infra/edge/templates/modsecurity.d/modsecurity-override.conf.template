@@ -1,0 +1,30 @@
+# =============================================================================
+#  AlphaPay — ajustements du Core Rule Set OWASP
+# =============================================================================
+#  Ce fichier est inclus par /etc/modsecurity.d/setup.conf à la suite de la
+#  configuration par défaut de ModSecurity et du CRS.
+#
+#  Principe directeur : on n'affaiblit aucune détection d'attaque réelle. On
+#  écarte uniquement les requêtes de service internes, qui ne sont pas
+#  émises par un utilisateur et dont l'inspection produit du bruit.
+# =============================================================================
+
+# --- Les sondes de disponibilité ne sont pas des requêtes clientes
+SecRule REQUEST_URI "@beginsWith /healthz" \
+    "id:9001000,phase:1,pass,nolog,msg:'AlphaPay: sonde de disponibilite hors perimetre CRS',\
+     ctl:ruleEngine=Off"
+
+# --- Le service de vérification de la remédiation interroge les API en interne
+#     depuis le réseau applicatif ; le volume généré par la sonde synthétique
+#     ne doit pas fausser le seuil d'anomalie entrant.
+SecRule REQUEST_HEADERS:X-AlphaPay-Probe "@streq 1" \
+    "id:9001001,phase:1,pass,nolog,msg:'AlphaPay: sonde de verification interne',\
+     ctl:ruleEngine=Off,setvar:'tx.alphapay_probe=1'"
+
+# --- Étiquette de corrélation des exercices Red Team.
+#     La bordure journalise déjà l'en-tête ; on le reprend ici pour que
+#     l'événement d'audit ModSecurity porte lui aussi la marque de l'exercice,
+#     ce qui permet de rapprocher une attaque de l'incident qu'elle déclenche.
+SecRule REQUEST_HEADERS:X-AlphaPay-RedTeam "@rx ^[A-Za-z0-9._-]{1,64}$" \
+    "id:9001002,phase:1,pass,nolog,msg:'AlphaPay: marqueur Red Team',\
+     setvar:'tx.alphapay_redteam=%{tx.0}'"

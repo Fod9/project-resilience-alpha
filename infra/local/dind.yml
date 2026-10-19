@@ -1,0 +1,30 @@
+# =============================================================================
+#  Surcharge pour un environnement de test isolé (démon Docker distant).
+# =============================================================================
+#  Ce fichier ne fait pas partie du déploiement nominal. Il sert lorsque la pile
+#  est lancée sur un démon Docker qui n'est pas celui de la machine locale : le
+#  socket Unix `/var/run/docker.sock` n'existe alors pas et le proxy
+#  `docker-proxy` ne peut pas démarrer.
+#
+#  Le moteur de remédiation reçoit directement l'adresse du démon, et `dind` est
+#  résolu vers la passerelle du réseau, qui est précisément l'hôte du démon.
+#
+#  Utilisation :
+#      docker compose -f docker-compose.yml -f infra/local/dind.yml up -d
+#
+#  Sur le poste hôte du sujet (Docker Desktop sous Windows/WSL2), ce fichier est
+#  ignoré : `docker compose up -d` suffit.
+# =============================================================================
+
+services:
+  remediation:
+    extra_hosts:
+      - "dind:host-gateway"
+    environment:
+      REMEDIATION_DOCKER_HOST: "tcp://dind:23757"
+
+  # Le proxy à moindre privilège n'a de sens qu'avec un socket Unix : sur un
+  # démon distant, il n'a rien à relayer. Il est neutralisé ici pour que la pile
+  # de test ne signale pas un conteneur en échec permanent.
+  docker-proxy:
+    profiles: ["socket-proxy"]

@@ -1,0 +1,1 @@
+{"ts":"2026-10-19T08:10:52+00:00","level":"INFO","service":"edge","logger":"edge.access","event":"http.request","trace_id":"6e25b03eeba92f99f9ce35bec5a18061","source_ip":"192.168.64.3","fields":{"method":"GET","path":"/sonde","route":"auth","status":200,"duration_s":0.004,"bytes_in":128,"bytes_out":263,"user_agent":"Python-urllib/3.13","waf_blocked":0,"redteam_marker":""}}

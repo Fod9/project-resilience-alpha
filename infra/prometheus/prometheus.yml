@@ -1,0 +1,64 @@
+# =============================================================================
+#  AlphaPay — collecte Prometheus
+# =============================================================================
+#  Intervalle volontairement court : la détection doit être rapide, et une
+#  résolution de 5 secondes suffit à distinguer une rafale d'un pic légitime.
+#  Au-delà de 15 secondes, l'évaluation des règles d'alerte lisserait l'attaque
+#  et repousserait le délai de détection mécaniquement.
+# =============================================================================
+
+global:
+  scrape_interval: 5s
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+  external_labels:
+    projet: resilience-alpha
+    plateforme: alphapay
+    environnement: demo
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+      timeout: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # --- Services applicatifs : API, télémétrie, détection, remédiation -------
+  - job_name: alphapay-services
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api-auth:8000"]
+        labels: {service: api-auth, zone: application}
+      - targets: ["api-payment:8000"]
+        labels: {service: api-payment, zone: application}
+      - targets: ["api-ledger:8000"]
+        labels: {service: api-ledger, zone: application}
+      - targets: ["telemetry:8000"]
+        labels: {service: telemetry, zone: supervision}
+      - targets: ["detector:8000"]
+        labels: {service: detector, zone: supervision}
+      - targets: ["remediation:8000"]
+        labels: {service: remediation, zone: gestion}
+      - targets: ["assistant:8000"]
+        labels: {service: assistant, zone: application}
+
+  # --- Bordure : métriques de connexion fournies par le module stub_status --
+  - job_name: alphapay-edge
+    metrics_path: /metrics/nginx
+    static_configs:
+      - targets: ["edge:8080"]
+        labels: {service: edge, zone: bordure}
+
+  # --- Modèle de langage local ---------------------------------------------
+  - job_name: alphapay-ollama
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ollama:11434"]
+        labels: {service: ollama, zone: intelligence}

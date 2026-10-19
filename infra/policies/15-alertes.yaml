@@ -1,0 +1,104 @@
+# =============================================================================
+#  AlphaPay — Politiques déclenchées par les alertes Prometheus
+# =============================================================================
+#  Second chemin de détection.
+#
+#  Ce fichier matérialise la redondance de détection : si le modèle d'anomalie
+#  est indisponible, ou si son comportement est inadapté, les seuils
+#  d'exploitation produisent les mêmes effets. La différence est assumée et
+#  documentée :
+#
+#    * le chemin « modèle » identifie l'adresse d'origine — il peut donc
+#      confiner la source, en plus de remettre le service en état ;
+#    * le chemin « alertes » ne transporte pas d'adresse d'origine — il remet le
+#      service en état et le vérifie, sans confinement.
+#
+#  Les priorités sont volontairement inférieures à celles des politiques du
+#  chemin « modèle » : lorsque les deux se déclenchent, c'est la politique la
+#  plus complète qui l'emporte.
+# =============================================================================
+
+policies:
+  # ---------------------------------------------------------------------------
+  #  Injection applicative — détectée par le seuil sur la variable observée
+  # ---------------------------------------------------------------------------
+  - id: POL-ALERTE-INJECTION
+    title: "Injection applicative confirmée par les seuils de supervision"
+    description: >-
+      Déclenchée par la règle AlphaPayInjectionSurge : la part de requêtes
+      portant une charge d'injection dépasse le seuil d'exploitation.
+    severity: critical
+    priority: 240
+    sources: [alertmanager]
+    match: any
+    conditions:
+      - signal: event
+        name: kind
+        op: "=="
+        value: AlphaPayInjectionSurge
+    playbook: PB-ALERTE-REPRISE
+    cooldown_seconds: 180
+
+  # ---------------------------------------------------------------------------
+  #  Exfiltration suspectée — le volume sortant sort de la tendance longue
+  # ---------------------------------------------------------------------------
+  - id: POL-ALERTE-EXFILTRATION
+    title: "Volume sortant hors tendance, exfiltration plausible"
+    description: >-
+      Déclenchée par la règle AlphaPayExfiltrationSuspectee. Le service exposé
+      est redémarré après prise d'un instantané, afin qu'aucune donnée
+      incohérente ne survive à l'incident.
+    severity: critical
+    priority: 238
+    sources: [alertmanager]
+    match: any
+    conditions:
+      - signal: event
+        name: kind
+        op: "=="
+        value: AlphaPayExfiltrationSuspectee
+    playbook: PB-ALERTE-REPRISE
+    cooldown_seconds: 180
+
+  # ---------------------------------------------------------------------------
+  #  Bourrage d'identifiants — détecté par le taux d'échec d'authentification
+  # ---------------------------------------------------------------------------
+  - id: POL-ALERTE-AUTH
+    title: "Bourrage d'identifiants confirmé par les seuils de supervision"
+    description: >-
+      Déclenchée par la règle AlphaPayAuthAbuse. La priorité est inférieure à
+      celle de POL-A2-IDENTITES : si le modèle a déjà qualifié la situation, sa
+      politique — qui sait quelle adresse bloquer — reste prioritaire.
+    severity: critical
+    priority: 190
+    sources: [alertmanager]
+    match: any
+    conditions:
+      - signal: event
+        name: kind
+        op: "=="
+        value: AlphaPayAuthAbuse
+    playbook: PB-ALERTE-REPRISE
+    cooldown_seconds: 180
+
+  # ---------------------------------------------------------------------------
+  #  Dégradation de performance — réponse proportionnée
+  # ---------------------------------------------------------------------------
+  - id: POL-ALERTE-LATENCE
+    title: "Latence du paiement durablement dégradée"
+    description: >-
+      Déclenchée par la règle AlphaPayLatencyDegraded. La réponse est un
+      redémarrage vérifié : si la dégradation provient d'un état interne
+      accumulé, elle disparaît ; sinon, la vérification échoue et la main est
+      rendue à l'opérateur, ce qui évite de boucler indéfiniment.
+    severity: warning
+    priority: 80
+    sources: [alertmanager]
+    match: any
+    conditions:
+      - signal: event
+        name: kind
+        op: "=="
+        value: AlphaPayLatencyDegraded
+    playbook: PB-ALERTE-REPRISE
+    cooldown_seconds: 600

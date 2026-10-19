@@ -1,0 +1,37 @@
+# Secrets et configuration locale — jamais versionnés.
+.env
+.env.*
+!.env.example
+secrets/*
+!secrets/.gitkeep
+
+# Artefacts d'exécution
+*.log
+logs/
+deliverables/*.mp4
+deliverables/*.pptx
+deliverables/*.pdf
+!deliverables/.gitkeep
+
+# Modèles entraînés (régénérables par `python -m ml.train`)
+ml/artifacts/*.joblib
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Outils
+.DS_Store
+*.swp
+.idea/
+.vscode/

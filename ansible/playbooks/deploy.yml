@@ -1,0 +1,118 @@
+# =============================================================================
+#  AlphaPay — déploiement complet, idempotent et rejouable
+# =============================================================================
+#  Le playbook est volontairement en lecture seule sur l'existant : il vérifie,
+#  complète ce qui manque, construit, démarre, puis attend que la plateforme
+#  réponde. Rejoué sur une pile déjà en service, il ne détruit rien.
+#
+#      ansible-playbook -i inventory.ini playbooks/deploy.yml
+# =============================================================================
+
+- name: Déployer la plateforme AlphaPay
+  hosts: plateforme
+  gather_facts: true
+  vars:
+    compose_fichiers: >-
+      -f {{ racine_projet }}/docker-compose.yml
+      {% if docker_host.startswith('tcp://') %}
+      -f {{ racine_projet }}/infra/local/dind.yml
+      {% endif %}
+
+  tasks:
+    - name: Vérifier la présence du démon Docker
+      ansible.builtin.command:
+        cmd: docker version --format '{{ '{{' }}.Server.Version{{ '}}' }}'
+      environment:
+        DOCKER_HOST: "{{ docker_host }}"
+      register: version_docker
+      changed_when: false
+      failed_when: version_docker.rc != 0
+
+    - name: Afficher la version du démon
+      ansible.builtin.debug:
+        msg: "Démon Docker {{ version_docker.stdout }} sur {{ inventory_hostname }}"
+
+    - name: Vérifier la mémoire disponible pour Docker
+      ansible.builtin.command:
+        cmd: docker info --format '{{ '{{' }}.MemTotal{{ '}}' }}'
+      environment:
+        DOCKER_HOST: "{{ docker_host }}"
+      register: memoire_docker
+      changed_when: false
+
+    - name: Alerter si la mémoire allouée à Docker est insuffisante
+      ansible.builtin.debug:
+        msg: >-
+          AVERTISSEMENT : seulement
+          {{ (memoire_docker.stdout | int / 1073741824) | round(1) }} Go alloués à
+          Docker. Douze gigaoctets sont recommandés pour dix-huit conteneurs dont
+          un modèle de langage. Réglez ce point dans Docker Desktop,
+          Ressources, avant de lancer la démonstration.
+      when: (memoire_docker.stdout | int) < 12000000000
+
+    - name: Vérifier la présence du fichier de secrets
+      ansible.builtin.stat:
+        path: "{{ racine_projet }}/.env"
+      register: fichier_env
+
+    - name: Générer les secrets locaux si nécessaire
+      ansible.builtin.command:
+        cmd: bash {{ racine_projet }}/scripts/seed-secrets.sh
+        chdir: "{{ racine_projet }}"
+      when: not fichier_env.stat.exists
+      register: secrets
+
+    - name: Construire les images
+      ansible.builtin.command:
+        cmd: >-
+          docker compose {{ compose_fichiers }} build
+      environment:
+        DOCKER_HOST: "{{ docker_host }}"
+      args:
+        chdir: "{{ racine_projet }}"
+      changed_when: true
+
+    - name: Démarrer la pile
+      ansible.builtin.command:
+        cmd: >-
+          docker compose {{ compose_fichiers }} up -d
+      environment:
+        DOCKER_HOST: "{{ docker_host }}"
+      args:
+        chdir: "{{ racine_projet }}"
+      changed_when: true
+
+    - name: Attendre que la bordure réponde
+      ansible.builtin.uri:
+        url: "{{ url_publique }}/healthz"
+        validate_certs: false
+        status_code: 200
+      register: sante
+      until: sante.status == 200
+      retries: "{{ (delai_sante | int / 3) | int }}"
+      delay: 3
+      changed_when: false
+
+    - name: État des conteneurs
+      ansible.builtin.command:
+        cmd: >-
+          docker compose {{ compose_fichiers }} ps --format
+          '{{ '{{' }}.Name{{ '}}' }}\t{{ '{{' }}.State{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}'
+      environment:
+        DOCKER_HOST: "{{ docker_host }}"
+      args:
+        chdir: "{{ racine_projet }}"
+      register: etat
+      changed_when: false
+
+    - name: Afficher l'état de la pile
+      ansible.builtin.debug:
+        msg: "{{ etat.stdout_lines }}"
+
+    - name: Rappel des accès
+      ansible.builtin.debug:
+        msg:
+          - "Interface de paiement : {{ url_publique }}/"
+          - "Salle d'opérations    : {{ url_publique }}/ops"
+          - "Grafana               : http://localhost:3000"
+          - "Prometheus            : http://localhost:9090"

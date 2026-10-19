@@ -1,0 +1,134 @@
+# =============================================================================
+#  Aiguillage vers les amonts internes.
+# =============================================================================
+#  `proxy_pass` est utilisé avec une variable : nginx réinterroge alors le
+#  résolveur selon le TTL, au lieu de figer l'adresse IP au démarrage. C'est
+#  indispensable ici : l'isolement réseau et la reprise d'un conteneur lui
+#  attribuent une nouvelle adresse, et la bordure doit suivre sans rechargement
+#  manuel.
+#
+#  Ordre impératif : `set` AVANT `rewrite ... break`. L'option `break`
+#  interrompt la phase de réécriture : toute instruction `set` placée après ne
+#  serait jamais exécutée et `proxy_pass` recevrait une variable vide.
+# =============================================================================
+
+# --- Santé de la bordure elle-même (non journalisée, non inspectée par le WAF)
+location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "alphapay-edge ok\n";
+}
+
+# --- Métriques de connexion de la bordure, réservées au réseau interne.
+#     Le module `stub_status` expose des compteurs agrégés ; il est restreint aux
+#     plages privées afin de ne jamais être atteignable depuis l'extérieur.
+location = /metrics/nginx {
+    access_log off;
+    allow 127.0.0.1;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 192.168.0.0/16;
+    deny all;
+    stub_status;
+}
+
+# --- Authentification : jeton, rafraîchissement, JWKS
+location /api/auth/ {
+    limit_req zone=alphapay_auth burst=30 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://api-auth:8000;
+    rewrite ^/api/auth/(.*)$ /$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Paiements : création, consultation, historique
+#
+#     La localisation est déclarée sans barre oblique finale et la réécriture
+#     accepte un suffixe absent : `/api/payments` comme `/api/payments/{id}`
+#     sont traités. Sans cela, un appel sans suffixe retomberait sur l'interface
+#     web et renverrait une erreur 404 déroutante.
+location /api/payments {
+    limit_req zone=alphapay_api burst=120 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://api-payment:8000;
+    rewrite ^/api/payments(.*)$ /payments$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Grand livre : soldes, intégrité, instantanés
+location /api/ledger/ {
+    limit_req zone=alphapay_api burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://api-ledger:8000;
+    rewrite ^/api/ledger/(.*)$ /$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Supervision : incidents, chronologie, actions, vérifications
+#
+#     Aucune réécriture : le service de remédiation expose lui-même ses routes
+#     sous `/api/supervision/...`. Le contrat est donc identique en interne et
+#     en externe, ce qui évite toute divergence entre l'appelant et le service.
+location /api/supervision/ {
+    limit_req zone=alphapay_api burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://remediation:8000;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Interface d'ingestion et d'administration de la remédiation.
+#     Le préfixe public `/api/ops/` est ramené sous `/api/` : l'appel
+#     `/api/ops/ingest/falco` atteint ainsi la route `/api/ingest/falco` du
+#     service, dont le contrat est identique en interne et en externe.
+location /api/ops/ {
+    limit_req zone=alphapay_api burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://remediation:8000;
+    rewrite ^/api/ops/(.*)$ /api/$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Détecteur : fenêtre courante, score, historique
+location /api/detector/ {
+    limit_req zone=alphapay_api burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://detector:8000;
+    rewrite ^/api/detector/(.*)$ /$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Assistant documentaire (RAG) : un modèle local sur CPU peut mettre
+#     plusieurs dizaines de secondes à produire une réponse.
+location /api/assistant/ {
+    limit_req zone=alphapay_auth burst=10 nodelay;
+    proxy_read_timeout 180s;
+    set $alphapay_upstream http://assistant:8000;
+    rewrite ^/api/assistant/(.*)$ /$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Télémétrie : variables observées, en lecture seule
+location /api/telemetry/ {
+    limit_req zone=alphapay_api burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://telemetry:8000;
+    rewrite ^/api/telemetry/(.*)$ /$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}
+
+# --- Interface web : paiement client et salle d'opérations
+location / {
+    limit_req zone=alphapay_api burst=200 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://web:8080;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy.conf;
+}

@@ -1,0 +1,8 @@
+# Ce dossier reçoit le modèle entraîné par `python -m ml.train`.
+#
+# Le fichier `model.joblib` n'est pas versionné : il est reproductible à
+# l'identique depuis le générateur de trafic nominal et une graine fixe, et
+# versionner un binaire de plusieurs centaines de kilo-octets n'apporterait
+# rien. Il est en revanche embarqué dans l'image du détecteur au moment de la
+# construction, ce qui évite toute période d'apprentissage à froid en
+# démonstration.

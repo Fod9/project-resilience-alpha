@@ -1,0 +1,386 @@
+{
+  "uid": "alphapay-reprise",
+  "title": "AlphaPay — Reprise autonome",
+  "description": "Machine a etats de la remediation, actions executees, delais mesures et resultats de verification.",
+  "tags": [
+    "alphapay",
+    "resilience"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Etat courant",
+      "description": "1 sur l'etat actif de la machine a etats.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "alphapay_remediation_state",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 10,
+        "h": 5
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Dernier resultat de verification",
+      "description": "1 = service reellement retabli, verifie de bout en bout.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(alphapay_remediation_verification_passed)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "gridPos": {
+        "x": 10,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "type": "stat",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Delai de detection",
+      "description": "Secondes entre le debut de la fenetre anormale et la qualification.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(alphapay_remediation_mttd_seconds)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "MTTD"
+        }
+      ],
+      "gridPos": {
+        "x": 14,
+        "y": 0,
+        "w": 5,
+        "h": 5
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 60
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Delai de retablissement",
+      "description": "Secondes entre l'ouverture de l'incident et la verification reussie.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(alphapay_remediation_mttr_seconds)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "MTTR"
+        }
+      ],
+      "gridPos": {
+        "x": 19,
+        "y": 0,
+        "w": 5,
+        "h": 5
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 180
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Actions de remediation",
+      "description": "Cadence des actions executees, par action.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (action) (rate(alphapay_remediation_actions_total[5m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Incidents",
+      "description": "Cadence d'ouverture d'incidents, par severite.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "alphapay-prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (severity) (rate(alphapay_remediation_incidents_total[10m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "alphapay-prometheus"
+          },
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 6
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Journal de la remediation",
+      "description": "Evenements du moteur : politiques, actions, verifications.",
+      "datasource": {
+        "type": "loki",
+        "uid": "alphapay-loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"alphapay-evenements\", service=\"remediation\"}",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "alphapay-loki"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 8
+      },
+      "type": "logs",
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ],
+  "version": 1,
+  "graphTooltip": 1
+}

@@ -1,0 +1,80 @@
+# =============================================================================
+#  AlphaPay — Acheminement des alertes
+# =============================================================================
+#  Alertmanager ne décide de rien : il regroupe, filtre et achemine. La décision
+#  appartient au moteur de remédiation, qui applique une politique écrite et
+#  journalisée. Cette séparation est volontaire : le composant qui transporte une
+#  alerte ne doit pas pouvoir décider d'un redémarrage.
+#
+#  AuthENTIFICATION DU WEBHOOK
+#  Alertmanager 0.27 ne permet pas de définir un en-tête arbitraire sur un
+#  webhook `http_config` n'accepte que `authorization`. Le jeton partagé est donc
+#  transmis sous la forme `Authorization: AlphaPay <secret>`, et le moteur de
+#  remédiation accepte cette forme au même titre que `X-AlphaPay-Signature`.
+#  Le secret est injecté par variable d'environnement (`--config.expand-env`) :
+#  il n'apparaît jamais dans ce fichier ni dans aucune image.
+# =============================================================================
+
+global:
+  # Un délai court est indispensable : sur une attaque de 90 secondes, le
+  # regroupement par défaut de 30 secondes consommerait un tiers du temps de
+  # détection disponible.
+  resolve_timeout: 2m
+
+route:
+  receiver: remediation
+  group_by: ["alertname"]
+  group_wait: 5s
+  group_interval: 10s
+  repeat_interval: 4h
+
+  routes:
+    # L'intégrité comptable ne se regroupe jamais avec autre chose : elle
+    # appelle une réponse distincte et prioritaire.
+    - matchers:
+        - categorie = "integrite"
+      receiver: remediation
+      group_by: ["alertname"]
+      group_wait: 0s
+      group_interval: 30s
+      repeat_interval: 1h
+
+    # Une campagne d'injection en cours ne se regroupe pas non plus.
+    - matchers:
+        - categorie =~ "attaque|securite"
+      receiver: remediation
+      group_wait: 0s
+      group_interval: 15s
+      repeat_interval: 1h
+
+receivers:
+  - name: remediation
+    webhook_configs:
+      - url: http://remediation:8000/api/ingest/alertmanager
+        send_resolved: false
+        max_alerts: 20
+        http_config:
+          follow_redirects: false
+          authorization:
+            type: AlphaPay
+            # Le secret partagé est injecté au démarrage du conteneur par
+            # substitution de ce marqueur : Alertmanager 0.27 ne sait pas
+            # développer les variables d'environnement dans son fichier de
+            # configuration, et le secret ne doit apparaître dans aucune image.
+            credentials: "@@HMAC_SECRET@@"
+inhibit_rules:
+  # Un déséquilibre comptable rend les alertes de performance inexploitables :
+  # elles en découlent.
+  - source_matchers:
+      - categorie = "integrite"
+    target_matchers:
+      - categorie = "performance"
+    equal: []
+
+  # Une indisponibilité rend les seuils de latence et de taux d'erreur
+  # inexploitables : ils mesurent une absence de réponse, pas une dégradation.
+  - source_matchers:
+      - alertname = "AlphaPayServiceDown"
+    target_matchers:
+      - categorie = "performance"
+    equal: ["service"]

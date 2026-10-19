@@ -1,0 +1,893 @@
+# =============================================================================
+#  PROJECT RESILIENCE-ALPHA — AlphaPay
+#  Orchestration de la plateforme de paiement et de la salle d'opérations
+# =============================================================================
+#  Cibles matérielles : PC Hôte Windows 10/11 + Docker Desktop (WSL2),
+#  4 cœurs / 16 Go RAM / 50 Go SSD. Toutes les limites mémoire ci-dessous sont
+#  calibrées pour tenir dans 16 Go avec le modèle de langage local chargé.
+#
+#  Commandes usuelles :
+#    docker compose up --build -d
+#    docker compose ps
+#    docker compose logs -f remediation
+# =============================================================================
+
+name: alphapay
+
+# -----------------------------------------------------------------------------
+#  Fragments réutilisables
+# -----------------------------------------------------------------------------
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-common-env: &common-env
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FILE: /var/log/alphapay
+  TZ: ${TZ:-Europe/Paris}
+  HMAC_SECRET: ${HMAC_SECRET:?HMAC_SECRET doit etre defini dans .env}
+  DEMO_MODE: ${DEMO_MODE:-true}
+  DRY_RUN: ${DRY_RUN:-false}
+
+x-python-service: &python-service
+  restart: unless-stopped
+  logging: *default-logging
+  networks:
+    - net-app
+    - net-data
+    - net-obs
+  volumes:
+    - alphaplat-logs:/var/log/alphapay
+  depends_on:
+    init-perms:
+      condition: service_completed_successfully
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
+networks:
+  # Bordure : seul point d'entrée, exposé sur le PC Hôte
+  net-edge:
+    name: alphaplat-edge
+  # Applicatif : services métier entre eux
+  net-app:
+    name: alphaplat-app
+    internal: false
+  # Données : uniquement les services ayant besoin de PostgreSQL
+  net-data:
+    name: alphaplat-data
+    internal: true
+  # Supervision : scrape Prometheus, collecte de journaux
+  net-obs:
+    name: alphaplat-obs
+    internal: true
+  # Administration : remédiation, Vault, API Docker — jamais exposé
+  net-mgmt:
+    name: alphaplat-mgmt
+    internal: true
+
+volumes:
+  alphaplat-logs:
+    name: alphaplat-logs
+  alphaplat-pgdata:
+    name: alphaplat-pgdata
+  alphaplat-loki:
+    name: alphaplat-loki
+  alphaplat-grafana:
+    name: alphaplat-grafana
+  alphaplat-prometheus:
+    name: alphaplat-prometheus
+  alphaplat-vault:
+    name: alphaplat-vault
+  alphaplat-ollama:
+    name: alphaplat-ollama
+  alphaplat-detector-model:
+    name: alphaplat-detector-model
+  alphaplat-edge-state:
+    name: alphaplat-edge-state
+  alphaplat-ledger-snapshots:
+    name: alphaplat-ledger-snapshots
+
+services:
+
+  # ===========================================================================
+  #  0. Initialisation — préparation et permissions des volumes persistants
+  # ===========================================================================
+  #  Volontairement exécuté en root une seule fois : les images officielles
+  #  Prometheus (uid 65534), Grafana (uid 472) et nos services (uid 10001)
+  #  n'ont pas les mêmes propriétaires de volume. Cette étape les aligne.
+  # ===========================================================================
+  init-perms:
+    image: alpine:3.20
+    container_name: alphaplat-init-perms
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        mkdir -p /logs /ledger-snapshots /models /prometheus /grafana /loki /edge-dynamic
+        # Journaux : écrits par plusieurs services et par nginx, lus par promtail
+        chmod 1777 /logs
+        # Instantanés du grand livre : service api-ledger uniquement
+        chown -R 10001:10001 /ledger-snapshots
+        chmod 0750 /ledger-snapshots
+        # Artefacts du détecteur : service detector (uid 10001)
+        chown -R 10001:10001 /models
+        chmod 0750 /models
+        # Prometheus s'execute en uid 65534 (nobody) dans l'image officielle
+        chown -R 65534:65534 /prometheus
+        chmod 0750 /prometheus
+        # Grafana s'execute en uid 472 dans l'image officielle
+        chown -R 472:472 /grafana
+        chmod 0750 /grafana
+        # Loki s'execute en uid 10001 dans l'image officielle
+        chown -R 10001:10001 /loki
+        chmod 0750 /loki
+        # Liste de blocage de la bordure : écrite par le moteur de remédiation
+        # (uid 10001) et par le surveillant de la bordure (uid nginx 101), relue
+        # par nginx. Propriétaire nginx, groupe applicatif, mode 0770 : les deux
+        # services y accèdent sans avoir à élargir les droits.
+        chown -R 101:10001 /edge-dynamic
+        chmod 0770 /edge-dynamic
+        echo "volumes applicatifs prets"
+    volumes:
+      - alphaplat-logs:/logs
+      - alphaplat-ledger-snapshots:/ledger-snapshots
+      - alphaplat-detector-model:/models
+      - alphaplat-prometheus:/prometheus
+      - alphaplat-grafana:/grafana
+      - alphaplat-loki:/loki
+      - alphaplat-edge-state:/edge-dynamic
+    networks:
+      - net-obs
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  1. Données
+  # ===========================================================================
+  postgres:
+    build:
+      context: ./infra/db
+      dockerfile: Dockerfile
+    image: alphaplat-postgres:1.0.0
+    container_name: alphaplat-postgres
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alphapay}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit etre defini dans .env}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: ${TZ:-Europe/Paris}
+      # Rendus disponibles au script 02-roles.sh, seul endroit où les mots de
+      # passe des rôles applicatifs sont nécessaires (ils ne sont jamais
+      # réutilisés ensuite : chaque service reçoit le sien via DATABASE_URL).
+      ALPHAPAY_DB_NAME: ${POSTGRES_DB:-alphapay}
+      ALPHAPAY_SEED_MODE: ${SEED_MODE:-demo}
+      SVC_AUTH_PASSWORD: ${SVC_AUTH_PASSWORD:?SVC_AUTH_PASSWORD doit etre defini dans .env}
+      SVC_PAYMENT_PASSWORD: ${SVC_PAYMENT_PASSWORD:?SVC_PAYMENT_PASSWORD doit etre defini dans .env}
+      SVC_LEDGER_PASSWORD: ${SVC_LEDGER_PASSWORD:?SVC_LEDGER_PASSWORD doit etre defini dans .env}
+      SVC_DETECTOR_PASSWORD: ${SVC_DETECTOR_PASSWORD:?SVC_DETECTOR_PASSWORD doit etre defini dans .env}
+      SVC_REMEDIATION_PASSWORD: ${SVC_REMEDIATION_PASSWORD:?SVC_REMEDIATION_PASSWORD doit etre defini dans .env}
+      SVC_RAG_PASSWORD: ${SVC_RAG_PASSWORD:?SVC_RAG_PASSWORD doit etre defini dans .env}
+      SVC_READONLY_PASSWORD: ${SVC_READONLY_PASSWORD:?SVC_READONLY_PASSWORD doit etre defini dans .env}
+      MONITORING_PASSWORD: ${MONITORING_PASSWORD:?MONITORING_PASSWORD doit etre defini dans .env}
+    volumes:
+      - alphaplat-pgdata:/var/lib/postgresql/data
+    networks:
+      - net-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-alphapay}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    mem_limit: 1024m
+    pids_limit: 512
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  2. Bordure — WAF applicatif (ModSecurity v3 + OWASP CRS) et reverse proxy
+  # ===========================================================================
+  edge:
+    build:
+      context: ./infra/edge
+      dockerfile: Dockerfile
+    image: alphaplat-edge:1.0.0
+    container_name: alphaplat-edge
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MODSEC_AUDIT_LOG: /var/log/alphapay/edge-modsec.log
+    ports:
+      - "${EDGE_HTTPS_PORT:-443}:8443"
+      - "${EDGE_HTTP_PORT:-80}:8080"
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+      - alphaplat-edge-state:/etc/nginx/dynamic
+    networks:
+      - net-edge
+      - net-app
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  3. Interface web (SPA React) — /pay et /ops
+  # ===========================================================================
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE: /api
+        VITE_BUILD_ID: ${BUILD_ID:-local}
+    image: alphaplat-web:1.0.0
+    container_name: alphaplat-web
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - net-app
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
+    # Le serveur statique a besoin de ces trois capacités et d'aucune autre :
+    # nginx s'exécute en root pour se lier au port puis confie le travail à
+    # l'utilisateur `nginx`, ce qui suppose de changer le propriétaire de ses
+    # répertoires temporaires (CHOWN) puis d'abandonner ses privilèges
+    # (SETUID, SETGID). Tout le reste est retiré.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+
+  # ===========================================================================
+  #  4. Services métier
+  # ===========================================================================
+  api-auth:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/api-auth/Dockerfile
+    image: alphaplat-api-auth:1.0.0
+    container_name: alphaplat-api-auth
+    environment:
+      <<: *common-env
+      SERVICE_NAME: api-auth
+      DATABASE_URL: postgresql://svc_auth:${SVC_AUTH_PASSWORD}@postgres:5432/${POSTGRES_DB:-alphapay}
+      # Les paires RS256 sont générées au premier démarrage puis conservées
+      # dans auth.signing_keys. Aucun fichier de clé sur l'hôte : la clé privée
+      # ne quitte jamais la base, et sa compromission simulée (scénario A2) est
+      # réversible par une simple rotation.
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-604800}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN doit etre defini dans .env}
+      ARGON2_TIME_COST: "2"
+      ARGON2_MEMORY_COST: "65536"
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 384m
+
+  api-payment:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/api-payment/Dockerfile
+    image: alphaplat-api-payment:1.0.0
+    container_name: alphaplat-api-payment
+    environment:
+      <<: *common-env
+      SERVICE_NAME: api-payment
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN doit etre defini dans .env}
+      DATABASE_URL: postgresql://svc_payment:${SVC_PAYMENT_PASSWORD}@postgres:5432/${POSTGRES_DB:-alphapay}
+      LEDGER_URL: http://api-ledger:8000
+      AUTH_JWKS_URL: http://api-auth:8000/.well-known/jwks.json
+      PAYMENT_MIN_CENTS: "100"
+      PAYMENT_MAX_CENTS: "5000000"
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 384m
+
+  api-ledger:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/api-ledger/Dockerfile
+    image: alphaplat-api-ledger:1.0.0
+    container_name: alphaplat-api-ledger
+    environment:
+      <<: *common-env
+      SERVICE_NAME: api-ledger
+      DATABASE_URL: postgresql://svc_ledger:${SVC_LEDGER_PASSWORD}@postgres:5432/${POSTGRES_DB:-alphapay}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN doit etre defini dans .env}
+      SNAPSHOT_DIR: /var/lib/alphapay/snapshots
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+      - alphaplat-ledger-snapshots:/var/lib/alphapay/snapshots
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 384m
+
+  # ===========================================================================
+  #  5. Télémétrie — agrégation des 18 features sur fenêtres de 60 s
+  # ===========================================================================
+  telemetry:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/telemetry/Dockerfile
+    image: alphaplat-telemetry:1.0.0
+    container_name: alphaplat-telemetry
+    environment:
+      <<: *common-env
+      SERVICE_NAME: telemetry
+      LOG_DIR: /var/log/alphapay
+      WINDOW_SECONDS: "60"
+      WINDOW_STRIDE_SECONDS: "10"
+    volumes:
+      - alphaplat-logs:/var/log/alphapay:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 384m
+
+  # ===========================================================================
+  #  6. Détecteur d'anomalies (apprentissage non supervisé)
+  # ===========================================================================
+  detector:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/detector/Dockerfile
+    image: alphaplat-detector:1.0.0
+    container_name: alphaplat-detector
+    environment:
+      <<: *common-env
+      SERVICE_NAME: detector
+      DATABASE_URL: postgresql://svc_detector:${SVC_DETECTOR_PASSWORD}@postgres:5432/${POSTGRES_DB:-alphapay}
+      TELEMETRY_URL: http://telemetry:8000
+      MODEL_PATH: /models/model.joblib
+      MODEL_META_PATH: /models/model-meta.json
+      SCAN_INTERVAL_SECONDS: "10"
+      CONSECUTIVE_WINDOWS: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      telemetry:
+        condition: service_started
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+      - alphaplat-detector-model:/models
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    mem_limit: 768m
+
+  # ===========================================================================
+  #  7. Moteur de remédiation autonome
+  # ===========================================================================
+  remediation:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/remediation/Dockerfile
+    image: alphaplat-remediation:1.0.0
+    container_name: alphaplat-remediation
+    environment:
+      <<: *common-env
+      SERVICE_NAME: remediation
+      DATABASE_URL: postgresql://svc_remediation:${SVC_REMEDIATION_PASSWORD}@postgres:5432/${POSTGRES_DB:-alphapay}
+      POLICIES_DIR: /etc/alphapay/policies
+      PLAYBOOKS_DIR: /etc/alphapay/playbooks
+      PAYMENT_URL: http://api-payment:8000
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN doit etre defini dans .env}
+      AUTH_URL: http://api-auth:8000
+      LEDGER_URL: http://api-ledger:8000
+      DETECTOR_URL: http://detector:8000
+      # Les sondes de vérification passent par la bordure : c'est le seul chemin
+      # qui prouve que la chaîne complète est rétablie, et non un service isolé.
+      EDGE_PUBLIC_URL: http://edge:8080
+      EDGE_STATE_DIR: /var/lib/alphapay/edge-state
+      # Préparer un instantané avant toute opération de remise en état est une
+      # politique générale : l'instantané de départ sert de point de retour.
+      AUTO_ESCALATE: "true"
+      SNAPSHOT_ON_INCIDENT: "true"
+      PROBE_USERNAME: client01
+      PROBE_PASSWORD: ${PROBE_PASSWORD:?PROBE_PASSWORD doit etre defini dans .env}
+      PROBE_SOURCE_ACCOUNT: CUST-000001
+      PROBE_DESTINATION_ACCOUNT: MERCHANT-0001
+      PROBE_AMOUNT_CENTS: "100"
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN}
+      MANAGED_CONTAINERS: >-
+        alphaplat-api-auth,alphaplat-api-payment,alphaplat-api-ledger,
+        alphaplat-edge,alphaplat-web,alphaplat-telemetry
+      # Seules les adresses dont le blocage couperait le jury ou l'hôte sont
+      # protégées. Le poste attaquant est délibérément bloquable : c'est la
+      # preuve de confinement attendue.
+      NEVER_BLOCK_IPS: "127.0.0.1,::1,192.168.137.1"
+      MAX_ACTIONS_PER_WINDOW: "6"
+      ACTION_WINDOW_SECONDS: "300"
+      MTTR_TARGET_SECONDS: ${MTTR_TARGET_SECONDS:-180}
+      MTTD_TARGET_SECONDS: ${MTTD_TARGET_SECONDS:-60}
+      CIRCUIT_BREAKER_FAILURES: "3"
+      VERIFY_MAX_ATTEMPTS: "2"
+      # Accès au démon Docker via un proxy à moindre privilège (net-mgmt).
+      # En environnement de test isolé, surcharger par REMEDIATION_DOCKER_HOST.
+      DOCKER_HOST: ${REMEDIATION_DOCKER_HOST:-tcp://docker-proxy:2375}
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+      - alphaplat-edge-state:/var/lib/alphapay/edge-state
+    networks:
+      - net-app
+      - net-data
+      - net-obs
+      - net-mgmt
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    mem_limit: 512m
+
+  # ===========================================================================
+  #  8. Assistant opérateur (RAG local)
+  # ===========================================================================
+  assistant:
+    <<: *python-service
+    build:
+      context: .
+      dockerfile: services/assistant/Dockerfile
+    image: alphaplat-assistant:1.0.0
+    container_name: alphaplat-assistant
+    environment:
+      <<: *common-env
+      SERVICE_NAME: assistant
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN doit etre defini dans .env}
+      DATABASE_URL: postgresql://svc_rag:${SVC_RAG_PASSWORD}@postgres:5432/${POSTGRES_DB:-alphapay}
+      CORPUS_DIR: /corpus
+      OLLAMA_BASE_URL: ${ASSISTANT_OLLAMA_BASE_URL:-http://ollama:11434}
+      ASSISTANT_LLM_MODEL: ${ASSISTANT_LLM_MODEL:-llama3.2:3b}
+      ASSISTANT_EMBED_MODEL: ${ASSISTANT_EMBED_MODEL:-nomic-embed-text}
+      ASSISTANT_TOP_K: "5"
+      ASSISTANT_MMR_LAMBDA: "0.7"
+      ASSISTANT_MODE: ${ASSISTANT_MODE:-full}
+      ASSISTANT_MAX_QUESTION_CHARS: "1000"
+      ASSISTANT_RATE_PER_MINUTE: "10"
+    volumes:
+      - alphaplat-logs:/var/log/alphapay
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    mem_limit: 512m
+    cap_drop:
+      - ALL
+
+  # ===========================================================================
+  #  9. Modèle de langage local
+  # ===========================================================================
+  ollama:
+    image: ollama/ollama:0.3.14
+    container_name: alphaplat-ollama
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes:
+      - alphaplat-ollama:/root/.ollama
+    networks:
+      - net-app
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    mem_limit: 5120m
+    security_opt:
+      - no-new-privileges:true
+
+  # Charge les modèles une seule fois (nomic-embed-text pour les embeddings,
+  # llama3.2:3b pour la génération). Idempotent : ne re-télécharge pas.
+  ollama-init:
+    image: ollama/ollama:0.3.14
+    container_name: alphaplat-ollama-init
+    restart: "no"
+    logging: *default-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        export OLLAMA_HOST=http://ollama:11434
+        until ollama list >/dev/null 2>&1; do echo "attente d'ollama..."; sleep 3; done
+        ollama pull ${ASSISTANT_EMBED_MODEL:-nomic-embed-text}
+        ollama pull ${ASSISTANT_LLM_MODEL:-llama3.2:3b}
+        echo "modeles prets"
+        ollama list
+    networks:
+      - net-app
+    depends_on:
+      ollama:
+        condition: service_started
+    mem_limit: 512m
+
+  # ===========================================================================
+  #  10. Gestion des secrets
+  # ===========================================================================
+  vault:
+    image: hashicorp/vault:1.17.2
+    container_name: alphaplat-vault
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN:?VAULT_DEV_ROOT_TOKEN doit etre defini dans .env}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_LOG_LEVEL: ${LOG_LEVEL:-info}
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - net-mgmt
+      - net-app
+    healthcheck:
+      test: ["CMD-SHELL", "vault status >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 256m
+
+  vault-seed:
+    image: hashicorp/vault:1.17.2
+    container_name: alphaplat-vault-seed
+    restart: "no"
+    logging: *default-logging
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        until vault status >/dev/null 2>&1; do echo "attente de vault..."; sleep 2; done
+        vault kv put secret/alphapay/jwt signing_key_ref="k-0001" rotating="false"
+        vault kv put secret/alphapay/waf admin_token_ref="edge-admin"
+        vault kv put secret/alphapay/db rotation_epoch="0"
+        echo "secrets initialises"
+        vault kv list secret/alphapay
+    networks:
+      - net-mgmt
+    depends_on:
+      vault:
+        condition: service_started
+    mem_limit: 128m
+
+  # ===========================================================================
+  #  11. Supervision — métriques
+  # ===========================================================================
+  prometheus:
+    build:
+      context: ./infra/prometheus
+      dockerfile: Dockerfile
+    image: alphaplat-prometheus:1.0.0
+    container_name: alphaplat-prometheus
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      - --web.enable-admin-api
+      - --web.route-prefix=/
+    volumes:
+      - alphaplat-prometheus:/prometheus
+    networks:
+      - net-obs
+      - net-app
+      - net-data
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+
+  alertmanager:
+    build:
+      context: ./infra/alertmanager
+      dockerfile: Dockerfile
+    image: alphaplat-alertmanager:1.0.0
+    container_name: alphaplat-alertmanager
+    restart: unless-stopped
+    logging: *default-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        sed "s|@@HMAC_SECRET@@|$$HMAC_SECRET|" \
+            /etc/alertmanager/alertmanager.yml.tmpl \
+            > /tmp/alertmanager.yml
+        exec /bin/alertmanager \
+            --config.file=/tmp/alertmanager.yml \
+            --storage.path=/alertmanager \
+            --web.external-url=http://alertmanager:9093
+    environment:
+      HMAC_SECRET: ${HMAC_SECRET:?HMAC_SECRET doit etre defini dans .env}
+      TZ: ${TZ:-Europe/Paris}
+    networks:
+      - net-obs
+      - net-app
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  12. Supervision — journaux
+  # ===========================================================================
+  loki:
+    build:
+      context: ./infra/loki
+      dockerfile: Dockerfile
+    image: alphaplat-loki:1.0.0
+    container_name: alphaplat-loki
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - alphaplat-loki:/loki
+    networks:
+      - net-obs
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+
+  promtail:
+    build:
+      context: ./infra/promtail
+      dockerfile: Dockerfile
+    image: alphaplat-promtail:1.0.0
+    container_name: alphaplat-promtail
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["-config.file=/etc/promtail/promtail-config.yaml"]
+    volumes:
+      - alphaplat-logs:/var/log/alphapay:ro
+    networks:
+      - net-obs
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
+    mem_limit: 192m
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  13. Supervision — tableaux de bord
+  # ===========================================================================
+  grafana:
+    build:
+      context: ./infra/grafana
+      dockerfile: Dockerfile
+    image: alphaplat-grafana:1.0.0
+    container_name: alphaplat-grafana
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD doit etre defini dans .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_INSTALL_PLUGINS: ""
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - alphaplat-grafana:/var/lib/grafana
+    networks:
+      - net-obs
+      - net-app
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 384m
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  14. SIEM / SOC — détection d'exécution
+  # ===========================================================================
+  falco:
+    build:
+      context: ./infra/falco
+      dockerfile: Dockerfile
+    image: alphaplat-falco:1.0.0
+    container_name: alphaplat-falco
+    # Falco nécessite un noyau autorisant eBPF depuis un conteneur privilégié.
+    # Lorsque l'environnement ne le permet pas, l'initialisation échoue : le
+    # conteneur s'arrête au lieu de redémarrer en boucle. La plateforme continue
+    # de fonctionner, la détection d'anomalie et le WAF assurant la couverture.
+    # Diagnostic : docker compose logs falco
+    restart: "no"
+    logging: *default-logging
+    privileged: true
+    volumes:
+      - /proc:/host/proc:ro
+      - /etc:/host/etc:ro
+    networks:
+      - net-obs
+    mem_limit: 512m
+    pids_limit: 256
+
+  falcosidekick:
+    image: falcosecurity/falcosidekick:2.29.0
+    container_name: alphaplat-falcosidekick
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      LOGLEVEL: ${LOG_LEVEL:-info}
+      LOKI_HOSTPORT: http://loki:3100
+      LOKI_FORMAT: json
+      LOKI_TENANT: falco
+      WEBHOOK_ADDRESS: http://remediation:8000/api/ingest/falco
+      WEBHOOK_METHOD: POST
+      WEBHOOK_CUSTOMHEADERS: "X-Alphaplat-Signature:${HMAC_SECRET}"
+      WEBHOOK_MINIMUMPRIORITY: warning
+      DEBUG: "false"
+    networks:
+      - net-obs
+      - net-app
+    depends_on:
+      loki:
+        condition: service_started
+      remediation:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2801/ping || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================================================
+  #  15. Accès Docker restreint pour le moteur de remédiation
+  # ===========================================================================
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.2
+    container_name: alphaplat-docker-proxy
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      CONTAINERS: "1"
+      NETWORKS: "1"
+      IMAGES: "1"
+      INFO: "1"
+      VERSION: "1"
+      EVENTS: "0"
+      VOLUMES: "0"
+      POST: "1"
+      BUILD: "0"
+      COMMIT: "0"
+      EXEC: "0"
+      SWARM: "0"
+      SECRETS: "0"
+      CONFIGS: "0"
+      SYSTEM: "0"
+      NODES: "0"
+      SERVICES: "0"
+      TASKS: "0"
+      PLUGINS: "0"
+      DISTRIBUTION: "0"
+      SESSION: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - net-mgmt
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2375/_ping || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    mem_limit: 64m
+    security_opt:
+      - no-new-privileges:true

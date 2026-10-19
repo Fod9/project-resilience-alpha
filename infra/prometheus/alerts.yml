@@ -1,0 +1,185 @@
+# =============================================================================
+#  AlphaPay — Règles d'alerte Prometheus
+# =============================================================================
+#  Ces règles constituent le second chemin de détection, indépendant du modèle
+#  d'apprentissage. Si le détecteur est indisponible ou si son modèle est
+#  inadapté, les seuils d'exploitation ci-dessous déclenchent les mêmes
+#  playbooks. C'est ce qui rend la boucle de reprise tolérante à la panne de
+#  l'un de ses deux détecteurs.
+#
+#  Les noms d'alerte sont un contrat : ils sont reconnus tels quels par les
+#  politiques d'infra/policies/15-alertes.yaml.
+# =============================================================================
+
+groups:
+  # ---------------------------------------------------------------------------
+  #  Détection d'anomalie par le modèle
+  # ---------------------------------------------------------------------------
+  - name: alphapay-detection
+    interval: 5s
+    rules:
+      - alert: AlphaPayAnomalyDetected
+        expr: max(alphapay_anomaly_anomalous) == 1
+        for: 10s
+        labels:
+          severity: critical
+          categorie: detection
+        annotations:
+          resume: "Le modèle d'anomalie signale un comportement hors norme."
+          detail: >-
+            Le score dépasse le seuil calibré sur le trafic nominal depuis au
+            moins deux fenêtres consécutives. Les variables contributives sont
+            visibles dans la salle d'opérations et dans le tableau de bord
+            « Détection ».
+
+      - alert: AlphaPayInjectionSurge
+        expr: max(alphapay_feature_value{feature="injection_token_ratio"}) > 0.04
+        for: 15s
+        labels:
+          severity: critical
+          categorie: attaque
+          service: api-payment
+        annotations:
+          resume: "Proportion anormale de requêtes portant une charge d'injection."
+          detail: >-
+            La part des requêtes marquées par le WAF comme tentatives
+            d'injection dépasse nettement la normale observée.
+
+      - alert: AlphaPayExfiltrationSuspectee
+        expr: max(alphapay_feature_value{feature="outgoing_bytes_ratio"}) > 6
+        for: 20s
+        labels:
+          severity: critical
+          categorie: attaque
+          service: api-payment
+        annotations:
+          resume: "Volume sortant très supérieur à la tendance habituelle."
+          detail: >-
+            Le volume de données renvoyées dépasse six fois la moyenne longue.
+            Une exfiltration est plausible et justifie un confinement.
+
+  # ---------------------------------------------------------------------------
+  #  Exploitation : disponibilité et intégrité
+  # ---------------------------------------------------------------------------
+  - name: alphapay-exploitation
+    interval: 5s
+    rules:
+      - alert: AlphaPayServiceDown
+        expr: up{job="alphapay-services"} == 0
+        for: 20s
+        labels:
+          severity: critical
+          categorie: disponibilite
+        annotations:
+          resume: "Un composant de la plateforme ne répond plus."
+          detail: >-
+            Le service {{ $labels.service }} ne répond plus à la collecte depuis
+            20 secondes. Le redémarrage et la vérification de bout en bout sont
+            déclenchés automatiquement.
+
+      - alert: AlphaPayErrorRateHigh
+        expr: >-
+          (
+            sum(rate(alphapay_http_requests_total{status=~"5.."}[1m]))
+            /
+            clamp_min(sum(rate(alphapay_http_requests_total[1m])), 0.001)
+          ) > 0.15
+        for: 30s
+        labels:
+          severity: warning
+          categorie: disponibilite
+        annotations:
+          resume: "Taux d'erreur serveur supérieur à 15 %."
+          detail: >-
+            La proportion de réponses en erreur dépasse le seuil d'exploitation
+            retenu pour la plateforme de paiement.
+
+      - alert: AlphaPayLatencyDegraded
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum(rate(alphapay_http_request_duration_seconds_bucket{service="api-payment"}[1m])) by (le)
+          ) > 1.0
+        for: 30s
+        labels:
+          severity: warning
+          categorie: performance
+        annotations:
+          resume: "Latence p95 du paiement supérieure à une seconde."
+          detail: >-
+            Le quatre-vingt-quinzième centile de latence du service de paiement
+            dépasse une seconde, ce qui dégrade l'expérience client.
+
+      - alert: AlphaPayLedgerImbalance
+        expr: max(alphapay_ledger_imbalance_cents) != 0
+        for: 10s
+        labels:
+          severity: critical
+          categorie: integrite
+        annotations:
+          resume: "Déséquilibre comptable détecté dans le grand livre."
+          detail: >-
+            La somme des écritures ne s'annule plus. L'intégrité comptable est
+            rompue : un instantané doit être pris et une réconciliation lancée
+            avant toute reprise du service.
+
+      - alert: AlphaPayVerificationFailed
+        expr: max(alphapay_remediation_state{state="FAILED"}) == 1
+        for: 10s
+        labels:
+          severity: critical
+          categorie: reprise
+        annotations:
+          resume: "Une tentative de reprise autonome s'est soldée par un échec."
+          detail: >-
+            La vérification de bout en bout n'a pas confirmé le rétablissement.
+            Une nouvelle tentative est engagée ; en cas d'échec répété, la main
+            est rendue à l'opérateur avec l'ensemble des éléments de diagnostic.
+
+  # ---------------------------------------------------------------------------
+  #  Sécurité applicative
+  # ---------------------------------------------------------------------------
+  - name: alphapay-securite
+    interval: 5s
+    rules:
+      - alert: AlphaPayAuthAbuse
+        expr: sum(rate(alphapay_auth_attempts_total{outcome=~"failure|locked"}[1m])) > 8
+        for: 30s
+        labels:
+          severity: critical
+          categorie: attaque
+          service: api-auth
+        annotations:
+          resume: "Taux d'échec d'authentification anormal."
+          detail: >-
+            Plus de huit échecs d'authentification par seconde. Un bourrage
+            d'identifiants est probable.
+
+      - alert: AlphaPayTokensRevokedSurge
+        expr: sum(rate(alphapay_tokens_revoked_total[1m])) > 20
+        for: 20s
+        labels:
+          severity: warning
+          categorie: securite
+        annotations:
+          resume: "Vague de révocation de jetons en cours."
+          detail: >-
+            La cadence de révocation traduit une action de confinement ou une
+            compromission étendue.
+
+      - alert: AlphaPayWafBlockSurge
+        expr: >-
+          (
+            sum(rate(alphapay_http_requests_total{service="edge",status="403"}[1m]))
+            /
+            clamp_min(sum(rate(alphapay_http_requests_total{service="edge"}[1m])), 0.001)
+          ) > 0.30
+        for: 20s
+        labels:
+          severity: warning
+          categorie: securite
+        annotations:
+          resume: "Part élevée de requêtes rejetées par le WAF."
+          detail: >-
+            Le WAF rejette plus de trois requêtes sur dix : la bordure est
+            soumise à une campagne automatisée.

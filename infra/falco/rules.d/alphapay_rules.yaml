@@ -1,0 +1,94 @@
+# =============================================================================
+#  AlphaPay — Règles de détection d'exécution propres à la plateforme
+# =============================================================================
+#  Ces règles complètent le jeu de règles standard de Falco. Elles visent trois
+#  comportements qui, sur cette plateforme précise, n'ont aucune justification
+#  légitime.
+#
+#  Le nom du conteneur sert de filtre : toutes les charges de la pile portent le
+#  préfixe `alphaplat-`, ce qui évite de signaler des conteneurs sans rapport.
+# =============================================================================
+
+- rule: AlphaPay — shell interactif dans un conteneur
+  desc: >-
+    Un shell lancé dans un conteneur applicatif signale une intrusion ou une
+    erreur de conception. Aucun composant d'AlphaPay n'en ouvre.
+  condition: >-
+    spawned_process
+    and container
+    and container.name startswith "alphaplat-"
+    and proc.name in (bash, sh, ash, zsh, dash)
+    and proc.tty != 0
+  output: >-
+    Shell interactif dans un conteneur de la plateforme
+    (conteneur=%container.name utilisateur=%user.name commande=%proc.cmdline
+    parent=%proc.pname)
+  priority: WARNING
+  tags: [alphapay, execution, intrusion]
+
+- rule: AlphaPay — modification d'une politique ou d'un playbook
+  desc: >-
+    Les politiques et les playbooks de remédiation déterminent ce que la
+    plateforme a le droit de faire à elle-même. Leur modification en cours
+    d'exécution est un acte d'administration, jamais une opération automatique :
+    elle doit être vue et attribuée.
+  condition: >-
+    open_write
+    and container
+    and container.name startswith "alphaplat-"
+    and (fd.name startswith /etc/alphapay or fd.name contains "/policies/" or fd.name contains "/playbooks/")
+  output: >-
+    Écriture dans une politique ou un playbook de remédiation
+    (conteneur=%container.name processus=%proc.name fichier=%fd.name
+    utilisateur=%user.name)
+  priority: CRITICAL
+  tags: [alphapay, integrite, gouvernance]
+
+- rule: AlphaPay — écriture dans un binaire système
+  desc: >-
+    Aucun conteneur de la plateforme n'a de raison d'écrire dans les
+    répertoires de binaires. Cette règle couvre la persistance après
+    exploitation.
+  condition: >-
+    open_write
+    and container
+    and container.name startswith "alphaplat-"
+    and (fd.name startswith /usr/bin or fd.name startswith /usr/sbin
+         or fd.name startswith /bin or fd.name startswith /sbin)
+  output: >-
+    Écriture dans un répertoire de binaires système
+    (conteneur=%container.name processus=%proc.name fichier=%fd.name)
+  priority: CRITICAL
+  tags: [alphapay, persistance, integrite]
+
+- rule: AlphaPay — connexion sortante depuis un conteneur de données
+  desc: >-
+    Le conteneur de base de données n'a aucune raison d'ouvrir une connexion
+    vers l'extérieur. Une sortie réseau depuis cette zone traduit une tentative
+    d'exfiltration.
+  condition: >-
+    outbound
+    and container
+    and container.name = "alphaplat-postgres"
+    and not fd.sport in (5432, 5433)
+  output: >-
+    Connexion sortante depuis la zone de données
+    (conteneur=%container.name destination=%fd.cip:%fd.sport processus=%proc.name)
+  priority: CRITICAL
+  tags: [alphapay, exfiltration, reseau]
+
+- rule: AlphaPay — lecture massive du grand livre
+  desc: >-
+    Une lecture en volume des tables comptables depuis un processus non prévu
+    est un signal d'exfiltration de données.
+  condition: >-
+    open_read
+    and container
+    and container.name startswith "alphaplat-"
+    and fd.name contains "/pgdata/"
+    and not proc.name in (postgres, psql, pg_dump, pg_restore, initdb, pg_ctl)
+  output: >-
+    Lecture directe des fichiers du grand livre
+    (conteneur=%container.name processus=%proc.name fichier=%fd.name)
+  priority: CRITICAL
+  tags: [alphapay, exfiltration, donnees]

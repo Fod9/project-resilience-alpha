@@ -1,0 +1,109 @@
+# =============================================================================
+#  AlphaPay — Promtail (collecte des journaux)
+# =============================================================================
+#  Les services écrivent leurs événements structurés dans le volume partagé
+#  `/var/log/alphapay`, en JSON Lines. Promtail les suit et les expédie à Loki.
+#
+#  Pourquoi un volume plutôt que la lecture directe des journaux Docker :
+#  la télémétrie doit lire exactement les mêmes lignes pour en extraire les
+#  variables observées. Un support unique garantit que le détecteur et
+#  l'opérateur regardent la même vérité — condition indispensable pour qu'une
+#  explication d'anomalie soit vérifiable par un jury.
+# =============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 131072
+    backoff_config:
+      min_period: 200ms
+      max_period: 5s
+      max_retries: 10
+
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  #  Journal d'accès de la bordure et événements des services
+  # ---------------------------------------------------------------------------
+  - job_name: alphapay-evenements
+    pipeline_stages:
+      # Le champ `service` du JSON devient une étiquette : c'est ce qui permet
+      # de filtrer par composant dans Grafana sans indexer le contenu.
+      - json:
+          expressions:
+            service: service
+            level: level
+            event: event
+            trace_id: trace_id
+      - labels:
+          service:
+          level:
+          event:
+      - timestamp:
+          source: ts
+          format: RFC3339
+          # Un horodatage absent ou illisible ne doit pas faire disparaître la
+          # ligne : on retombe sur l'instant de collecte.
+          fallback_formats:
+            - RFC3339Nano
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: alphapay-evenements
+          hote: poste-hote
+          __path__: /var/log/alphapay/*.jsonl
+
+  # ---------------------------------------------------------------------------
+  #  Journal d'audit ModSecurity : la trace de ce que le WAF a décidé
+  # ---------------------------------------------------------------------------
+  - job_name: alphapay-waf
+    pipeline_stages:
+      - json:
+          expressions:
+            client_ip: transaction.client_ip
+            uri: transaction.request.uri
+            methode: transaction.request.method
+            code: transaction.response.http_code
+            interrompu: transaction.is_interrupted
+            regles: transaction.messages
+      - template:
+          source: decision
+          template: '{{ if eq .interrompu true }}bloque{{ else }}observe{{ end }}'
+      - labels:
+          decision:
+          code:
+          methode:
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: alphapay-waf
+          hote: poste-hote
+          __path__: /var/log/alphapay/edge-modsec.log
+
+  # ---------------------------------------------------------------------------
+  #  Erreurs de la bordure : texte brut, aucun décodage JSON attendu
+  # ---------------------------------------------------------------------------
+  - job_name: alphapay-bordure-erreurs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: alphapay-bordure-erreurs
+          niveau: erreur
+          __path__: /var/log/alphapay/edge-error.log
+
+  # ---------------------------------------------------------------------------
+  #  Journal du surveillant de la liste de blocage : traçabilité des rechargements
+  # ---------------------------------------------------------------------------
+  - job_name: alphapay-blocage
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: alphapay-blocage
+          __path__: /var/log/alphapay/edge-reload.log

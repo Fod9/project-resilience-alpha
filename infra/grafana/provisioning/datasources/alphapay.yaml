@@ -1,0 +1,42 @@
+# =============================================================================
+#  AlphaPay — sources de données Grafana
+# =============================================================================
+#  Les identifiants (`uid`) sont fixés explicitement. C'est indispensable : les
+#  tableaux de bord versionnés dans ce dépôt y font référence par leur `uid`, et
+#  un identifiant généré automatiquement casserait tous les panneaux à chaque
+#  recréation du volume Grafana.
+# =============================================================================
+
+apiVersion: 1
+
+deleteDatasources:
+  - name: AlphaPay Metriques
+    orgId: 1
+  - name: AlphaPay Journaux
+    orgId: 1
+
+datasources:
+  - name: AlphaPay Metriques
+    uid: alphapay-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 5s
+      httpMethod: POST
+      # Le pas de temps suit l'intervalle de collecte : un pas plus fin
+      # produirait des trous visuels trompeurs pendant une attaque.
+      prometheusType: Prometheus
+      prometheusVersion: 2.54.1
+
+  - name: AlphaPay Journaux
+    uid: alphapay-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 2000
+      timeout: 60

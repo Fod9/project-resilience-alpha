@@ -1,0 +1,85 @@
+# =============================================================================
+#  AlphaPay — Falco (détection d'exécution, composant SOC)
+# =============================================================================
+#  Falco surveille les appels système des conteneurs et signale les
+#  comportements qui ne devraient jamais se produire : ouverture d'un shell
+#  interactif, écriture dans un binaire système, accès inhabituel à un fichier
+#  sensible.
+#
+#  CHOIX D'INGÉNIERIE : pourquoi pas la pile Elastic ?
+#  Le sujet l'exclut explicitement au regard de la mémoire disponible. Falco
+#  s'exécute en espace noyau avec une empreinte de quelques centaines de
+#  mégaoctets, ses événements partent vers Loki via Falcosidekick, et Grafana
+#  les affiche. Le rapport coût/couverture est sans comparaison sur un poste à
+#  12 Go partagé entre dix-huit conteneurs.
+# =============================================================================
+
+# --- Moteur -------------------------------------------------------------------
+# `modern_ebpf` évite d'avoir à compiler un module noyau : c'est la seule option
+# raisonnable sous WSL2, et elle fonctionne aussi sur un noyau Linux classique.
+engine:
+  kind: modern_ebpf
+
+modern_ebpf:
+  # Tampon volontairement modeste : le trafic de l'exercice est faible, et la
+  # mémoire est la ressource critique de ce poste.
+  buf_size_preset: 4
+  # Les conteneurs de la pile sont identifiés par leur préfixe : les événements
+  # portent ainsi le nom du service concerné, ce qui permet au moteur de
+  # remédiation de cibler le bon conteneur.
+  drop_failed_exit: false
+
+# --- Règles -------------------------------------------------------------------
+rules_files:
+  - /etc/falco/falco_rules.yaml
+  - /etc/falco/rules.d
+
+# --- Sortie -------------------------------------------------------------------
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+
+# Tout ce qui est en dessous de `warning` n'a pas d'utilité ici et noierait
+# les événements exploitables.
+priority: warning
+
+log_stderr: true
+log_syslog: false
+log_level: warning
+
+# Falcosidekick reçoit les événements et les répartit : vers Loki pour
+# conservation, vers le moteur de remédiation pour réaction.
+http_output:
+  enabled: true
+  url: http://falcosidekick:2801/
+  insecure: true
+  user_agent: "falcosecurity/falco"
+
+program_output:
+  enabled: false
+
+stdout_output:
+  enabled: true
+
+syslog_output:
+  enabled: false
+
+# --- Divers -------------------------------------------------------------------
+grpc:
+  enabled: false
+
+grpc_output:
+  enabled: false
+
+metrics:
+  enabled: false
+
+# La priorité minimale par défaut ne doit pas dépendre d'une option de ligne de
+# commande : la configuration est la source de vérité.
+time_format_iso_8601: true
+
+buffered_outputs: false
+
+outputs:
+  rate: 0
+  max_burst: 1000
