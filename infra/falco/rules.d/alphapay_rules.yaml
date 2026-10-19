@@ -9,7 +9,7 @@
 #  préfixe `alphaplat-`, ce qui évite de signaler des conteneurs sans rapport.
 # =============================================================================
 
-- rule: AlphaPay : shell interactif dans un conteneur
+- rule: "AlphaPay : shell interactif dans un conteneur"
   desc: >-
     Un shell lancé dans un conteneur applicatif signale une intrusion ou une
     erreur de conception. Aucun composant d'AlphaPay n'en ouvre.
@@ -26,7 +26,7 @@
   priority: WARNING
   tags: [alphapay, execution, intrusion]
 
-- rule: AlphaPay : modification d'une politique ou d'un playbook
+- rule: "AlphaPay : modification d'une politique ou d'un playbook"
   desc: >-
     Les politiques et les playbooks de remédiation déterminent ce que la
     plateforme a le droit de faire à elle-même. Leur modification en cours
@@ -44,7 +44,7 @@
   priority: CRITICAL
   tags: [alphapay, integrite, gouvernance]
 
-- rule: AlphaPay : écriture dans un binaire système
+- rule: "AlphaPay : écriture dans un binaire système"
   desc: >-
     Aucun conteneur de la plateforme n'a de raison d'écrire dans les
     répertoires de binaires. Cette règle couvre la persistance après
@@ -61,7 +61,7 @@
   priority: CRITICAL
   tags: [alphapay, persistance, integrite]
 
-- rule: AlphaPay : connexion sortante depuis un conteneur de données
+- rule: "AlphaPay : connexion sortante depuis un conteneur de données"
   desc: >-
     Le conteneur de base de données n'a aucune raison d'ouvrir une connexion
     vers l'extérieur. Une sortie réseau depuis cette zone traduit une tentative
@@ -77,7 +77,7 @@
   priority: CRITICAL
   tags: [alphapay, exfiltration, reseau]
 
-- rule: AlphaPay : lecture massive du grand livre
+- rule: "AlphaPay : lecture massive du grand livre"
   desc: >-
     Une lecture en volume des tables comptables depuis un processus non prévu
     est un signal d'exfiltration de données.
