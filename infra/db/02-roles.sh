@@ -33,6 +33,8 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON DATABASE :"db_name" FROM PUBLIC;
 GRANT CONNECT ON DATABASE :"db_name" TO postgres;
 
+-- L'extension pgvector s'installe dans `public`. Un rôle ...[truncated]
+
 -- ---------------------------------------------------------------------------
 --  2. Création des rôles
 -- ---------------------------------------------------------------------------

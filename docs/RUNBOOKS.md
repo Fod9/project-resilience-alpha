@@ -20,6 +20,14 @@ conteneur**, préfixé `alphaplat-` (par exemple `alphaplat-edge`,
 `alphaplat-detector`, `alphaplat-remediation`). L'index des procédures
 figure ci-dessous.
 
+Nota sur l'accès au moteur (bordure) : la **lecture** d'état passe par
+`GET $CIBLE/api/supervision/...` (état, incidents, chronologie,
+vérifications), sans jeton. Les **commandes** d'administration (rejouer la
+suite de vérification, relâcher la suspension, déclencher un playbook)
+passent par le préfixe public `/api/ops/` de la bordure, réécrit vers
+`/api/actions/...` du moteur de remédiation, et exigent l'en-tête
+`X-Admin-Token`, dont la valeur est `ADMIN_API_TOKEN` dans `.env`.
+
 - **R1** — Démarrage à froid de la pile
 - **R2** — Diagnostic d'un service indisponible
 - **R3** — Lecture d'un incident de remédiation
@@ -31,9 +39,11 @@ figure ci-dessous.
 Nota : l'exécution réelle des playbooks est activée par
 `DEMO_MODE=true` dans `.env` ; en `DEMO_MODE=false`, le moteur reste en
 `DRY_RUN` et ne change que l'étape d'exécution. Toute commande humaine
-sur le moteur (relâcher, escalader, interdire) passe par l'API
-`/api/supervision/...` sous l'en-tête `X-Admin-Token`, dont la valeur est
-`ADMIN_API_TOKEN` dans `.env`.
+sur le moteur (relâcher la suspension, réexécuter la vérification,
+déclencher un playbook) passe par l'API publique `/api/ops/actions/...`
+de la bordure, sous l'en-tête `X-Admin-Token`, dont la valeur est
+`ADMIN_API_TOKEN` dans `.env` ; la consultation de l'état reste publique
+(`/api/supervision/...`).
 
 ## R1 — Démarrage à froid de la pile
 
@@ -129,25 +139,31 @@ réponse d'un service, ou étape de vérification du moteur bloquée.
    **Résultat attendu** : un conteneur en `Restarting (N)`, `Exited` ou
    sans santé `ok` est mis en évidence.
 
-2. Journal du service suspect (remplacer `SVC`) :
+2. Journal du conteneur suspect. `SVC` est le nom de service complet
+   (`edge`, `api-ledger`, `detector`, ...) ; son conteneur porte le préfixe
+   `alphaplat-` :
 
    ```bash
    docker logs --since 15m alphaplat-SVC
-   docker logs alphaplat-remediation | grep -i "SVC\|recherche" | tail -20
+   docker logs alphaplat-remediation | grep -i "$SVC\|recherche" | tail -20
    ```
 
-3. Circuit complet et dernière action du moteur :
+3. Circuit complet du moteur et actions du dernier incident : l'état
+   courant expose la suspension, les échecs consécutifs (disjoncteur) et
+   l'incident en cours ; le détail de cet incident expose ses actions :
 
    ```bash
    curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/supervision/state"
    curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/actions?limit=10"
+        "$CIBLE/api/supervision/incidents?limit=1"
+   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+        "$CIBLE/api/supervision/incidents/ID_INCIDENT"
    ```
 
-   **Vérification** : l'état expose la dernière action exécutée ; la
-   chronologie distingue un redémarrage (recherche) d'un isolement de
-   bordure.
+   **Vérification** : l'état expose l'incident en cours et le compteur
+   d'échecs consécutifs ; le détail distingue un redémarrage (phase
+   recherche / remise en état) d'un isolement de bordure.
 
 4. Isolation réseau du conteneur (cause infra) :
 
@@ -178,8 +194,7 @@ préparation du point de situation.
 1. Liste des incidents (borne de détection, délai MTTD/MTTR, playbook) :
 
    ```bash
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/incidents?limit=10"
+   curl -s "$CIBLE/api/supervision/incidents?limit=10"
    ```
 
 2. Détail de l'incident (remplacer `ID_INCIDENT`) : le point de lecture
@@ -187,8 +202,7 @@ préparation du point de situation.
    d'événements, les actions exécutées et les vérifications :
 
    ```bash
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/incidents/ID_INCIDENT"
+   curl -s "$CIBLE/api/supervision/incidents/ID_INCIDENT"
    ```
 
    La réponse expose `incident` (état, sévérité, `mttd_ms`, `mttr_ms`,
@@ -207,11 +221,12 @@ préparation du point de situation.
         "$CIBLE/api/supervision/verifications?limit=5"
    ```
 
-4. Rejouer la suite de vérification de restitution à la demande (admin) :
+4. Rejouer la suite de vérification de restitution à la demande (commande
+   d'administration, en-tête `X-Admin-Token`) :
 
    ```bash
    curl -s -X POST -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/actions/verify"
+        "$CIBLE/api/ops/actions/verify"
    ```
 
 **Vérification** : le détail porte la politique (par exemple
@@ -309,10 +324,8 @@ passage devant le jury.
 
    ```bash
    curl -s "$CIBLE/healthz"
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/state"
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/incidents?limit=5"
+   curl -s "$CIBLE/api/supervision/state"
+   curl -s "$CIBLE/api/supervision/incidents?limit=5"
    ```
 
 **Vérification** : la bordure est saine ; l'état du moteur ne porte
@@ -351,31 +364,34 @@ MTTD / MTTR.
    Le deuxième argument est l'adresse d'origine de l'attaque
    (défaut `192.168.137.20`).
 
-3. Capturer l'état du moteur, les incidents et les métriques :
+3. Capturer l'état du moteur et les incidents (chaque incident porte ses
+   délais `mttd_ms` / `mttr_ms`) :
 
    ```bash
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" "$CIBLE/api/supervision/state"
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" "$CIBLE/api/supervision/incidents?limit=20"
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" "$CIBLE/api/supervision/metrics?limit=20"
+   curl -s "$CIBLE/api/supervision/state"
+   curl -s "$CIBLE/api/supervision/incidents?limit=20"
    ```
 
 4. Capturer les preuves de restitution (six points de contrôle) :
    santé des services, transaction synthétique de bout en bout,
    intégrité comptable, confinement effectif, intégrité d'image,
-   intégrité d'authentification :
+   intégrité d'authentification. Le déclenchement de la suite de
+   vérification est une commande d'administration (en-tête
+   `X-Admin-Token`) ; la liste des rapports et l'intégrité comptable sont
+   publics :
 
    ```bash
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/verify?incident=ID_INCIDENT"
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" "$CIBLE/api/ledger/integrity"
+   curl -s -X POST -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+        "$CIBLE/api/ops/actions/verify"
+   curl -s "$CIBLE/api/supervision/verifications?limit=5"
+   curl -s "$CIBLE/api/ledger/integrity"
    ```
 
 5. Regrouper les résultats et les exporter :
 
    ```bash
    bash tests/e2e.sh A1 > preuve_e2e.txt
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/incidents" > preuve_incidents.json
+   curl -s "$CIBLE/api/supervision/incidents" > preuve_incidents.json
    docker logs alphaplat-detector --since 30m > preuve_detector.log
    docker logs alphaplat-remediation --since 30m > preuve_remediation.log
    ```
@@ -395,12 +411,14 @@ données.
 alerte `AlphaPayLedgerImbalance` (intégrité comptable).
 
 1. Prendre un instantané d'état du grand livre via l'API du service de
-   grand livre (volume de snapshots monté en écriture) :
+   grand livre (volume de snapshots monté en écriture). Les routes
+   d'administration du grand livre exigent l'en-tête `X-Internal-Token`
+   (valeur : `ADMIN_API_TOKEN`) :
 
    ```bash
-   curl -s -X POST -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+   curl -s -X POST -H "X-Internal-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/ledger/admin/snapshot"
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+   curl -s -H "X-Internal-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/ledger/admin/snapshots"
    ```
 
@@ -432,7 +450,7 @@ alerte `AlphaPayLedgerImbalance` (intégrité comptable).
 4. Restaurer depuis l'instantané d'application (si besoin) :
 
    ```bash
-   curl -s -X POST -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+   curl -s -X POST -H "X-Internal-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/ledger/admin/restore"
    ```
 

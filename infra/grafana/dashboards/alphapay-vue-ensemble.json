@@ -140,7 +140,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(alphapay_http_requests_total{status=~\"5..\"}[1m])) / clamp_min(sum(rate(alphapay_http_requests_total[1m])), 0.001)",
+          "expr": "sum(rate(alphapay_http_requests_total{status=~\"5..\"}[1m]))\n/\nsum(rate(alphapay_http_requests_total[1m]))\nand\nsum(rate(alphapay_http_requests_total[1m])) > 0",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -191,7 +191,9 @@
                 "value": 0.15
               }
             ]
-          }
+          },
+          "min": 0,
+          "max": 1
         }
       }
     },
@@ -293,8 +295,8 @@
     },
     {
       "id": 6,
-      "title": "Deséquilibre comptable",
-      "description": "Somme des ecritures non nulle = integrite rompue.",
+      "title": "Déséquilibre comptable (centimes)",
+      "description": "Écart entre la somme des débits et celle des crédits, en centimes. Doit rester strictement à zéro : toute valeur non nulle signale une corruption de l'invariant comptable.",
       "datasource": {
         "type": "prometheus",
         "uid": "alphapay-prometheus"
@@ -334,7 +336,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "short",
           "thresholds": {
             "mode": "absolute",
             "steps": [
