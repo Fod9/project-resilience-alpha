@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  seed-secrets.sh — génère un fichier .env complet à partir de .env.example
+#  seed-secrets.sh : génère un fichier .env complet à partir de .env.example
 # =============================================================================
 #  Produit des secrets aléatoires forts pour toutes les valeurs sensibles, puis
 #  vérifie que la configuration obtenue est exploitable par Docker Compose.

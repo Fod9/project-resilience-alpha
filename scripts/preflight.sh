@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  preflight.sh — contrôles de pré-vol de la pile AlphaPay
+#  preflight.sh : contrôles de pré-vol de la pile AlphaPay
 # =============================================================================
 #  À exécuter sur le poste hôte (Windows + WSL2 ou Linux) AVANT tout démarrage.
 #  Vérifie les prérequis matériels et logiciels du sujet, puis la cohérence de
@@ -51,7 +51,7 @@ if [ -r /proc/meminfo ]; then
     if [ "$MEM_GO" -ge 12 ]; then
         ok "mémoire : ${MEM_GO} Go accessibles au conteneur (minimum conseillé 12)"
     else
-        echec "mémoire : ${MEM_GO} Go — relever la limite WSL2 dans %UserProfile%\\.wslconfig (memory=12GB)"
+        echec "mémoire : ${MEM_GO} Go : relever la limite WSL2 dans %UserProfile%\\.wslconfig (memory=12GB)"
     fi
 fi
 
@@ -67,9 +67,9 @@ for port in 80 443 3000 9090; do
     if command -v ss >/dev/null 2>&1; then
         if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"; then
             if [ "$port" = "80" ] || [ "$port" = "443" ]; then
-                avert "port $port déjà occupé — arrêter le service qui l'utilise ou changer EDGE_HTTP_PORT/EDGE_HTTPS_PORT"
+                avert "port $port déjà occupé : arrêter le service qui l'utilise ou changer EDGE_HTTP_PORT/EDGE_HTTPS_PORT"
             else
-                avert "port $port déjà occupé — changer GRAFANA_PORT/PROMETHEUS_PORT"
+                avert "port $port déjà occupé : changer GRAFANA_PORT/PROMETHEUS_PORT"
             fi
         else
             ok "port $port libre"

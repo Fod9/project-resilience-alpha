@@ -1,5 +1,5 @@
 # =============================================================================
-#  PROJECT RESILIENCE-ALPHA — AlphaPay
+#  PROJECT RESILIENCE-ALPHA : AlphaPay
 #  Orchestration de la plateforme de paiement et de la salle d'opérations
 # =============================================================================
 #  Cibles matérielles : PC Hôte Windows 10/11 + Docker Desktop (WSL2),
@@ -68,7 +68,7 @@ networks:
   net-obs:
     name: alphaplat-obs
     internal: true
-  # Administration : remédiation, Vault, API Docker — jamais exposé
+  # Administration : remédiation, Vault, API Docker : jamais exposé
   net-mgmt:
     name: alphaplat-mgmt
     internal: true
@@ -98,7 +98,7 @@ volumes:
 services:
 
   # ===========================================================================
-  #  0. Initialisation — préparation et permissions des volumes persistants
+  #  0. Initialisation : préparation et permissions des volumes persistants
   # ===========================================================================
   #  Volontairement exécuté en root une seule fois : les images officielles
   #  Prometheus (uid 65534), Grafana (uid 472) et nos services (uid 10001)
@@ -197,7 +197,7 @@ services:
       - no-new-privileges:true
 
   # ===========================================================================
-  #  2. Bordure — WAF applicatif (ModSecurity v3 + OWASP CRS) et reverse proxy
+  #  2. Bordure : WAF applicatif (ModSecurity v3 + OWASP CRS) et reverse proxy
   # ===========================================================================
   edge:
     build:
@@ -236,7 +236,7 @@ services:
       - no-new-privileges:true
 
   # ===========================================================================
-  #  3. Interface web (SPA React) — /pay et /ops
+  #  3. Interface web (SPA React) : /pay et /ops
   # ===========================================================================
   web:
     build:
@@ -356,7 +356,7 @@ services:
     mem_limit: 384m
 
   # ===========================================================================
-  #  5. Télémétrie — agrégation des 18 features sur fenêtres de 60 s
+  #  5. Télémétrie : agrégation des 18 features sur fenêtres de 60 s
   # ===========================================================================
   telemetry:
     <<: *python-service
@@ -623,7 +623,7 @@ services:
     mem_limit: 128m
 
   # ===========================================================================
-  #  11. Supervision — métriques
+  #  11. Supervision : métriques
   # ===========================================================================
   prometheus:
     build:
@@ -697,7 +697,7 @@ services:
       - no-new-privileges:true
 
   # ===========================================================================
-  #  12. Supervision — journaux
+  #  12. Supervision : journaux
   # ===========================================================================
   loki:
     build:
@@ -746,7 +746,7 @@ services:
       - no-new-privileges:true
 
   # ===========================================================================
-  #  13. Supervision — tableaux de bord
+  #  13. Supervision : tableaux de bord
   # ===========================================================================
   grafana:
     build:
@@ -794,7 +794,7 @@ services:
       - no-new-privileges:true
 
   # ===========================================================================
-  #  14. SIEM / SOC — détection d'exécution
+  #  14. SIEM / SOC : détection d'exécution
   # ===========================================================================
   falco:
     build:

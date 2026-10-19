@@ -1,4 +1,4 @@
-# Secrets et configuration locale — jamais versionnés.
+# Secrets et configuration locale : jamais versionnés.
 .env
 .env.*
 !.env.example

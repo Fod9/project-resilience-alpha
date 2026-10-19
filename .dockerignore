@@ -2,7 +2,7 @@
 #  Fichiers exclus des contextes de construction Docker.
 # =============================================================================
 #  Sans ce fichier, `docker build` expédie l'intégralité du répertoire au démon,
-#  y compris `.env` — donc les secrets générés localement. Les exclure évite
+#  y compris `.env` : donc les secrets générés localement. Les exclure évite
 #  toute fuite d'un secret vers une couche d'image ou un journal de construction.
 # =============================================================================
 
