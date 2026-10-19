@@ -33,7 +33,13 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON DATABASE :"db_name" FROM PUBLIC;
 GRANT CONNECT ON DATABASE :"db_name" TO postgres;
 
--- L'extension pgvector s'installe dans `public`. Un rôle ...[truncated]
+-- L'extension pgvector s'installe dans le schema `public`. Or le bloc
+-- ci-dessus en a retire l'usage a tout le monde. Un role qui manipule des
+-- vecteurs doit donc le recevoir explicitement, sinon PostgreSQL repond
+-- "type vector does not exist" au lieu d'un refus de privilege, message
+-- trompeur qui fait perdre un temps considerable. Seuls les deux roles qui
+-- touchent des vecteurs le recoivent.
+GRANT USAGE ON SCHEMA public TO svc_rag, svc_readonly;
 
 -- ---------------------------------------------------------------------------
 --  2. Création des rôles
