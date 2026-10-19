@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Playbooks de sécurité
+#  AlphaPay : Playbooks de sécurité
 # =============================================================================
 #  Un playbook est une suite ordonnée d'actions élémentaires. Chaque étape est
 #  rattachée à une phase de la reprise, ce qui alimente directement la
@@ -18,7 +18,7 @@
 playbooks:
 
   # ---------------------------------------------------------------------------
-  #  A1 — Rafale volumétrique
+  #  A1 : Rafale volumétrique
   # ---------------------------------------------------------------------------
   - id: PB-A1-CONFINER-ET-REDEMARRER
     title: "Confinement d'une rafale et remise en service du paiement"
@@ -77,7 +77,7 @@ playbooks:
         description: "Exigence des cinq preuves de rétablissement"
 
   # ---------------------------------------------------------------------------
-  #  A2 — Compromission d'identité
+  #  A2 : Compromission d'identité
   # ---------------------------------------------------------------------------
   - id: PB-A2-ROTATION-DE-CLES
     title: "Confinement et remplacement de la clé de signature"
@@ -152,7 +152,7 @@ playbooks:
         description: "Exigence des cinq preuves de rétablissement"
 
   # ---------------------------------------------------------------------------
-  #  A3 — Injection applicative et exfiltration
+  #  A3 : Injection applicative et exfiltration
   # ---------------------------------------------------------------------------
   - id: PB-A3-CONFINER-ET-REPARER
     title: "Confinement d'une injection et contrôle comptable"
@@ -208,7 +208,7 @@ playbooks:
         description: "Exigence des cinq preuves de rétablissement"
 
   # ---------------------------------------------------------------------------
-  #  SIEM — exécution suspecte dans un conteneur
+  #  SIEM : exécution suspecte dans un conteneur
   # ---------------------------------------------------------------------------
   - id: PB-SIEM-CONFINER-CONTENEUR
     title: "Quarantaine réseau d'un conteneur au comportement suspect"

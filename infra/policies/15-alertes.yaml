@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Politiques déclenchées par les alertes Prometheus
+#  AlphaPay : Politiques déclenchées par les alertes Prometheus
 # =============================================================================
 #  Second chemin de détection.
 #
@@ -8,9 +8,9 @@
 #  d'exploitation produisent les mêmes effets. La différence est assumée et
 #  documentée :
 #
-#    * le chemin « modèle » identifie l'adresse d'origine — il peut donc
+#    * le chemin « modèle » identifie l'adresse d'origine : il peut donc
 #      confiner la source, en plus de remettre le service en état ;
-#    * le chemin « alertes » ne transporte pas d'adresse d'origine — il remet le
+#    * le chemin « alertes » ne transporte pas d'adresse d'origine : il remet le
 #      service en état et le vérifie, sans confinement.
 #
 #  Les priorités sont volontairement inférieures à celles des politiques du
@@ -20,7 +20,7 @@
 
 policies:
   # ---------------------------------------------------------------------------
-  #  Injection applicative — détectée par le seuil sur la variable observée
+  #  Injection applicative : détectée par le seuil sur la variable observée
   # ---------------------------------------------------------------------------
   - id: POL-ALERTE-INJECTION
     title: "Injection applicative confirmée par les seuils de supervision"
@@ -40,7 +40,7 @@ policies:
     cooldown_seconds: 180
 
   # ---------------------------------------------------------------------------
-  #  Exfiltration suspectée — le volume sortant sort de la tendance longue
+  #  Exfiltration suspectée : le volume sortant sort de la tendance longue
   # ---------------------------------------------------------------------------
   - id: POL-ALERTE-EXFILTRATION
     title: "Volume sortant hors tendance, exfiltration plausible"
@@ -61,14 +61,14 @@ policies:
     cooldown_seconds: 180
 
   # ---------------------------------------------------------------------------
-  #  Bourrage d'identifiants — détecté par le taux d'échec d'authentification
+  #  Bourrage d'identifiants : détecté par le taux d'échec d'authentification
   # ---------------------------------------------------------------------------
   - id: POL-ALERTE-AUTH
     title: "Bourrage d'identifiants confirmé par les seuils de supervision"
     description: >-
       Déclenchée par la règle AlphaPayAuthAbuse. La priorité est inférieure à
       celle de POL-A2-IDENTITES : si le modèle a déjà qualifié la situation, sa
-      politique — qui sait quelle adresse bloquer — reste prioritaire.
+      politique : qui sait quelle adresse bloquer : reste prioritaire.
     severity: critical
     priority: 190
     sources: [alertmanager]
@@ -82,7 +82,7 @@ policies:
     cooldown_seconds: 180
 
   # ---------------------------------------------------------------------------
-  #  Dégradation de performance — réponse proportionnée
+  #  Dégradation de performance : réponse proportionnée
   # ---------------------------------------------------------------------------
   - id: POL-ALERTE-LATENCE
     title: "Latence du paiement durablement dégradée"

@@ -1,6 +1,6 @@
 -- =============================================================================
---  PROJECT RESILIENCE-ALPHA — AlphaPay
---  03-seed.sql — jeu de démonstration
+--  PROJECT RESILIENCE-ALPHA : AlphaPay
+--  03-seed.sql : jeu de démonstration
 -- =============================================================================
 --  Données entièrement fictives. Aucune donnée réelle, aucune clé réelle.
 --
@@ -58,7 +58,7 @@ INSERT INTO ledger.accounts (id, owner_user_id, code, label, currency, balance_c
    'CUST-000003', 'Compte client 03', 'EUR', 85000, 'active');
 
 -- -----------------------------------------------------------------------------
---  Transaction de genèse — équilibrée
+--  Transaction de genèse : équilibrée
 --      Débits   : 250000 + 120000 + 85000 = 455000
 --      Crédits  : 455000 sur le compte de règlement
 --      Somme de toutes les jambes = 0

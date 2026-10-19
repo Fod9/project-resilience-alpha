@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-#  Test de fumée de la bordure — exécuté hors de la pile complète.
+#  Test de fumée de la bordure : exécuté hors de la pile complète.
 # =============================================================================
 #  Vérifie, sur deux amonts factices, que :
 #    1. l'aiguillage par préfixe atteint le bon service ;

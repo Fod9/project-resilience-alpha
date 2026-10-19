@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — collecte Prometheus
+#  AlphaPay : collecte Prometheus
 # =============================================================================
 #  Intervalle volontairement court : la détection doit être rapide, et une
 #  résolution de 5 secondes suffit à distinguer une rafale d'un pic légitime.

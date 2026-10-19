@@ -1,4 +1,4 @@
-# Gouvernance et exploitation — PROJECT RESILIENCE-ALPHA
+# Gouvernance et exploitation : PROJECT RESILIENCE-ALPHA
 
 Plateforme de paiement fictive AlphaPay, réalisée dans le cadre du
 workshop national EPSI BAC+5 « PROJECT RESILIENCE-ALPHA : cyber-résilience
@@ -43,9 +43,9 @@ strictement internes** (`net-data`, `net-obs`, `net-mgmt`). Seuls la bordure
 
 | Valeur | Définition | Priorité |
 |--------|------------|----------|
-| VM1 — Intégrité des opérations | Un paiement enregistré est complet, cohérent, conforme au double effet ; le grand livre n'est jamais incohérent. | 1 |
-| VM2 — Confidentialité des identités et données | Identifiants, jetons, clés et données de compte ne sont pas exposés à des tiers non autorisés. | 1 |
-| VM3 — Disponibilité du paiement | Le client peut authentifier une session et solder un paiement dans un délai raisonnable. | 2 |
+| VM1 : Intégrité des opérations | Un paiement enregistré est complet, cohérent, conforme au double effet ; le grand livre n'est jamais incohérent. | 1 |
+| VM2 : Confidentialité des identités et données | Identifiants, jetons, clés et données de compte ne sont pas exposés à des tiers non autorisés. | 1 |
+| VM3 : Disponibilité du paiement | Le client peut authentifier une session et solder un paiement dans un délai raisonnable. | 2 |
 
 VM1 et VM2 priment sur VM3 : en cas de conflit, le système préfère refuser
 une transaction à en exécuter une dont l'intégrité ou la légitimité n'est
@@ -65,7 +65,7 @@ pas établie.
 
 ---
 
-## 2. Analyse de risques — EBIOS Risk Manager
+## 2. Analyse de risques : EBIOS Risk Manager
 
 Démarche EBIOS RM en deux temps : socle (valeurs métier, biens supports,
 événements redoutés, sources de risque, scénarios stratégiques) puis volet
@@ -86,11 +86,11 @@ opérationnel (scénarios d'incident, matrice de risques, mesures).
 | Chaîne de supervision (Prometheus, Alertmanager) | VM3 |
 | Stockage des secrets (Vault, dépôts chiffrés sops+age) | VM2 |
 
-**Événements redoutés** — ER1 indisponibilité du paiement (volume hostile saturant la capacité) ; ER2 indépendance d'identité compromise (identifiants brouillés, jetons ou clé usurpés) ; ER3 compromission d'intégrité des données (injection, écriture non autorisée, exfiltration) ; ER4 altération du grand livre (solde incohérent) ; ER5 perte d'observation (attaque ou panne sans détection).
+**Événements redoutés** : ER1 indisponibilité du paiement (volume hostile saturant la capacité) ; ER2 indépendance d'identité compromise (identifiants brouillés, jetons ou clé usurpés) ; ER3 compromission d'intégrité des données (injection, écriture non autorisée, exfiltration) ; ER4 altération du grand livre (solde incohérent) ; ER5 perte d'observation (attaque ou panne sans détection).
 
-**Sources de risque** — SR1 attaquant externe automatisé (scripts contre la bordure exposée, A1/A2/A3) ; SR2 défaut applicatif (fuite, blocage, déséquilibre comptable) ; SR3 compromission d'un conteneur interne (charge utile détectée par Falco) ; SR4 défaillance de la chaîne de détection ; SR5 erreur du dispositif de remédiation (blocage d'une adresse légitime) ; SR6 faiblesse d'hygiène (durcissement incomplet, secret mal distribué, dérive de configuration).
+**Sources de risque** : SR1 attaquant externe automatisé (scripts contre la bordure exposée, A1/A2/A3) ; SR2 défaut applicatif (fuite, blocage, déséquilibre comptable) ; SR3 compromission d'un conteneur interne (charge utile détectée par Falco) ; SR4 défaillance de la chaîne de détection ; SR5 erreur du dispositif de remédiation (blocage d'une adresse légitime) ; SR6 faiblesse d'hygiène (durcissement incomplet, secret mal distribué, dérive de configuration).
 
-**Scénarios stratégiques** — SS1 saturation et déni de service (SR1 -> ER1) ; SS2 usurpation d'identité de masse (SR1 -> ER2) ; SS3 compromission applicative (SR1/SR3 -> ER3) ; SS4 dégradation silencieuse (SR2 -> ER4) ; SS5 aveuglement (SR4 -> ER5) ; SS6 dérive de sécurité (SR6 -> ER2/ER3).
+**Scénarios stratégiques** : SS1 saturation et déni de service (SR1 -> ER1) ; SS2 usurpation d'identité de masse (SR1 -> ER2) ; SS3 compromission applicative (SR1/SR3 -> ER3) ; SS4 dégradation silencieuse (SR2 -> ER4) ; SS5 aveuglement (SR4 -> ER5) ; SS6 dérive de sécurité (SR6 -> ER2/ER3).
 
 ### 2.2 Scénarios opérationnels
 
@@ -148,7 +148,7 @@ Organisation par couche, en distinguant prévention, détection, réaction.
 | Prévention | WAF ModSecurity v3 + OWASP CRS 4, paranoïa 1, mode bloquant, seuil d'anomalie entrant de 5 ; les charges d'injection et XSS sont rejetées avant les services. |
 | Prévention | Limites de débit par adresse IP et par route (authentification, paiement, assistant), durcissables dynamiquement par la remédiation. |
 | Prévention | En-têtes de sécurité (HSTS, CSP strict, X-Frame-Options : DENY, etc.) ; certificat TLS interne auto-signé, HTTP redirigé vers HTTPS (limité, section 8). |
-| Réaction | Liste de blocage dynamique : fichier relu par la bordure à chaque changement ; un témoin de rechargement horodaté (empreinte de la liste, résultat) est publié et vérifié par le moteur — une règle n'est active que si le rechargement a abouti. |
+| Réaction | Liste de blocage dynamique : fichier relu par la bordure à chaque changement ; un témoin de rechargement horodaté (empreinte de la liste, résultat) est publié et vérifié par le moteur : une règle n'est active que si le rechargement a abouti. |
 
 ### 3.2 Couche applicative
 
@@ -168,7 +168,7 @@ Organisation par couche, en distinguant prévention, détection, réaction.
 |------|--------|
 | Détection | Modèle d'anomalie non supervisé (forêt d'isolation) : 18 variables, fenêtre glissante de 60 s, seuil calibré au 99,8e centile du trafic nominal simulé. Le signalement qualifié identifie l'adresse d'origine pressentie, ce qui rend le confinement possible. |
 | Détection | Règles d'alerte Prometheus formant le deuxième chemin, indépendant du modèle : onze règles couvrant l'anomalie, l'injection, l'exfiltration, le service indisponible, le taux d'erreurs, la latence, le déséquilibre comptable, l'échec de vérification, l'authentification, les révocations de jetons et le blocage WAF. Ces alertes ne transportent pas d'adresse d'origine : elles remettent en état et vérifient, sans confinement. |
-| Détection | Supervision runtime (Falco) : shell dans un conteneur, écriture dans un binaire système, connexion sortante inattendue — comportements à malveillance intrinsèque que le modèle statistique ne qualifie pas. |
+| Détection | Supervision runtime (Falco) : shell dans un conteneur, écriture dans un binaire système, connexion sortante inattendue : comportements à malveillance intrinsèque que le modèle statistique ne qualifie pas. |
 | Prévention de la défaillance | Redondance des chemins : les priorités du chemin « modèle » sont supérieures, car il est le plus complet (il sait quelle adresse bloquer). |
 
 ### 3.4 Couche de réaction (moteur de remédiation)
@@ -210,7 +210,7 @@ Organisation par couche, en distinguant prévention, détection, réaction.
 Les trois scénarios d'attaque (A1, A2, A3), la défaillance d'un service
 applicatif (O1), la rupture de l'invariant comptable (O2), l'exécution
 suspecte dans un conteneur (O3), et la défaillance de chaque maillon de la
-chaîne de détection — le deuxième chemin doit alors suffire.
+chaîne de détection : le deuxième chemin doit alors suffire.
 
 ### 4.2 Objectifs de reprise par composant
 
@@ -256,7 +256,7 @@ chaîne de détection — le deuxième chemin doit alors suffire.
    par défaut) ; une levée anticipée suit la procédure de `RUNBOOKS.md`
    (retirer la règle, vérifier le témoin de rechargement).
 3. Gels comptables : un compte gelé par un playbook reste gelé jusqu'à
-   décision humaine — la seule étape qui exige l'humain.
+   décision humaine : la seule étape qui exige l'humain.
 4. Analyse d'après-incident : rapport archivé (politique, playbook,
    actions, preuves, délais) ; journaux conservés.
 5. Action corrective le cas échéant, tracée dans la matrice de risques.
@@ -284,7 +284,7 @@ sur un dump horodaté conservé hors du dépôt.
 Le règlement (UE) 2022/2555 s'applique aux prestataires de services de
 paiement. Le tableau fait le lien entre chaque exigence pertinente et le
 dispositif ; les points « non démontrables » sont ceux qu'un exercice de
-quatre jours ne peut pas établir — listés tels quels, sans être présentés
+quatre jours ne peut pas établir : listés tels quels, sans être présentés
 comme couverts.
 
 | Exigence NIS2 | Couverture | Comment |
@@ -318,7 +318,7 @@ dispositif :
 |---------------|----------------------|
 | Inventaire des systèmes d'information critiques (art. 6) | Le dispositif fournit l'inventaire par conteneur, réseau et volume (23 conteneurs, 5 réseaux dont 3 internes) ; les systèmes critiques se distinguent : bordure, trois services applicatifs, base, chaîne de détection. |
 | Évaluation des risques ICT (art. 8) | L'analyse EBIOS RM (section 2) est la méthode retenue. DORA exige qu'elle tienne compte des fournisseurs essentiels et de la concentration : la concentration (base unique, modèle unique) est un risque identifié, traité par la redondance des chemins de détection et la reproductibilité du modèle. |
-| Incidents ICT : classification et notification (art. 19) | Pour chaque incident, le moteur produit la gravité, la politique déclenchée, les actions, le MTTD/MTTR et l'état final — la matière première d'une notification. La classification « incident majeur » et les canaux vers l'autorité compétente relèvent de l'organisation. |
+| Incidents ICT : classification et notification (art. 19) | Pour chaque incident, le moteur produit la gravité, la politique déclenchée, les actions, le MTTD/MTTR et l'état final : la matière première d'une notification. La classification « incident majeur » et les canaux vers l'autorité compétente relèvent de l'organisation. |
 | Tests et exercices (art. 24-25) | Le banc offensif borné (A1, A2, A3 ; durée et volume plafonnés, refus de cibler une adresse hors périmètre autorisé, marquage horodaté) est l'équivalent miniature d'un exercice type TLPT : il rejoue les scénarios de manière reproductible et bornée. Un TLPT complet (adversaire habilité, non annoncé) est hors portée du sprint. |
 | Exigences de résilience (art. 16-23) | Le dispositif matérialise l'identification des systèmes critiques (section 4.2), les plans de continuité et de reprise (section 4.3), la tolérance à la défaillance d'une chaîne de détection (section 3.3) et la protection de la continuité des données (journal en ajout seul, instantanés du grand livre, restauration documentée). |
 | Transparence et supervision | Les preuves de rétablissement (V1 à V6) et les rapports d'incident automatisés sont des artefacts auditables, alignés sur l'attente DORA de justifier la résilience face à l'autorité de contrôle. |
@@ -336,28 +336,28 @@ qui alimenteront cette gouvernance.
 Chaque arbitrage est formulé : option retenue / option écartée / motif /
 conséquence assumée.
 
-**A1 — Modèle d'anomalie non supervisé.** Retenu : forêt d'isolation, 18
+**A1 : Modèle d'anomalie non supervisé.** Retenu : forêt d'isolation, 18
 variables, fenêtre de 60 s, seuil au 99,8e centile du trafic nominal
 simulé. Écarté : classifieur supervisé sur attaques réelles. Motif : en
 quatre jours aucun corpus d'attaques réelles n'existe ; le non supervisé
 n'attend que le trafic nominal produit par le banc de simulation et borne
 les faux positifs (zéro sur 30 minutes de trafic nominal). Conséquence
 assumée : le modèle signale l'écart à la norme sans « comprendre » l'attaque ;
-la qualification est déléguée aux politiques — séparation assumée entre
+la qualification est déléguée aux politiques : séparation assumée entre
 détection et décision.
 
-**A2 — Redondance de détection à capacités inégales.** Retenu : deux
-chemins inégaux par conception — le chemin modèle identifie l'adresse
+**A2 : Redondance de détection à capacités inégales.** Retenu : deux
+chemins inégaux par conception : le chemin modèle identifie l'adresse
 d'origine (peut confiner) ; le chemin alertes Prometheus ne transporte pas
 d'adresse (remet en état, vérifie, sans confinement). Écarté : un seul
 chemin, ou deux chemins de capacités égales. Motif : la tolérance à la
 panne exige la redondance ; équilibrer les capacités aurait coûté le
 transport de la source dans chaque alerte sans bénéfice. Conséquence
 assumée : si seul le chemin alertes fonctionne, le service est remis en
-état mais la source n'est pas coupée — l'attaque peut reprendre ; risque
+état mais la source n'est pas coupée : l'attaque peut reprendre ; risque
 explicitement porté.
 
-**A3 — Rotation de clé plutôt que révocation un à un (réponse à A2).**
+**A3 : Rotation de clé plutôt que révocation un à un (réponse à A2).**
 Retenu : rotation de la clé RS256, qui invalide instantanément tous les
 jetons émis sans énumération. Écarté : révocation jeton par jeton. Motif :
 en cas de compromission on ne sait pas quels jetons émis sont volés ; les
@@ -366,7 +366,7 @@ tout client est déconnecté, pas seulement l'attaquant ; un jeton conservé
 par l'attaquant reste valide jusqu'à sa courte expiration (15 minutes),
 mitigé par la durée de vie courte et par la rotation elle-même.
 
-**A4 — Coffre de secrets en mode développement.** Retenu : Vault en mode
+**A4 : Coffre de secrets en mode développement.** Retenu : Vault en mode
 développement, scellé au plus juste, alimenté au démarrage depuis les
 dépôts chiffrés du dépôt. Écarté : coffre haute disponibilité (mode
 production, sauvegardes de la racine, audit complet). Motif : un sprint de
@@ -375,7 +375,7 @@ mode développement suffit à prouver la mécanique (distribution, rotation).
 Conséquence assumée : les secrets ne survivraient pas au conteneur du
 coffre ; en production, le mode doit être levé.
 
-**A5 — Blocage d'adresse par fichier relu, avec témoin.** Retenu : le
+**A5 : Blocage d'adresse par fichier relu, avec témoin.** Retenu : le
 moteur écrit la liste de blocage dans un volume partagé ; un surveillant
 de la bordure détecte le changement, relance le rechargement de la
 configuration nginx et publie un témoin horodaté (empreinte, résultat) que
@@ -387,17 +387,17 @@ supposer qu'un fichier écrit est une règle appliquée. Conséquence assumée :
 le blocage met quelques secondes à se propager (test, rechargement), délai
 compté dans les cibles et largement sous les seuils.
 
-**A6 — Journal d'audit en ajout seul, garanti par les privilèges SQL.**
+**A6 : Journal d'audit en ajout seul, garanti par les privilèges SQL.**
 Retenu : la table d'audit d'authentification est en ajout seul pour tous ;
 l'absence de droits de mise à jour et de suppression garantit qu'aucun
-acteur — pas même un service compromis — ne réécrit l'histoire. Écarté :
+acteur : pas même un service compromis : ne réécrit l'histoire. Écarté :
 contrainte applicative ou droit de suppression réservé à un rôle
 d'administration. Motif : une contrainte dans le code est contournable si
 le code est compromis ; un droit SQL absent ne l'est pas. Conséquence
 assumée : la table croît sans borne ; en production, un archivage
 horodaté serait ajouté sans ouvrir de droit de suppression.
 
-**A7 — Gel plutôt que correction automatique des soldes.** Retenu : en cas
+**A7 : Gel plutôt que correction automatique des soldes.** Retenu : en cas
 d'exposition comptable (A3), le dispositif gèle le compte exposé et
 recalcule les soldes depuis le journal des jambes ; il n'écrit jamais un
 solde « corrigé ». Écarté : correction automatique des soldes incohérents.
@@ -405,16 +405,16 @@ Motif : écrire dans les comptes sans jugement humain sur la cause serait
 une action irréversible de trop pour une automatisation ; le journal des
 jambes fait autorité, le recalcul est réversible et prouvable. Conséquence
 assumée : le compte gelé reste bloqué pour son titulaire jusqu'à décision
-humaine — le seul point de la boucle qui exige l'humain.
+humaine : le seul point de la boucle qui exige l'humain.
 
-**A8 — Assistant local de quelques milliards de paramètres, non affiné.**
+**A8 : Assistant local de quelques milliards de paramètres, non affiné.**
 Retenu : inférence embarquée, sans affinement, interface de
 questionnement sur la documentation. Écarté : affinement sur le corpus ou
 accès direct aux données opérationnelles. Motif : l'affinement coûte plus
 qu'un sprint ; l'accès aux données opérationnelles élargirait la surface
 d'attaque sans bénéfice démontrable. Conséquence assumée : les réponses
 peuvent contenir des inexactitudes ; l'assistant est un aide-mémoire, pas
-une source de décision — les décisions s'appuient sur les données
+une source de décision : les décisions s'appuient sur les données
 mesurées du dispositif.
 
 ---
@@ -442,7 +442,7 @@ mesurées du dispositif.
 
 ### 8.2 Recommandations à la direction, hiérarchisées
 
-**Priorité 1 — lever les risques résiduels**
+**Priorité 1 : lever les risques résiduels**
 
 1. Coffre de secrets en mode production (repli des clés racine, accès
    audités, sauvegardes), en conservant les dépôts chiffrés comme point de
@@ -454,7 +454,7 @@ mesurées du dispositif.
 4. Confinement au-delà de l'adresse IP (reconnaissance d'identité, scores
    de confiance) pour couvrir les attaques depuis des adresses diffuses.
 
-**Priorité 2 — consolider la détection**
+**Priorité 2 : consolider la détection**
 
 5. Recalibrage périodique du seuil sur le trafic réel, avec suivi des
    faux positifs et procédure documentée.
@@ -465,7 +465,7 @@ mesurées du dispositif.
    chaque mise à jour, mêmes critères de sortie (MTTD < 60 s, MTTR < 180 s,
    six preuves).
 
-**Priorité 3 — étendre la gouvernance**
+**Priorité 3 : étendre la gouvernance**
 
 8. Matrice de risques transformée en registre vivant : revue trimestrielle,
    propriétaires par risque, traçabilité des mesures.
@@ -491,5 +491,5 @@ démontrable.
 
 ---
 
-*Document de gouvernance — v1.0, produit dans le cadre de PROJECT
+*Document de gouvernance : v1.0, produit dans le cadre de PROJECT
 RESILIENCE-ALPHA. À relire à chaque évolution du dispositif.*

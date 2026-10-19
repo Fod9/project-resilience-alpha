@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — ajustements du Core Rule Set OWASP
+#  AlphaPay : ajustements du Core Rule Set OWASP
 # =============================================================================
 #  Ce fichier est inclus par /etc/modsecurity.d/setup.conf à la suite de la
 #  configuration par défaut de ModSecurity et du CRS.

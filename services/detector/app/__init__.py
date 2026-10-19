@@ -1,4 +1,4 @@
-"""AlphaPay — détecteur d'anomalies (apprentissage non supervisé)."""
+"""AlphaPay : détecteur d'anomalies (apprentissage non supervisé)."""
 
 from .main import app
 

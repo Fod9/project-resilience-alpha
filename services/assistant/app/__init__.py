@@ -1,4 +1,4 @@
-"""AlphaPay — assistant documentaire (RAG)."""
+"""AlphaPay : assistant documentaire (RAG)."""
 
 from .main import app
 

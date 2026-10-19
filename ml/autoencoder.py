@@ -9,8 +9,8 @@ Principe
 --------
 Un autoencodeur apprend à reconstruire le trafic nominal. Une observation
 anormale se reconstruit mal : l'erreur de reconstruction sert de score
-d'atypie. La logique est donc la même que pour Isolation Forest — modéliser la
-normale, mesurer l'écart — mais le coût n'est pas comparable.
+d'atypie. La logique est donc la même que pour Isolation Forest : modéliser la
+normale, mesurer l'écart : mais le coût n'est pas comparable.
 
 Comparaison honnête entre les deux approches
 --------------------------------------------
@@ -19,7 +19,7 @@ Comparaison honnête entre les deux approches
 * Taille du modèle : quelques centaines de kilo-octets contre quelques
   mégaoctets.
 * Dépendance : scikit-learn seul contre PyTorch, soit environ 900 Mo d'image en
-  plus — rédhibitoire sur un poste à 16 Go partagé avec dix-huit conteneurs.
+  plus : rédhibitoire sur un poste à 16 Go partagé avec dix-huit conteneurs.
 * Explicabilité : la permutation de variables s'applique aux deux, mais l'écart
   en écarts-types par variable reste plus immédiat à lire sur Isolation Forest.
 * Performance : sur 18 variables corrélées et un régime nominal unimodal,

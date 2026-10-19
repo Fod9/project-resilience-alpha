@@ -189,7 +189,7 @@ class Connecteurs:
     def _ecrire_entrees(self, entrees: dict[str, Any]) -> bytes:
         now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         lignes = [
-            "# Liste de blocage AlphaPay — ecrite par le moteur de remediation.",
+            "# Liste de blocage AlphaPay : ecrite par le moteur de remediation.",
             f"# Derniere mise a jour : {now}",
         ]
         for adresse in sorted(entrees):

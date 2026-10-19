@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
-#  PROJECT RESILIENCE-ALPHA — AlphaPay
-#  02-roles.sh — rôles applicatifs et cloisonnement des privilèges
+#  PROJECT RESILIENCE-ALPHA : AlphaPay
+#  02-roles.sh : rôles applicatifs et cloisonnement des privilèges
 # =============================================================================
 #  Un rôle par service, aucun superutilisateur en exécution. Les mots de passe
 #  proviennent de l'environnement du conteneur et ne sont jamais écrits dans un
@@ -86,7 +86,7 @@ END
 $$;
 
 -- ---------------------------------------------------------------------------
---  4. Privilèges — schéma `auth`
+--  4. Privilèges : schéma `auth`
 -- ---------------------------------------------------------------------------
 GRANT USAGE ON SCHEMA auth TO svc_auth, svc_remediation, monitoring, svc_readonly;
 GRANT SELECT, INSERT, UPDATE ON auth.users, auth.refresh_tokens TO svc_auth;
@@ -100,7 +100,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA auth
   GRANT SELECT ON TABLES TO svc_remediation, monitoring, svc_readonly;
 
 -- ---------------------------------------------------------------------------
---  5. Privilèges — schéma `ledger`
+--  5. Privilèges : schéma `ledger`
 -- ---------------------------------------------------------------------------
 GRANT USAGE ON SCHEMA ledger TO svc_ledger, svc_payment, svc_remediation, monitoring, svc_readonly;
 GRANT ALL ON ALL TABLES IN SCHEMA ledger TO svc_ledger;
@@ -114,7 +114,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ledger
   GRANT SELECT ON TABLES TO svc_remediation, monitoring, svc_readonly;
 
 -- ---------------------------------------------------------------------------
---  6. Privilèges — schéma `ops`
+--  6. Privilèges : schéma `ops`
 -- ---------------------------------------------------------------------------
 GRANT USAGE ON SCHEMA ops TO svc_remediation, svc_detector, monitoring, svc_readonly;
 GRANT ALL ON ALL TABLES IN SCHEMA ops TO svc_remediation;
@@ -126,7 +126,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ops
   GRANT ALL ON TABLES TO svc_remediation;
 
 -- ---------------------------------------------------------------------------
---  7. Privilèges — schémas `ml` et `rag`
+--  7. Privilèges : schémas `ml` et `rag`
 -- ---------------------------------------------------------------------------
 GRANT USAGE ON SCHEMA ml TO svc_detector, svc_remediation, monitoring, svc_readonly;
 GRANT SELECT, INSERT, UPDATE ON ml.features, ml.models TO svc_detector;

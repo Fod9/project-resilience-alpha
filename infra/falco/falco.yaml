@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Falco (détection d'exécution, composant SOC)
+#  AlphaPay : Falco (détection d'exécution, composant SOC)
 # =============================================================================
 #  Falco surveille les appels système des conteneurs et signale les
 #  comportements qui ne devraient jamais se produire : ouverture d'un shell

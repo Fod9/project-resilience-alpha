@@ -1,4 +1,4 @@
-# Dépendances de api-payment — AlphaPay
+# Dépendances de api-payment : AlphaPay
 # Socle commun + spécificités du service.
 PyJWT[crypto]>=2.9,<3.0
 fastapi>=0.115,<1.0

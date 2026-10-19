@@ -1,4 +1,4 @@
-# Manuel de procédures — PROJECT RESILIENCE-ALPHA
+# Manuel de procédures : PROJECT RESILIENCE-ALPHA
 
 Procédures d'exploitation de la plateforme AlphaPay (23 conteneurs, 5
 réseaux cloisonnés). Chaque procédure précise son objectif, son
@@ -28,13 +28,13 @@ passent par le préfixe public `/api/ops/` de la bordure, réécrit vers
 `/api/actions/...` du moteur de remédiation, et exigent l'en-tête
 `X-Admin-Token`, dont la valeur est `ADMIN_API_TOKEN` dans `.env`.
 
-- **R1** — Démarrage à froid de la pile
-- **R2** — Diagnostic d'un service indisponible
-- **R3** — Lecture d'un incident de remédiation
-- **R4** — Déblocage d'une adresse par erreur
-- **R5** — Réinitialisation complète
-- **R6** — Export des preuves pour le jury
-- **R7** — Sauvegarde et restauration du grand livre
+- **R1** : Démarrage à froid de la pile
+- **R2** : Diagnostic d'un service indisponible
+- **R3** : Lecture d'un incident de remédiation
+- **R4** : Déblocage d'une adresse par erreur
+- **R5** : Réinitialisation complète
+- **R6** : Export des preuves pour le jury
+- **R7** : Sauvegarde et restauration du grand livre
 
 Nota : l'exécution réelle des playbooks est activée par
 `DEMO_MODE=true` dans `.env` ; en `DEMO_MODE=false`, le moteur reste en
@@ -45,7 +45,7 @@ de la bordure, sous l'en-tête `X-Admin-Token`, dont la valeur est
 `ADMIN_API_TOKEN` dans `.env` ; la consultation de l'état reste publique
 (`/api/supervision/...`).
 
-## R1 — Démarrage à froid de la pile
+## R1 : Démarrage à froid de la pile
 
 **Objectif** : mettre en service les 23 conteneurs depuis un hôte
 préparé, puis vérifier la santé de la bordure et du moteur.
@@ -110,7 +110,7 @@ présent (sinon, R1b).
    **Vérification** : l'état de la fenêtre passe d'`apprenant` à
    `normal` ; le score reste bas en régime nominal.
 
-**R1b — Préparation du fichier de secrets (hôte neuf)**
+**R1b : Préparation du fichier de secrets (hôte neuf)**
 
 ```bash
 ./scripts/seed-secrets.sh   # refuse l'écrasement sans --force
@@ -121,7 +121,7 @@ que des empreintes tronquées (12 caractères de sha256), jamais les
 secrets. **Vérification** : le fichier existe avec tous les champs
 obligatoires ; le préflight ne signale plus de secret manquant.
 
-## R2 — Diagnostic d'un service indisponible
+## R2 : Diagnostic d'un service indisponible
 
 **Objectif** : identifier le service à l'origine de l'incident et
 distinguer une cause applicative (image, déploiement) d'une cause
@@ -182,7 +182,7 @@ réponse d'un service, ou étape de vérification du moteur bloquée.
    service sera de nouveau joignable, sinon intervenir ou escalader
    manuellement.
 
-## R3 — Lecture d'un incident de remédiation
+## R3 : Lecture d'un incident de remédiation
 
 **Objectif** : comprendre ce que le moteur a fait pour un incident
 donné : politique déclenchée, signalement, actions, vérifications,
@@ -235,7 +235,7 @@ les vérifications sont toutes passées (`passed: true`) ; les délais
 `mttd_ms` et `mttr_ms` respectent les cibles (inférieurs à 60 s et 180 s,
 cibles exposées par `/api/supervision/state`).
 
-## R4 — Déblocage d'une adresse par erreur
+## R4 : Déblocage d'une adresse par erreur
 
 **Objectif** : lever un blocage d'adresse IP imposé à tort par la
 bordure, avec trace horodatée, et vérifier que la bordure a bien
@@ -289,7 +289,7 @@ témoin horodaté (`/etc/nginx/dynamic/reload-witness.json`, champs
 de l'adresse anciennement bloquée aboutit ; aucun régression sur les
 autres blocages en cours.
 
-## R5 — Réinitialisation complète
+## R5 : Réinitialisation complète
 
 **Objectif** : remettre la plateforme à l'état initial, propre, pour une
 répétition de démonstration ou un retour à la normale après incident.
@@ -333,7 +333,7 @@ aucun incident, aucun blocage, aucun compte gelé ; le détecteur est en
 apprentissage puis en régime nominal. Les certificats auto-signés sont
 reconstruits à l'ouverture des conteneurs.
 
-## R6 — Export des preuves pour le jury
+## R6 : Export des preuves pour le jury
 
 **Objectif** : produire un dossier de preuves reproductible attestant la
 chaîne complète détection → réaction → restitution, et les délais
@@ -401,7 +401,7 @@ MTTR < 180 s, vérifications réussies) ; les six preuves de restitution
 sont rassemblées ; le journal du moteur porte l'intégrale des actions,
 y compris les actions refusées, avec identifiant de suivi.
 
-## R7 — Sauvegarde et restauration du grand livre
+## R7 : Sauvegarde et restauration du grand livre
 
 **Objectif** : garantir la persistance et l'intégrité comptable du grand
 livre : instantanés d'état (application) et sauvegarde de base de

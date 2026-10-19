@@ -42,8 +42,8 @@ def main() -> int:
         return 0
 
     incident = charge.get("incident") or {}
-    print(f"  politique      : {incident.get('policy_id') or '—'}")
-    print(f"  playbook       : {incident.get('playbook_id') or '—'}")
+    print(f"  politique      : {incident.get('policy_id') or '-'}")
+    print(f"  playbook       : {incident.get('playbook_id') or '-'}")
     print(f"  état final     : {incident.get('state')}")
     print(f"  délai détection: {secondes(incident.get('mttd_ms'))}")
     print(f"  délai reprise  : {secondes(incident.get('mttr_ms'))}")

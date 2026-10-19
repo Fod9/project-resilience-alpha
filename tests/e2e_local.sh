@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  e2e_local.sh — parcours complet sur un démon Docker isolé
+#  e2e_local.sh : parcours complet sur un démon Docker isolé
 # =============================================================================
 #  Variante de `e2e.sh` pour l'environnement de test où la pile tourne sur un
 #  démon Docker distant.

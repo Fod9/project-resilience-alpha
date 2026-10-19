@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-#  AlphaPay — surveillant de la liste de blocage de la bordure
+#  AlphaPay : surveillant de la liste de blocage de la bordure
 # =============================================================================
 #  Le moteur de remédiation n'a pas d'accès privilégié au conteneur de bordure :
 #  il ne peut ni exécuter de commande dedans, ni recharger nginx. Le seul canal

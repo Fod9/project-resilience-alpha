@@ -1,4 +1,4 @@
-"""AlphaPay — télémétrie : des journaux aux 18 variables observées.
+"""AlphaPay : télémétrie : des journaux aux 18 variables observées.
 
 Rôle dans l'architecture
 ------------------------
@@ -52,7 +52,7 @@ async def _arreter() -> None:
 ctx = build_app(
     service_name="telemetry",
     version=VERSION,
-    title="AlphaPay — Télémétrie",
+    title="AlphaPay : Télémétrie",
     description="Agrégation des journaux en variables observées pour la détection d'anomalies.",
     on_startup=_demarrer,
     on_shutdown=_arreter,
@@ -266,7 +266,7 @@ async def _boucle() -> None:
         dernier_cycle = maintenant
         try:
             _cycle(suiveur)
-        except Exception as erreur:  # noqa: BLE001 — la boucle ne doit jamais mourir
+        except Exception as erreur:  # noqa: BLE001 : la boucle ne doit jamais mourir
             events.warn(
                 "telemetry.cycle_failed",
                 message="échec d'un cycle d'agrégation",

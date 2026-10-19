@@ -1,12 +1,12 @@
 /** @type {import('tailwindcss').Config} */
-// Jetons du système de design AlphaPay — thème clair « grand livre ».
+// Jetons du système de design AlphaPay : thème clair « grand livre ».
 //
 // Source de vérité : docs/DESIGN-SYSTEM.md. Le fichier Figma
 // (https://www.figma.com/design/SacCkouYmlKojpdNol2dO4) et ce fichier doivent
 // rester alignés : toute retouche de couleur se fait ici ET là-bas.
 //
 // Parti pris : ce n'est pas un tableau de bord sombre. Le sujet est un grand
-// livre de paiement — papier comptable, encre de document, cuivre oxydé. Les
+// livre de paiement : papier comptable, encre de document, cuivre oxydé. Les
 // deux couleurs d'état ne sont jamais vives : une salle d'opérations qui crie
 // en permanence ne signale plus rien.
 export default {
@@ -27,7 +27,7 @@ export default {
         accent: { DEFAULT: "#2E6B5A", dim: "#1F4C40" },
         // Filet de marge imprimé, comme dans un registre comptable.
         marge: "#B4523F",
-        // États — sourds par construction.
+        // États : sourds par construction.
         nominal: "#2F6B4F",
         degraded: "#96690C",
         incident: "#9C2B24",
@@ -43,7 +43,7 @@ export default {
         marque: "0.22em",
       },
       gridTemplateColumns: {
-        ops: "64px minmax(0, 1fr) 44px minmax(0, 1.24fr)",
+        ops: "minmax(0, 44fr) 44px minmax(0, 56fr)",
       },
       borderRadius: {
         // Le papier comptable n'a pas d'angles arrondis : un rayon nul est ici

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  scenario.sh — déclenchement direct d'un playbook
+#  scenario.sh : déclenchement direct d'un playbook
 # =============================================================================
 #  Ce script joue le rôle du détecteur : il pousse un signalement d'anomalie
 #  signé vers le moteur de remédiation, exactement comme le ferait le service
-#  `detector`. Il sert à isoler un problème — vérifier qu'un playbook fonctionne
+#  `detector`. Il sert à isoler un problème : vérifier qu'un playbook fonctionne
 #  sans dépendre de la production de télémétrie ni du modèle.
 #
 #  Utilisation :

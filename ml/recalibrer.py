@@ -40,7 +40,7 @@ def ajuster_sur_mesures(
 
     Le cœur d'ajustement n'est pas réécrit : on réutilise `ml.train.entrainer`
     en substituant sa source de données. Cela garantit que le modèle recalibré
-    est produit par exactement le même code que le modèle embarqué — même
+    est produit par exactement le même code que le modèle embarqué : même
     normalisation, même seuil, mêmes explications.
     """
     import numpy as np

@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Politiques de réaction aux anomalies détectées
+#  AlphaPay : Politiques de réaction aux anomalies détectées
 # =============================================================================
 #  Une politique ne décide pas qu'il y a attaque : elle n'est évaluée que sur un
 #  signalement déjà qualifié par le détecteur (ou par une alerte
@@ -20,7 +20,7 @@
 policies:
 
   # ---------------------------------------------------------------------------
-  #  A3 — Injection applicative et tentative d'exfiltration
+  #  A3 : Injection applicative et tentative d'exfiltration
   #  Le WAF a bloqué des charges utiles hostiles et le volume sortant dévie.
   #  La priorité la plus haute : ce scénario suppose une compromission avérée.
   # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ policies:
     playbook: PB-A3-CONFINER-ET-REPARER
 
   # ---------------------------------------------------------------------------
-  #  A2 — Compromission d'identité : bourrage d'identifiants ou jetons volés
+  #  A2 : Compromission d'identité : bourrage d'identifiants ou jetons volés
   #  Beaucoup d'échecs d'authentification et beaucoup d'identités distinctes
   #  depuis une même origine : signature d'un bourrage d'identifiants.
   # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ policies:
     playbook: PB-A2-ROTATION-DE-CLES
 
   # ---------------------------------------------------------------------------
-  #  A1 — Rafale volumétrique (déni de service)
+  #  A1 : Rafale volumétrique (déni de service)
   #  Volumétrie très supérieure à la pointe légitime, taux d'erreur élevé.
   # ---------------------------------------------------------------------------
   - id: POL-A1-RAFALE

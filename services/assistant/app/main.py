@@ -1,4 +1,4 @@
-"""AlphaPay — assistant documentaire fondé sur un modèle local.
+"""AlphaPay : assistant documentaire fondé sur un modèle local.
 
 Principe
 --------
@@ -47,7 +47,7 @@ VERSION = "1.0.0"
 ctx = build_app(
     service_name="assistant",
     version=VERSION,
-    title="AlphaPay — Assistant documentaire",
+    title="AlphaPay : Assistant documentaire",
     description=(
         "Réponses ancrées sur la documentation du projet, produites par un "
         "modèle local, sans capacité d'action."

@@ -5,7 +5,7 @@ import { api, ErreurApi, type Paiement } from "../api";
  * Interface de paiement du client.
  *
  * Écran volontairement sobre : c'est le service marchand que l'on veut
- * maintenir disponible. Sa simplicité est un choix de démonstration — le jury
+ * maintenir disponible. Sa simplicité est un choix de démonstration : le jury
  * doit pouvoir déclencher une transaction en trois gestes, et constater son
  * résultat sans ambiguïté.
  *
@@ -90,7 +90,7 @@ export default function Pay() {
               {comptes.length === 0 && <option value={source}>{source}</option>}
               {comptes.map((compte) => (
                 <option key={compte.code} value={compte.code}>
-                  {compte.code} — {formaterMontant(compte.balance_cents)}
+                  {compte.code} : {formaterMontant(compte.balance_cents)}
                 </option>
               ))}
             </select>
@@ -141,7 +141,7 @@ export default function Pay() {
           {resultat && (
             <div className="text-sm border border-nominal/40 rounded-sm px-3 py-2 space-y-1">
               <p className="text-nominal">
-                Paiement accepté — {formaterMontant(resultat.amount_cents)}
+                Paiement accepté : {formaterMontant(resultat.amount_cents)}
               </p>
               <p className="font-mono text-[0.6875rem] text-ink-dim">
                 {resultat.payment_id}

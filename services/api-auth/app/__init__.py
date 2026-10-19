@@ -1,4 +1,4 @@
-"""AlphaPay — service d'authentification et de gestion des jetons."""
+"""AlphaPay : service d'authentification et de gestion des jetons."""
 
 from .main import app
 

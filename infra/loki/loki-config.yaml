@@ -1,8 +1,8 @@
 # =============================================================================
-#  AlphaPay — Loki (journaux centralisés)
+#  AlphaPay : Loki (journaux centralisés)
 # =============================================================================
 #  Choix assumé : Loki plutôt que la pile Elastic. Le sujet l'autorise
-#  explicitement et le justifie par la mémoire disponible — dix-huit conteneurs
+#  explicitement et le justifie par la mémoire disponible : dix-huit conteneurs
 #  doivent tenir dans 12 Go. Loki indexe les étiquettes et non le contenu, ce
 #  qui divise son empreinte mémoire par un ordre de grandeur par rapport à un
 #  index inversé complet, au prix de recherches plein texte plus lentes. Sur un

@@ -49,7 +49,7 @@ export default function StateHeader({
         <div className="flex gap-8">
           <Mesure
             libelle="Incident en cours depuis"
-            valeur={ecoule === null ? "—" : formaterDuree(ecoule)}
+            valeur={ecoule === null ? "·" : formaterDuree(ecoule)}
             accent={global === "INCIDENT" ? couleurs.texte : undefined}
           />
           <Mesure

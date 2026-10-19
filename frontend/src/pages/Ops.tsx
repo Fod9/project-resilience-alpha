@@ -11,7 +11,7 @@ import StateHeader from "../components/StateHeader";
  * Salle d'opérations.
  *
  * Parti pris de mise en page : deux feuillets séparés par une gouttière, sous
- * une grille réglée, avec le filet de marge imprimé à gauche — la structure
+ * une grille réglée, avec le filet de marge imprimé à gauche : la structure
  * d'un grand livre ouvert. Le feuillet de gauche porte le système, celui de
  * droite l'incident. Ce n'est pas une grille de cartes : un registre se lit
  * page par page, et le jury doit pouvoir suivre une seule histoire, celle de
@@ -62,19 +62,10 @@ export default function Ops() {
   const composants = composantsAttendus(etat.donnees);
 
   return (
-    <main className="min-h-0 flex-1 grid grid-cols-1 xl:grid-cols-ops bg-base">
-      {/* --- Marge comptable : le filet imprimé et son intitulé -------------- */}
-      <aside className="filet-marge hidden flex-col items-end gap-2 px-3 py-6 xl:flex">
-        <span className="h-2.5 w-2.5 bg-marge" />
-        <span className="font-display text-[0.4375rem] uppercase tracking-marque text-marge">
-          Exercice
-        </span>
-        <span className="font-mono text-[0.5rem] tracking-wide text-ink-dim">2026</span>
-      </aside>
-
-      {/* --- Feuillet du système -------------------------------------------- */}
-      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line bg-surface px-6 py-6 xl:border-r">
-        <TitreFeuillet>Le système</TitreFeuillet>
+    <main className="min-h-0 flex-1 grid grid-cols-1 grid-rows-[minmax(0,1fr)_auto] xl:grid-cols-ops bg-base">
+      {/* --- Feuillet des services ------------------------------------------ */}
+      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line bg-surface px-6 py-6 xl:border-l">
+        <TitreFeuillet>Services</TitreFeuillet>
         <ServiceRail composants={composants} incident={etat.donnees?.incident ?? null} />
         <BandesMesures fenetre={fenetre.donnees} detection={detection.donnees} />
       </section>
@@ -84,9 +75,9 @@ export default function Ops() {
         <div className="mx-auto h-full w-px bg-line" />
       </div>
 
-      {/* --- Feuillet de l'incident ----------------------------------------- */}
-      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto bg-surface px-6 py-6">
-        <TitreFeuillet>L'incident</TitreFeuillet>
+      {/* --- Feuillet des incidents ----------------------------------------- */}
+      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line bg-surface px-6 py-6 xl:border-r">
+        <TitreFeuillet>Incidents</TitreFeuillet>
         <div className="fiche px-6 py-6">
           <StateHeader etat={etat.donnees} points={scoreCourant} />
         </div>
@@ -97,6 +88,11 @@ export default function Ops() {
         />
         <AssistantPanel />
       </section>
+
+      {/* --- Pied de page --------------------------------------------------- */}
+      <footer className="col-span-1 border-t border-line py-3 xl:col-span-3">
+        <p className="text-center font-mono text-[0.625rem] text-ink-dim">AlphaPay 2026©</p>
+      </footer>
     </main>
   );
 }

@@ -1,4 +1,4 @@
-# PROJECT RESILIENCE-ALPHA — AlphaPay
+# PROJECT RESILIENCE-ALPHA : AlphaPay
 
 > Plateforme de paiement fictive à **reprise autonome** · Workshop national EPSI BAC+5
 > Sprint d'ingénierie 4 jours · Session Octobre 2026
@@ -39,7 +39,7 @@ source de l'attaque est effectivement filtrée.
 | Docker Desktop (Windows 10/11) avec WSL2 | 4 cœurs | Le poste hôte du sujet |
 | Mémoire allouée à Docker | **12 Go** | 18 conteneurs, dont un modèle de langage local |
 | Espace disque libre | 30 Go | Images et volumes |
-| `git`, `bash` | — | WSL2 fournit les deux |
+| `git`, `bash` | : | WSL2 fournit les deux |
 
 Sous Docker Desktop, réglez *Settings → Resources* sur au moins 4 cœurs et 12 Go avant
 de démarrer. C'est de loin la première cause d'échec de démarrage.
@@ -104,8 +104,8 @@ docker compose down -v         # arrêt + effacement des volumes (repart de zér
 3. **Le comportement dévie.** Chaque seconde, la télémétrie agrège les journaux de la
    bordure, des services et du WAF en 18 variables observées sur une fenêtre glissante
    de 60 secondes.
-4. **Le modèle détecte.** Un modèle non supervisé — entraîné sur du trafic nominal, sans
-   jamais voir d'attaque — compare la fenêtre courante à la normale apprise et déclare
+4. **Le modèle détecte.** Un modèle non supervisé : entraîné sur du trafic nominal, sans
+   jamais voir d'attaque : compare la fenêtre courante à la normale apprise et déclare
    l'anomalie, en indiquant les variables qui l'expliquent.
 5. **Le moteur décide.** Une politique déclarative fait correspondre l'anomalie à un
    playbook. Le playbook contient, dans l'ordre, les phases de confinement, d'éradication
@@ -137,7 +137,7 @@ docker compose down -v         # arrêt + effacement des volumes (repart de zér
 Trois scénarios sont fournis, exécutables depuis le poste attaquant. Ils se distinguent
 par ce qu'ils cherchent à obtenir, et donc par la réponse qu'ils appellent.
 
-### A1 — Rafale volumétrique distribuée
+### A1 : Rafale volumétrique distribuée
 
 Objectif de l'attaquant : saturer la plateforme de paiement pour la rendre indisponible.
 
@@ -148,7 +148,7 @@ Réponse attendue : blocage de l'adresse d'origine à la bordure, révocation de
 émis depuis cette adresse, redémarrage du service de paiement, vérification de bout en
 bout.
 
-### A2 — Réutilisation d'identités compromises
+### A2 : Réutilisation d'identités compromises
 
 Objectif de l'attaquant : tester des couples identifiant/mot de passe volés à grande
 échelle, puis utiliser les accès obtenus.
@@ -156,11 +156,11 @@ Objectif de l'attaquant : tester des couples identifiant/mot de passe volés à 
 Signature observée : taux d'échec d'authentification très élevé, nombre d'identités
 distinctes sollicitées en forte hausse, tentatives par identité anormales.
 
-Réponse attendue : confinement de la source, **rotation de la clé de signature** — ce qui
-invalide instantanément l'ensemble des jetons émis — redémarrage du service
+Réponse attendue : confinement de la source, **rotation de la clé de signature** : ce qui
+invalide instantanément l'ensemble des jetons émis : redémarrage du service
 d'authentification, vérification.
 
-### A3 — Injection applicative et tentative d'exfiltration
+### A3 : Injection applicative et tentative d'exfiltration
 
 Objectif de l'attaquant : exploiter une entrée non filtrée, puis extraire des données.
 
@@ -221,7 +221,7 @@ est dans [`docs/DESIGN.md`](docs/DESIGN.md).
         │  https://<hôte>/            │                                          │
         ▼                             ▼                                          ▼
    ┌─────────────────────────────────────────────────────────────────────────────────┐
-   │  BORDURE — ModSecurity + OWASP CRS, reverse proxy, journalisation JSON          │
+   │  BORDURE : ModSecurity + OWASP CRS, reverse proxy, journalisation JSON          │
    └───────────────┬─────────────────────────────────────────────┬───────────────────┘
                    │                                             │
         ┌──────────▼──────────┐                        ┌─────────▼─────────┐
@@ -237,7 +237,7 @@ est dans [`docs/DESIGN.md`](docs/DESIGN.md).
    └───────────────┬─────────────────────────────────────────────────────────────────┘
                    │
    ┌───────────────▼─────────────────────────────────────────────────────────────────┐
-   │  SOCLE — PostgreSQL + pgvector · Prometheus · Grafana · Loki · Falco · Vault     │
+   │  SOCLE : PostgreSQL + pgvector · Prometheus · Grafana · Loki · Falco · Vault     │
    └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -392,10 +392,10 @@ resilience-alpha/
 
 | Livrable exigé | Emplacement | État |
 |---|---|---|
-| `Code.zip` — sources, historique Git, README | racine du dépôt | produit |
-| `Dossier.pdf` — ingénierie et gouvernance, 8 pages | `deliverables/` | produit |
-| `Pres.pptx` — présentation de soutenance | `deliverables/` | produit |
-| `VidChrono.mp4` — démonstration continue, 90 secondes | `deliverables/` | produit |
+| `Code.zip` : sources, historique Git, README | racine du dépôt | produit |
+| `Dossier.pdf` : ingénierie et gouvernance, 8 pages | `deliverables/` | produit |
+| `Pres.pptx` : présentation de soutenance | `deliverables/` | produit |
+| `VidChrono.mp4` : démonstration continue, 90 secondes | `deliverables/` | produit |
 | Démonstrateur live | pile complète, `docker compose up -d` | opérationnel |
 
 ---
@@ -409,5 +409,5 @@ bash tests/edge_smoke.sh         # bordure seule
 ```
 
 `tests/e2e.sh` déroule le parcours attendu par le jury : transaction nominale, attaque,
-détection, remédiation autonome, vérification, mesure des délais — et **échoue** si le
+détection, remédiation autonome, vérification, mesure des délais : et **échoue** si le
 service n'est pas réellement rétabli. C'est le test qui doit passer avant la soutenance.

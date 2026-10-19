@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Promtail (collecte des journaux)
+#  AlphaPay : Promtail (collecte des journaux)
 # =============================================================================
 #  Les services écrivent leurs événements structurés dans le volume partagé
 #  `/var/log/alphapay`, en JSON Lines. Promtail les suit et les expédie à Loki.
@@ -7,7 +7,7 @@
 #  Pourquoi un volume plutôt que la lecture directe des journaux Docker :
 #  la télémétrie doit lire exactement les mêmes lignes pour en extraire les
 #  variables observées. Un support unique garantit que le détecteur et
-#  l'opérateur regardent la même vérité — condition indispensable pour qu'une
+#  l'opérateur regardent la même vérité : condition indispensable pour qu'une
 #  explication d'anomalie soit vérifiable par un jury.
 # =============================================================================
 

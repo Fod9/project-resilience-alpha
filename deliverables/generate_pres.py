@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère Pres.pptx — présentation de soutenance de PROJECT RESILIENCE-ALPHA.
+"""Génère Pres.pptx : présentation de soutenance de PROJECT RESILIENCE-ALPHA.
 
 Le contenu est dérivé des faits du dépôt : composants réellement déployés,
 politiques et playbooks réellement chargés, résultats de la suite de vérification.
@@ -149,7 +149,7 @@ def puces(diapo, elements, *, gauche=0.7, haut=1.75, largeur=12, taille=17):
         premier = False
         paragraphe.space_after = Pt(9)
         marque = paragraphe.add_run()
-        marque.text = "— "
+        marque.text = "- "
         marque.font.color.rgb = LAITON
         marque.font.size = Pt(taille)
         marque.font.name = POLICE_TEXTE
@@ -179,7 +179,7 @@ def construire() -> Path:
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
 
-    # 1 — Couverture
+    # 1 : Couverture
     diapo = prs.slides.add_slide(prs.slide_layouts[6])
     fond(diapo)
     cadre = bloc_texte(diapo, 0.9, 2.1, 11.5, 3.4)
@@ -189,10 +189,10 @@ def construire() -> Path:
            espace_apres=8)
     ecrire(cadre, "Une plateforme de paiement qui se rétablit seule, et le prouve.",
            taille=22, couleur=ENCRE_PALE, police=POLICE_TEXTE, espace_apres=18)
-    ecrire(cadre, "Workshop national EPSI — BAC+5 — Session octobre 2026",
+    ecrire(cadre, "Workshop national EPSI : BAC+5 : Session octobre 2026",
            taille=13, couleur=ENCRE_PALE, police=POLICE_DONNEE)
 
-    # 2 — Le problème posé
+    # 2 : Le problème posé
     diapo = nouvelle_diapo(prs, "Ce que le sujet exige vraiment", "Cadrage")
     puces(diapo, [
         ("Un SI critique fictif doit encaisser un incident et revenir seul à un état opérationnel", ""),
@@ -203,7 +203,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, "Conséquence : l'ingénierie doit produire une preuve, pas une intention.")
 
-    # 3 — La thèse
+    # 3 : La thèse
     diapo = nouvelle_diapo(prs, "Notre thèse : la reprise doit être vérifiable", "Position")
     puces(diapo, [
         ("Nous ne déclarons pas un rétablissement", "nous le mesurons"),
@@ -213,7 +213,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, "Un système qui se répare sans rendre des comptes est un risque, pas une garantie.")
 
-    # 4 — Vue d'ensemble
+    # 4 : Vue d'ensemble
     diapo = nouvelle_diapo(prs, "La plateforme en un coup d'œil", "Architecture")
     puces(diapo, [
         (f"{chiffres['services']} composants orchestrés", "du WAF au modèle de langage local"),
@@ -223,7 +223,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, "Aucun composant n'a plus de droits que ce que sa fonction exige.")
 
-    # 5 — Les cinq piliers
+    # 5 : Les cinq piliers
     diapo = nouvelle_diapo(prs, "Les cinq piliers, et où ils vivent dans le dépôt", "Mise en œuvre")
     puces(diapo, [
         ("Développement", "microservices FastAPI, API REST, interface React et Tailwind, grand livre en partie double"),
@@ -233,7 +233,7 @@ def construire() -> Path:
         ("Gouvernance", "EBIOS Risk Manager, PCA et PRA, mise en regard NIS2 et DORA"),
     ])
 
-    # 6 — Développement
+    # 6 : Développement
     diapo = nouvelle_diapo(prs, "Développement : des services, pas un monolithe", "Pilier 1")
     puces(diapo, [
         ("Trois services métier", "authentification, paiement, grand livre"),
@@ -244,7 +244,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, "Un invariant comptable est plus facile à vérifier qu'une promesse de disponibilité.")
 
-    # 7 — Infrastructure
+    # 7 : Infrastructure
     diapo = nouvelle_diapo(prs, "Infrastructure : cloisonner plutôt que durcir après coup", "Pilier 2")
     puces(diapo, [
         ("Cinq zones réseau", "aucun conteneur ne parle à une zone dont il n'a pas besoin"),
@@ -253,7 +253,7 @@ def construire() -> Path:
         ("Configuration embarquée dans les images", "la pile démarre à l'identique partout"),
     ])
 
-    # 8 — IA
+    # 8 : IA
     diapo = nouvelle_diapo(prs, "IA : modéliser la normale, pas énumérer les attaques", "Pilier 3")
     puces(diapo, [
         ("Détection non supervisée", "aucune règle codée en dur, aucun jeu d'attaques étiqueté"),
@@ -263,12 +263,12 @@ def construire() -> Path:
         ("Deux chemins de détection redondants", "le modèle et les seuils d'exploitation"),
     ])
 
-    # 9 — Calibration
+    # 9 : Calibration
     diapo = nouvelle_diapo(prs, "Calibration du modèle", "Résultats")
     if modele:
         puces(diapo, [
-            (f"{modele.get('n_fenetres', '—')} fenêtres nominales apprises",
-             f"trafic simulé sur {modele.get('duree_simulee_s', '—')} s, graine fixe, reproductible"),
+            (f"{modele.get('n_fenetres', '-')} fenêtres nominales apprises",
+             f"trafic simulé sur {modele.get('duree_simulee_s', '-')} s, graine fixe, reproductible"),
             (f"Seuil au quantile {modele.get('quantile_seuil', 99.8)}",
              f"valeur {float(modele.get('seuil', 0.0)):.5f}"),
             (f"Dépassements nominaux mesurés : {float(modele.get('taux_detection_nominal_pct', 0.0)):.3f} %",
@@ -281,7 +281,7 @@ def construire() -> Path:
     else:
         puces(diapo, [("Modèle non entraîné", "exécuter python -m ml.train")])
 
-    # 10 — Assistant
+    # 10 : Assistant
     diapo = nouvelle_diapo(prs, "Assistant documentaire local", "Pilier 3")
     puces(diapo, [
         ("Chaîne RAG orchestrée par LangChain", "vectorisation, recherche dans pgvector, synthèse"),
@@ -290,7 +290,7 @@ def construire() -> Path:
         ("Lecture seule et citation des sources", "l'assistant ne peut déclencher aucune action"),
     ])
 
-    # 11 — Cybersécurité
+    # 11 : Cybersécurité
     diapo = nouvelle_diapo(prs, "Cybersécurité : prévenir, détecter, réagir", "Pilier 4")
     puces(diapo, [
         ("WAF ModSecurity et Core Rule Set OWASP", "paranoïa 1, seuil d'anomalie entrant 5"),
@@ -300,7 +300,7 @@ def construire() -> Path:
         ("Banc offensif fourni", "trois scénarios, exécutés depuis un poste distinct"),
     ])
 
-    # 12 — Gouvernance
+    # 12 : Gouvernance
     diapo = nouvelle_diapo(prs, "Gouvernance : rendre l'arbitrage explicite", "Pilier 5")
     puces(diapo, [
         ("EBIOS Risk Manager sur les cinq ateliers", "des valeurs métier aux scénarios opérationnels"),
@@ -310,16 +310,16 @@ def construire() -> Path:
         ("Limites assumées publiquement", "Vault en mode développement, certificats auto-signés"),
     ])
 
-    # 13 — Scénarios d'attaque
+    # 13 : Scénarios d'attaque
     diapo = nouvelle_diapo(prs, "Trois scénarios, trois réponses différentes", "Démonstration")
     puces(diapo, [
-        ("A1 — Rafale volumétrique", "débit anormal, erreurs, latence : confiner puis redémarrer"),
-        ("A2 — Réutilisation d'identités", "échecs d'authentification massifs : rotation de la clé de signature"),
-        ("A3 — Injection et exfiltration", "charges détectées par le WAF, volume sortant : gel du compte et réconciliation"),
+        ("A1 : Rafale volumétrique", "débit anormal, erreurs, latence : confiner puis redémarrer"),
+        ("A2 : Réutilisation d'identités", "échecs d'authentification massifs : rotation de la clé de signature"),
+        ("A3 : Injection et exfiltration", "charges détectées par le WAF, volume sortant : gel du compte et réconciliation"),
         ("Cas particulier traité", "la compromission de la clé invalide instantanément tous les jetons"),
     ])
 
-    # 14 — La boucle
+    # 14 : La boucle
     diapo = nouvelle_diapo(prs, "La boucle de remédiation", "Démonstration")
     puces(diapo, [
         ("Détection", "le modèle qualifie l'anomalie et désigne la source probable"),
@@ -331,7 +331,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, f"{chiffres['playbooks']} playbooks déclaratifs, relus et validés au démarrage.")
 
-    # 15 — Garde-fous
+    # 15 : Garde-fous
     diapo = nouvelle_diapo(prs, "Ce qui empêche le remède d'être pire que le mal", "Maîtrise du risque")
     puces(diapo, [
         ("Liste blanche d'actions", "aucune action non déclarée n'existe dans le code"),
@@ -342,7 +342,7 @@ def construire() -> Path:
         ("Mode simulation", "toute la boucle s'exécute sans effet réel"),
     ])
 
-    # 16 — La vérification
+    # 16 : La vérification
     diapo = nouvelle_diapo(prs, "Ce qui distingue une reprise d'un redémarrage", "Le point clé")
     puces(diapo, [
         ("Transaction synthétique de bout en bout", "authentification, paiement, écriture au grand livre"),
@@ -353,7 +353,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, "C'est ce point qui vaut cinq points sur vingt au barème.")
 
-    # 17 — Résultats
+    # 17 : Résultats
     diapo = nouvelle_diapo(prs, "Résultats mesurés", "Preuves")
     puces(diapo, [
         ("Délai de détection cible", "moins de 60 secondes"),
@@ -363,7 +363,7 @@ def construire() -> Path:
     ])
     bandeau_bas(diapo, "Les valeurs exactes de la dernière exécution figurent dans le dossier technique.")
 
-    # 18 — Limites
+    # 18 : Limites
     diapo = nouvelle_diapo(prs, "Limites assumées", "Honnêteté technique")
     puces(diapo, [
         ("Coffre de secrets en mode développement", "acceptable sur un exercice cloisonné, à remplacer en service réel"),
@@ -373,7 +373,7 @@ def construire() -> Path:
         ("Modèle local non affiné", "suffisant pour la synthèse documentaire"),
     ])
 
-    # 19 — Conclusion
+    # 19 : Conclusion
     diapo = nouvelle_diapo(prs, "Ce que nous recommandons", "Conclusion")
     puces(diapo, [
         ("Industrialiser la vérification", "une reprise non mesurée n'entre pas en production"),

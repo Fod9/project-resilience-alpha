@@ -1,4 +1,4 @@
-"""Simulation de trafic nominal — base de calibrage du détecteur.
+"""Simulation de trafic nominal : base de calibrage du détecteur.
 
 Pourquoi simuler plutôt que collecter : au démarrage du sprint, on ne dispose
 d'aucun historique réel étiqueté. Le détecteur est donc **non supervisé** : il

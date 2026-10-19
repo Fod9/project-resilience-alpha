@@ -1,4 +1,4 @@
-# AlphaPay — Système de design
+# AlphaPay : Système de design
 
 > **État courant : thème clair « grand livre ».** La version initiale de ce
 > document décrivait un thème sombre ; elle est remplacée. Les valeurs de
@@ -29,7 +29,7 @@ d'enregistreur de vol), la **télémétrie** (chiffres tabulaires, horodatages).
 ## 2. Palette
 
 Fond encre-bleu profond, texte os, **un seul accent : laiton**. Le vert, l'ambre
-et le rouge sont **réservés exclusivement à la sémantique d'état** — ils
+et le rouge sont **réservés exclusivement à la sémantique d'état** : ils
 n'apparaissent jamais comme décoration.
 
 | Rôle | Token | Hex | Usage |
@@ -63,14 +63,14 @@ sont donc **auto-hébergées** via `@fontsource`).
 
 | Rôle | Famille | Réglages | Usage |
 |------|---------|----------|-------|
-| **Signalétique** | `Archivo` (axe largeur étendu) | 700–800, `font-stretch: 125%`, uppercase, `letter-spacing: 0.04em` | mot d'état global, titres de page, en-têtes de section |
+| **Signalétique** | `Archivo` (axe largeur étendu) | 700-800, `font-stretch: 125%`, uppercase, `letter-spacing: 0.04em` | mot d'état global, titres de page, en-têtes de section |
 | **Lecture** | `IBM Plex Sans` | 400 / 500 / 600 | corps, libellés, descriptions, messages |
 | **Télémétrie** | `IBM Plex Mono` | 400 / 500, `font-variant-numeric: tabular-nums` | chiffres, horodatages, identifiants, valeurs de métriques, logs |
 
 Échelle : `11 / 12 / 14 / 16 / 20 / 28 / 44 / 96` px.
 Le **96 px en Archivo étendu majuscules** est réservé au mot d'état : c'est le
 seul endroit de l'interface où l'on dépasse 44 px. Cette rupture d'échelle est
-volontaire — elle crée la hiérarchie que les dashboards habituels n'ont pas.
+volontaire : elle crée la hiérarchie que les dashboards habituels n'ont pas.
 
 Interdits : aucune police à empattement, aucune graisse fine sous 14 px, aucun
 texte en majuscules hors de la signalétique.
@@ -81,7 +81,7 @@ texte en majuscules hors de la signalétique.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  RAIL D'ÉTAT  — plein cadre, hauteur 132 px                                  │
+│  RAIL D'ÉTAT  : plein cadre, hauteur 132 px                                  │
 │  ALPHAPAY · RESILIENCE-ALPHA            [ÉTAT EN 96px]        MTTD  00:41    │
 │  ▁▂▃▅▇▅▃▂▁  courbe de vie du score d'anomalie (sparkline 100% largeur)  MTTR │
 ├───────────────┬──────────────────────────────────────┬───────────────────────┤
@@ -96,7 +96,7 @@ texte en majuscules hors de la signalétique.
 │               │  ── Flux d'événements corrélés ──    │  Vérifications V1..V6 │
 │               │  (liste dense, monospace, horodatée) │   ✓ ✓ ✓ ✓ ✓ ⟳         │
 ├───────────────┴──────────────────────────────────────┴───────────────────────┤
-│  BANDE-ENREGISTREUR  — plein cadre, hauteur 148 px                           │
+│  BANDE-ENREGISTREUR  : plein cadre, hauteur 148 px                           │
 │  A1 attaque │ détection │ confinement │ remédiation │ vérification │ rétabli │
 │  ├──────────┼───────────┼─────────────┼──────────────┼──────────────┤        │
 │      MTTD (41 s)          MTTR (2 min 12 s)                                  │
@@ -105,7 +105,7 @@ texte en majuscules hors de la signalétique.
 
 - Largeur de référence : **1440 px**, grille 12 colonnes, gouttière 16 px,
   marge 24 px. Paliers : 1440 / 1280 / 1024 (empilement sous 1024).
-- Rayon : 4 px partout. Une seule valeur — la discipline prime sur la variété.
+- Rayon : 4 px partout. Une seule valeur : la discipline prime sur la variété.
 - Ombres : aucune. La profondeur est donnée par les surfaces et les bordures.
 - Espacement : échelle 4 / 8 / 12 / 16 / 24 / 32 / 48.
 
@@ -143,11 +143,11 @@ ressorte.
 | `EventStream` | Flux dense d'événements horodatés, source colorée, `trace_id` copiable | vide / nominal / incident |
 | `PlaybookSteps` | Étapes du playbook, statut, durée, `on_failure` | en attente / en cours / ok / échec / ignorée |
 | `VerificationGrid` | 6 contrôles V1..V6, preuve au survol | en attente / en cours / réussi / échoué |
-| `RecorderStrip` | **Signature** — bande-enregistreur | survol d'un instant = détail |
+| `RecorderStrip` | **Signature** : bande-enregistreur | survol d'un instant = détail |
 | `AssistantPanel` | Chat RAG, citations obligatoires, badge de mode dégradé | disponible / indisponible |
 | `PayForm` | Montant, bénéficiaire, récapitulatif, confirmation | validation / refus / succès |
 
-Pictogrammes : trait 1,5 px, aucune icône décorative — chaque icône signale un
+Pictogrammes : trait 1,5 px, aucune icône décorative : chaque icône signale un
 état ou une action nommable.
 
 ---
@@ -158,7 +158,7 @@ Pictogrammes : trait 1,5 px, aucune icône décorative — chaque icône signale
 - Le même mot du début à la fin : le bouton « Lancer le scénario » produit
   l'événement « Scénario lancé ».
 - Les erreurs nomment la cause et la suite : « Grand livre déséquilibré sur la
-  transaction 4f2a — réconciliation lancée », jamais « Une erreur est survenue ».
+  transaction 4f2a : réconciliation lancée », jamais « Une erreur est survenue ».
 - Les vides invitent à agir : « Aucun incident enregistré. Le système est
   nominal depuis 3 h 12. »
 - Aucun emoji, aucune exclamation, aucune formulation commerciale.
@@ -199,7 +199,7 @@ transitions d'opacité de 0 ms. La bande-enregistreur reste lisible.
 Les tokens sont déclarés dans `frontend/tailwind.config.ts` (`theme.extend`) et
 dans `frontend/src/design/tokens.css` sous forme de variables CSS. Toute valeur
 de couleur, d'espacement ou de police utilisée dans l'application **doit**
-provenir d'un token — aucune valeur littérale dans les composants.
+provenir d'un token : aucune valeur littérale dans les composants.
 
 ```ts
 // extrait de frontend/tailwind.config.ts
@@ -220,4 +220,4 @@ fontFamily: {
 
 ---
 
-*Système de design — v1.0*
+*Système de design : v1.0*

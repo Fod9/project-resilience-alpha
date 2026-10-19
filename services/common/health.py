@@ -1,9 +1,9 @@
 """Points de contrôle de santé et de disponibilité, identiques partout.
 
-  * `/healthz` — vivacité : le processus répond. Ne teste rien d'externe.
-  * `/readyz`  — disponibilité : exécute les sondes fournies par le service.
-  * `/metrics` — exposition Prometheus.
-  * `/version` — identification du service et de sa version.
+  * `/healthz` : vivacité : le processus répond. Ne teste rien d'externe.
+  * `/readyz`  : disponibilité : exécute les sondes fournies par le service.
+  * `/metrics` : exposition Prometheus.
+  * `/version` : identification du service et de sa version.
 
 Le passage du moteur de remédiation à l'état « rétabli » s'appuie sur ces
 points de contrôle, il est donc essentiel qu'ils soient honnêtes : `/readyz`

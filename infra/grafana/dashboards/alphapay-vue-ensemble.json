@@ -1,6 +1,6 @@
 {
   "uid": "alphapay-vue-ensemble",
-  "title": "AlphaPay — Vue d'ensemble",
+  "title": "AlphaPay : Vue d'ensemble",
   "description": "Etat general de la plateforme de paiement : disponibilite, debit, latence et transactions.",
   "tags": [
     "alphapay",

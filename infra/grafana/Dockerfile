@@ -1,4 +1,4 @@
-# AlphaPay — Grafana
+# AlphaPay : Grafana
 FROM grafana/grafana:11.2.0
 
 # Sources de données et tableaux de bord sont provisionnés au démarrage : un

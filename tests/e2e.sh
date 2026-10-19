@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  e2e.sh — parcours complet de bout en bout
+#  e2e.sh : parcours complet de bout en bout
 # =============================================================================
 #  Ce script rejoue ce que le jury demandera, et ÉCHOUE si la reprise n'est pas
 #  réelle. Il vérifie successivement :

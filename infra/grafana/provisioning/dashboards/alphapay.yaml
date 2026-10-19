@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — chargement automatique des tableaux de bord
+#  AlphaPay : chargement automatique des tableaux de bord
 # =============================================================================
 #  Les fichiers JSON sont embarqués dans l'image : le volume Grafana peut être
 #  détruit sans que les tableaux de bord disparaissent.

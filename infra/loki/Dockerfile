@@ -1,4 +1,4 @@
-# AlphaPay — Loki
+# AlphaPay : Loki
 FROM grafana/loki:3.1.1
 
 COPY loki-config.yaml /etc/loki/loki-config.yaml

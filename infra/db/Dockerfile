@@ -1,6 +1,6 @@
 FROM pgvector/pgvector:pg16
 
-LABEL org.opencontainers.image.title="AlphaPay — PostgreSQL"
+LABEL org.opencontainers.image.title="AlphaPay : PostgreSQL"
 LABEL org.opencontainers.image.description="Base de données de la plateforme de paiement fictive PROJECT RESILIENCE-ALPHA"
 
 # Les scripts d'initialisation sont intégrés à l'image plutôt que montés :

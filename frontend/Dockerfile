@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Interface web
+#  AlphaPay : Interface web
 # =============================================================================
 #  Construction en deux étapes : la chaîne Node ne sert qu'à produire les
 #  fichiers statiques et n'est pas présente dans l'image finale. L'image livrée
@@ -32,7 +32,7 @@ RUN npm run build
 
 FROM nginx:1.27-alpine AS livraison
 
-LABEL org.opencontainers.image.title="AlphaPay — Interface web"
+LABEL org.opencontainers.image.title="AlphaPay : Interface web"
 LABEL org.opencontainers.image.description="Interface de paiement et salle d'operations"
 
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf

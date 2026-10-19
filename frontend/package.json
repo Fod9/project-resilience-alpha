@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "AlphaPay — interface de paiement et salle d'opérations (PROJECT RESILIENCE-ALPHA)",
+  "description": "AlphaPay : interface de paiement et salle d'opérations (PROJECT RESILIENCE-ALPHA)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

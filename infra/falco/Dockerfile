@@ -1,4 +1,4 @@
-# AlphaPay — Falco (détection d'exécution)
+# AlphaPay : Falco (détection d'exécution)
 FROM falcosecurity/falco:0.38.2
 
 # Configuration et règles embarquées : l'image est autoportante, ce qui évite

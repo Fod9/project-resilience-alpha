@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — sources de données Grafana
+#  AlphaPay : sources de données Grafana
 # =============================================================================
 #  Les identifiants (`uid`) sont fixés explicitement. C'est indispensable : les
 #  tableaux de bord versionnés dans ce dépôt y font référence par leur `uid`, et

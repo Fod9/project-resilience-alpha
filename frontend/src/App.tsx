@@ -14,7 +14,7 @@ type Vue = "ops" | "pay";
  *
  * L'en-tête est celui d'un document, pas d'une application : le nom de la
  * plateforme à gauche, la navigation à droite, et un filet de pied qui sépare
- * l'en-tête du corps — exactement comme la bande d'un registre.
+ * l'en-tête du corps : exactement comme la bande d'un registre.
  */
 export default function App() {
   const [vue, setVue] = useState<Vue>(() =>
@@ -54,7 +54,7 @@ export default function App() {
               Paiement
             </LienNav>
             <LienNav actif={vue === "ops"} onClick={() => naviguer("ops")}>
-              Salle d'opérations
+              Tableau de bord
             </LienNav>
           </nav>
         </div>

@@ -1,4 +1,4 @@
-# api-auth — AlphaPay
+# api-auth : AlphaPay
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

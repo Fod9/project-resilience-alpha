@@ -1,4 +1,4 @@
-"""Vecteur des 18 variables observées — contrat partagé.
+"""Vecteur des 18 variables observées : contrat partagé.
 
 Ce module est utilisé à deux endroits, ce qui garantit qu'ils parlent
 exactement le même langage :

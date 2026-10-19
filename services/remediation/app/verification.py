@@ -7,12 +7,12 @@ Un conteneur redémarré n'est pas un service rétabli. La suite exige donc cinq
 preuves indépendantes, toutes obtenues **par le chemin public**, celui-là même
 qu'emprunte un client :
 
-1. `edge_reachable`     — la bordure répond ;
-2. `services_healthy`   — les trois services applicatifs se déclarent sains ;
-3. `synthetic_payment`  — un paiement réel est accepté de bout en bout par
+1. `edge_reachable`     : la bordure répond ;
+2. `services_healthy`   : les trois services applicatifs se déclarent sains ;
+3. `synthetic_payment`  : un paiement réel est accepté de bout en bout par
    l'interface publique : c'est la preuve fonctionnelle ;
-4. `ledger_integrity`   — l'invariant comptable tient toujours ;
-5. `containment_effective` — l'attaque est effectivement confinée (l'adresse
+4. `ledger_integrity`   : l'invariant comptable tient toujours ;
+5. `containment_effective` : l'attaque est effectivement confinée (l'adresse
    source figure dans la liste appliquée par la bordure, et la bordure a
    confirmé le rechargement de cette version).
 
@@ -101,7 +101,7 @@ class SuiteDeVerification:
         debut = time.perf_counter()
         try:
             resultat = await fonction(*args)
-        except Exception as erreur:  # noqa: BLE001 — un contrôle en échec n'arrête pas la suite
+        except Exception as erreur:  # noqa: BLE001 : un contrôle en échec n'arrête pas la suite
             resultat = Controle(
                 name=nom, passed=False, evidence={"error": f"{type(erreur).__name__}: {erreur}"}
             )

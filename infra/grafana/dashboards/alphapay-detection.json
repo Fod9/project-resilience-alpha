@@ -1,6 +1,6 @@
 {
   "uid": "alphapay-detection",
-  "title": "AlphaPay — Detection d'anomalies",
+  "title": "AlphaPay : Detection d'anomalies",
   "description": "Score du modele non supervise, seuil calibre sur le trafic nominal, et variables contributives.",
   "tags": [
     "alphapay",

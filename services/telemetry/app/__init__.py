@@ -1,4 +1,4 @@
-"""AlphaPay — télémétrie (agrégation des journaux en variables observées)."""
+"""AlphaPay : télémétrie (agrégation des journaux en variables observées)."""
 
 from .main import app
 

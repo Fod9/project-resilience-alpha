@@ -1,4 +1,4 @@
-"""AlphaPay — orchestration des paiements.
+"""AlphaPay : orchestration des paiements.
 
 Le service ne tient pas de registre propre : il applique les règles métier
 (autorisation, propriété du compte débité, plafonds, vélocité), puis délègue
@@ -30,7 +30,7 @@ VERSION = "1.0.0"
 ctx = build_app(
     service_name="api-payment",
     version=VERSION,
-    title="AlphaPay — Paiements",
+    title="AlphaPay : Paiements",
     description="Création et consultation des paiements, contrôle des plafonds et de la vélocité.",
 )
 app = ctx.app
@@ -348,7 +348,7 @@ async def lire_paiement(
 
 @app.get("/limits", tags=["paiements"])
 async def plafonds() -> dict[str, Any]:
-    """Plafonds appliqués — publiés pour que l'interface les affiche."""
+    """Plafonds appliqués : publiés pour que l'interface les affiche."""
     set_route_label("/limits")
     return {
         "min_cents": MIN_CENTS,

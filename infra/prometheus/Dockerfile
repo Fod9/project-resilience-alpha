@@ -1,4 +1,4 @@
-# AlphaPay — Prometheus
+# AlphaPay : Prometheus
 FROM prom/prometheus:v2.54.1
 
 # La configuration est embarquée dans l'image plutôt que montée depuis l'hôte :

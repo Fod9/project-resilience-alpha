@@ -1,4 +1,4 @@
-"""AlphaPay — service de paiement (orchestration et règles métier)."""
+"""AlphaPay : service de paiement (orchestration et règles métier)."""
 
 from .main import app
 

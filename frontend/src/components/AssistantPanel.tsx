@@ -60,7 +60,7 @@ export default function AssistantPanel() {
       <div className="p-3 overflow-y-auto text-xs">
         {erreur && (
           <p className="text-incident">
-            {erreur} — l'assistant est peut-être désactivé (ASSISTANT_MODE) ou le modèle local
+            {erreur} : l'assistant est peut-être désactivé (ASSISTANT_MODE) ou le modèle local
             n'est pas encore téléchargé.
           </p>
         )}

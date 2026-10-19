@@ -1,6 +1,6 @@
-# PROJECT RESILIENCE-ALPHA — Architecture système
+# PROJECT RESILIENCE-ALPHA : Architecture système
 
-> **AlphaPay** — plateforme de paiement fictive · *Cyber-résilience et reprise autonome*
+> **AlphaPay** : plateforme de paiement fictive · *Cyber-résilience et reprise autonome*
 > Workshop national EPSI BAC+5 · Sprint d'ingénierie 4 jours · Session Octobre 2026
 
 ---
@@ -9,7 +9,7 @@
 
 Démontrer, sur un périmètre maîtrisé, qu'un SI critique **détecte une anomalie,
 décide et exécute une action corrective, puis revient seul à un état de service
-vérifié** — sans intervention humaine.
+vérifié** : sans intervention humaine.
 
 Exigences structurantes extraites du sujet :
 
@@ -99,7 +99,7 @@ compromis ne voit que son réseau).
 | 6 | `postgres` | pgvector/pgvector:pg16 | SGBD relationnel + `pgvector` (RAG) | `net-data` | 400 Mo |
 | 7 | `detector` | FastAPI + scikit-learn | Détection d'anomalies ML (Isolation Forest), explicabilité, score API | `net-app`, `net-obs`, `net-data` | 350 Mo |
 | 8 | `remediation` | FastAPI | **Cœur du sujet** : ingestion, corrélation, policy engine, playbooks, vérification e2e, orchestration | `net-app`, `net-mgmt`, `net-data` | 250 Mo |
-| 9 | `assistant` | FastAPI + LangChain | Assistant opérateur RAG (post-mortem, procédures, architecture) — **lecture seule** | `net-app`, `net-data` | 300 Mo |
+| 9 | `assistant` | FastAPI + LangChain | Assistant opérateur RAG (post-mortem, procédures, architecture) : **lecture seule** | `net-app`, `net-data` | 300 Mo |
 | 10 | `ollama` | ollama/ollama | LLM local + modèle d'embedding | `net-app` | 2,5 Go (modèle 3B, quantifié) |
 | 11 | `prometheus` | prom/prometheus | Collecte métriques, règles d'alerte | `net-obs` | 250 Mo |
 | 12 | `alertmanager` | prom/alertmanager | Routage, inhibition, silences → webhook remediation | `net-obs`, `net-app` | 50 Mo |
@@ -191,7 +191,7 @@ Chaque service expose `/metrics` (Prometheus), `/healthz` (liveness), `/readyz`
 - **MTTR** (Mean Time To Recover) : horodatage `NOMINAL` rétabli (après
   vérification) moins la détection → mesuré par le moteur de remédiation.
 
-### 6.2 Boucle autonome — séquence détaillée
+### 6.2 Boucle autonome : séquence détaillée
 
 | Étape | Acteur | Action | Sortie observable |
 |-------|--------|--------|-------------------|
@@ -212,7 +212,7 @@ Chaque service expose `/metrics` (Prometheus), `/healthz` (liveness), `/readyz`
 ### 6.3 Garanties de non-trivialité (exigence E6)
 
 Le moteur **refuse** de déclarer un rétablissement si l'une des conditions
-suivantes est fausse — un simple `restart` échoue donc systématiquement à la
+suivantes est fausse : un simple `restart` échoue donc systématiquement à la
 vérification :
 
 1. `GET /healthz` + `/readyz` = 200 sur tous les services de la chaîne.
@@ -230,7 +230,7 @@ vérification :
 ## 7. Scénarios d'attaque retenus
 
 Trois scénarios crédibles, reproductibles, techniques et explicables. Chacun est
-exécutable indépendamment et présente une réponse **différente** — c'est
+exécutable indépendamment et présente une réponse **différente** : c'est
 précisément ce que le sujet demande de démontrer.
 
 | ID | Scénario | Technique | Effet provoqué | Réponse attendue du système |
@@ -242,7 +242,7 @@ précisément ce que le sujet demande de démontrer.
 > **A3 est le scénario retenu pour le Clip Chrono** : il est visuellement lisible
 > (un token légitime qui bascule en tentative d'exfiltration), il produit un
 > événement Falco exploitable, et sa remédiation touche **trois** domaines
-> (CYBER, IA, INFRA) — bon terrain de démonstration.
+> (CYBER, IA, INFRA) : bon terrain de démonstration.
 
 Toutes les cibles sont **forcées** sur `192.168.137.0/24` (le PA du groupe) et
 `redteam/attack.py` refuse de démarrer si la cible sort de ce préfixe ou resolve
@@ -319,11 +319,11 @@ steps:
 
 ### 8.4 Conventions d'API
 
-- `/api/auth/token` — `POST`, `application/x-www-form-urlencoded` ou JSON, renvoie `{access_token, token_type, expires_in}` (JWT RS256, `kid` en en-tête).
-- `/api/payments` — `POST`, en-tête `Idempotency-Key` obligatoire, renvoie `201` + `{payment_id, status, amount, currency, settled_at}`.
-- `/api/payments/{id}` — `GET`, renvoie l'état du paiement.
-- `/api/ledger/accounts/{id}/balance` — `GET`, réservé au rôle `service` ou `auditor`.
-- `/api/ops/*` — **supervision** consommée par le dashboard, protégée par le rôle `operator`, jamais exposée sans authentification.
+- `/api/auth/token` : `POST`, `application/x-www-form-urlencoded` ou JSON, renvoie `{access_token, token_type, expires_in}` (JWT RS256, `kid` en en-tête).
+- `/api/payments` : `POST`, en-tête `Idempotency-Key` obligatoire, renvoie `201` + `{payment_id, status, amount, currency, settled_at}`.
+- `/api/payments/{id}` : `GET`, renvoie l'état du paiement.
+- `/api/ledger/accounts/{id}/balance` : `GET`, réservé au rôle `service` ou `auditor`.
+- `/api/ops/*` : **supervision** consommée par le dashboard, protégée par le rôle `operator`, jamais exposée sans authentification.
 - Erreurs : `application/problem+json` (RFC 9457).
 - Corrélation : `X-Request-ID` généré par le WAF s'il est absent, propagé par tous les services, journalisé partout.
 
@@ -410,4 +410,4 @@ Hôte, conformément au §4 du sujet.
 
 ---
 
-*Document d'architecture — v1.0 — profile `vibe`*
+*Document d'architecture : v1.0 : profile `vibe`*

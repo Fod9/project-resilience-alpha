@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Acheminement des alertes
+#  AlphaPay : Acheminement des alertes
 # =============================================================================
 #  Alertmanager ne décide de rien : il regroupe, filtre et achemine. La décision
 #  appartient au moteur de remédiation, qui applique une politique écrite et

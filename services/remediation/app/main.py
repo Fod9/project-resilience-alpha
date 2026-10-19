@@ -1,4 +1,4 @@
-"""AlphaPay — moteur de remédiation autonome.
+"""AlphaPay : moteur de remédiation autonome.
 
 Rôle
 ----
@@ -93,7 +93,7 @@ async def _demarrer() -> None:
 ctx = build_app(
     service_name="remediation",
     version=VERSION,
-    title="AlphaPay — Remédiation autonome",
+    title="AlphaPay : Remédiation autonome",
     description=(
         "Ingestion des signalements, sélection de politique, exécution des "
         "playbooks, vérification de la reprise et journalisation des incidents."
@@ -644,7 +644,7 @@ async def ingerer_falco(request: Request) -> dict[str, Any]:
 
 @app.post("/api/ingest/webhook", tags=["ingestion"])
 async def ingerer_generique(request: Request) -> dict[str, Any]:
-    """Signalement générique — utilisé par le banc d'attaque pour horodater le tir.
+    """Signalement générique : utilisé par le banc d'attaque pour horodater le tir.
 
     Ce n'est pas un canal de déclenchement : le banc d'attaque s'en sert pour
     marquer l'instant exact du début d'attaque, ce qui permet de mesurer le
@@ -841,7 +841,7 @@ async def declencher_playbook(
     charge: dict[str, Any],
     x_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """Déclenchement manuel d'un playbook — utile pour les répétitions."""
+    """Déclenchement manuel d'un playbook : utile pour les répétitions."""
     _exiger_admin(x_admin_token)
     if _etat["suspendu"]:
         raise AppError(

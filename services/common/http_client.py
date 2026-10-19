@@ -179,8 +179,8 @@ class UpstreamError(RuntimeError):
     """Réponse d'erreur structurée renvoyée par un service amont.
 
     Conserve le code et le corps du problème (RFC 9457) pour que l'appelant
-    puisse propager un refus métier légitime — un solde insuffisant n'est pas
-    une indisponibilité — au lieu de tout confondre en erreur 502.
+    puisse propager un refus métier légitime : un solde insuffisant n'est pas
+    une indisponibilité : au lieu de tout confondre en erreur 502.
     """
 
     def __init__(self, status: int, payload: Any, url: str) -> None:

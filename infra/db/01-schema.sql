@@ -1,6 +1,6 @@
 -- =============================================================================
---  PROJECT RESILIENCE-ALPHA — AlphaPay
---  01-schema.sql — création des schémas et des tables
+--  PROJECT RESILIENCE-ALPHA : AlphaPay
+--  01-schema.sql : création des schémas et des tables
 -- =============================================================================
 --  Transcription de `docs/DESIGN.md` sections 1.2 à 1.5.
 --  Exécuté une seule fois, par le superutilisateur, à l'initialisation du
@@ -14,7 +14,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- -----------------------------------------------------------------------------
---  Schéma `auth` — identités, jetons, clés de signature, journal d'audit
+--  Schéma `auth` : identités, jetons, clés de signature, journal d'audit
 -- -----------------------------------------------------------------------------
 CREATE SCHEMA IF NOT EXISTS auth;
 
@@ -78,7 +78,7 @@ CREATE TABLE auth.signing_keys (
 );
 
 -- -----------------------------------------------------------------------------
---  Schéma `ledger` — comptes, transactions, jambes (partie double)
+--  Schéma `ledger` : comptes, transactions, jambes (partie double)
 -- -----------------------------------------------------------------------------
 CREATE SCHEMA IF NOT EXISTS ledger;
 
@@ -125,7 +125,7 @@ CREATE INDEX idx_entries_tx      ON ledger.entries(transaction_id);
 CREATE INDEX idx_entries_account ON ledger.entries(account_id);
 
 -- -----------------------------------------------------------------------------
---  Schéma `ops` — incidents, journal d'événements, actions, vérifications
+--  Schéma `ops` : incidents, journal d'événements, actions, vérifications
 -- -----------------------------------------------------------------------------
 CREATE SCHEMA IF NOT EXISTS ops;
 

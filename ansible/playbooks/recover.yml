@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — reprise manuelle d'un service
+#  AlphaPay : reprise manuelle d'un service
 # =============================================================================
 #  Ce playbook est le recours lorsqu'une reprise autonome n'a pas abouti, ou
 #  lorsqu'un opérateur veut reprendre la main. Il ne remplace jamais le moteur de
@@ -74,8 +74,8 @@
       ansible.builtin.debug:
         msg:
           - "État final      : {{ etat.json.state }}"
-          - "Délai détection : {{ etat.json.last_incident.mttd_ms | default('—') }} ms"
-          - "Délai reprise   : {{ etat.json.last_incident.mttr_ms | default('—') }} ms"
+          - "Délai détection : {{ etat.json.last_incident.mttd_ms | default('-') }} ms"
+          - "Délai reprise   : {{ etat.json.last_incident.mttr_ms | default('-') }} ms"
           - "Source filtrée  : {{ etat.json.blocked_ips | default([]) }}"
 
     - name: Échouer si la reprise n'est pas confirmée

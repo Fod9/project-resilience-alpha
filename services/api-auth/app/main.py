@@ -1,4 +1,4 @@
-"""AlphaPay — authentification, jetons d'accès et cycle de vie des clés.
+"""AlphaPay : authentification, jetons d'accès et cycle de vie des clés.
 
 Responsabilités
 ---------------
@@ -57,7 +57,7 @@ ALGORITHM = "RS256"
 ctx = build_app(
     service_name="api-auth",
     version=VERSION,
-    title="AlphaPay — Authentification",
+    title="AlphaPay : Authentification",
     description=(
         "Authentification des clients et des opérateurs, émission et révocation "
         "des jetons, publication des clés de signature."

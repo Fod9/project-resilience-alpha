@@ -1,4 +1,4 @@
-# remediation — AlphaPay
+# remediation : AlphaPay
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -22,7 +22,7 @@ COPY services/remediation/app  /app/app
 # Politiques et playbooks sont embarqués dans l'image plutôt que montés depuis
 # l'hôte. Deux conséquences voulues : la pile démarre à l'identique quel que
 # soit le système hôte, et l'ensemble des règles appliquées par le moteur est
-# exactement celui versionné dans ce dépôt — donc auditable.
+# exactement celui versionné dans ce dépôt : donc auditable.
 COPY infra/policies   /etc/alphapay/policies
 COPY infra/playbooks  /etc/alphapay/playbooks
 

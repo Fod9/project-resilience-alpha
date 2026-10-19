@@ -1,4 +1,4 @@
-# Playbooks et politiques — PROJECT RESILIENCE-ALPHA
+# Playbooks et politiques : PROJECT RESILIENCE-ALPHA
 
 Documentation de la couche de réaction autonome du moteur de remédiation :
 les **politiques** (`infra/policies/`) qui qualifient un signalement et
@@ -17,7 +17,7 @@ sans intervention humaine ; `RUNBOOKS.md` décrit ce que fait l'opérateur.
   et que déclenche-t-on ? »
 - **Plusieurs sources, un même signalement.** Chaque politique précise ses
   `sources` : `detector`, `alertmanager` ou `falco`. Les conditions sont
-  évaluées en `match: any` — une seule condition remplie suffit.
+  évaluées en `match: any` : une seule condition remplie suffit.
 - **Hiérarchie par priorité.** Quand plusieurs politiques correspondent, la
   plus forte `priority` l'emporte. Les politiques du chemin « modèle » sont
   volontairement prioritaires sur celles du chemin « alertes », car le chemin
@@ -67,7 +67,7 @@ sans intervention humaine ; `RUNBOOKS.md` décrit ce que fait l'opérateur.
 Ces trois politiques répondent aux trois scénarios d'attaque du workshop.
 Elles s'appuient sur le chemin « modèle » ou « alertes ».
 
-### POL-A3-INJECTION — Injection applicative et tentative d'exfiltration
+### POL-A3-INJECTION : Injection applicative et tentative d'exfiltration
 
 - **Sévérité / priorité / temporisation :** critical / 300 / 240 s
 - **Sources :** detector, alertmanager
@@ -81,7 +81,7 @@ Elles s'appuient sur le chemin « modèle » ou « alertes ».
   une compromission avérée ; le WAF a intercepté les charges utiles et c'est
   le volume sortant qui fait craindre une exfiltration.
 
-### POL-A2-IDENTITES — Bourrage d'identifiants ou jetons compromis
+### POL-A2-IDENTITES : Bourrage d'identifiants ou jetons compromis
 
 - **Sévérité / priorité / temporisation :** critical / 200 / 240 s
 - **Sources :** detector, alertmanager
@@ -94,7 +94,7 @@ Elles s'appuient sur le chemin « modèle » ou « alertes ».
   distinctes depuis une même origine est la signature d'un bourrage
   d'identifiants ou de l'usage de jetons volés.
 
-### POL-A1-RAFALE — Rafale volumétrique (déni de service)
+### POL-A1-RAFALE : Rafale volumétrique (déni de service)
 
 - **Sévérité / priorité / temporisation :** critical / 100 / 180 s
 - **Sources :** detector, alertmanager
@@ -116,7 +116,7 @@ les mêmes effets. Sa limite assumée est documentée : ces alertes ne
 transportent pas d'adresse d'origine, donc **elles remettent le service en
 état et le vérifient, sans confinement**.
 
-### POL-ALERTE-INJECTION — Injection confirmée par supervision
+### POL-ALERTE-INJECTION : Injection confirmée par supervision
 
 - **Sévérité / priorité / temporisation :** critical / 240 / 180 s
 - **Source :** alertmanager
@@ -124,7 +124,7 @@ transportent pas d'adresse d'origine, donc **elles remettent le service en
   d'injection au-dessus du seuil de supervision)
 - **Playbook :** PB-ALERTE-REPRISE
 
-### POL-ALERTE-EXFILTRATION — Volume sortant hors tendance
+### POL-ALERTE-EXFILTRATION : Volume sortant hors tendance
 
 - **Sévérité / priorité / temporisation :** critical / 238 / 180 s
 - **Source :** alertmanager
@@ -134,7 +134,7 @@ transportent pas d'adresse d'origine, donc **elles remettent le service en
 - **Fondement :** le service exposé est redémarré après prise d'un
   instantané, afin qu'aucune donnée incohérente ne survive à l'incident.
 
-### POL-ALERTE-AUTH — Bourrage d'identifiants par supervision
+### POL-ALERTE-AUTH : Bourrage d'identifiants par supervision
 
 - **Sévérité / priorité / temporisation :** critical / 190 / 180 s
 - **Source :** alertmanager
@@ -142,10 +142,10 @@ transportent pas d'adresse d'origine, donc **elles remettent le service en
   d'authentification élevé)
 - **Playbook :** PB-ALERTE-REPRISE
 - **Fondement :** priorité inférieure à celle de `POL-A2-IDENTITES` : si le
-  modèle a déjà qualifié la situation, sa politique — qui sait quelle adresse
-  bloquer — reste prioritaire.
+  modèle a déjà qualifié la situation, sa politique : qui sait quelle adresse
+  bloquer : reste prioritaire.
 
-### POL-ALERTE-LATENCE — Latence durablement dégradée
+### POL-ALERTE-LATENCE : Latence durablement dégradée
 
 - **Sévérité / priorité / temporisation :** warning / 80 / 600 s
 - **Source :** alertmanager
@@ -162,12 +162,12 @@ transportent pas d'adresse d'origine, donc **elles remettent le service en
 
 ## 3. Politiques d'exploitation (`infra/policies/20-exploitation.yaml`)
 
-Ces politiques traitent des défaillances ordinaires — service indisponible,
-invariant comptable rompu — qui doivent aussi être réparées sans
+Ces politiques traitent des défaillances ordinaires : service indisponible,
+invariant comptable rompu : qui doivent aussi être réparées sans
 intervention humaine. Un système qui ne se relève que des attaques n'est
 résilient qu'à moitié. L'intégrité comptable y prime sur la disponibilité.
 
-### POL-EXPL-INTEGRITE — Invariant comptable rompu
+### POL-EXPL-INTEGRITE : Invariant comptable rompu
 
 - **Sévérité / priorité / temporisation :** critical / 260 / 180 s
 - **Source :** alertmanager
@@ -175,7 +175,7 @@ résilient qu'à moitié. L'intégrité comptable y prime sur la disponibilité.
   livre, différent de zéro)
 - **Playbook :** PB-INTEGRITE-COMPTABLE
 
-### POL-EXPL-INDISPONIBLE — Service applicatif indisponible
+### POL-EXPL-INDISPONIBLE : Service applicatif indisponible
 
 - **Sévérité / priorité / temporisation :** critical / 150 / 120 s
 - **Source :** alertmanager
@@ -185,7 +185,7 @@ résilient qu'à moitié. L'intégrité comptable y prime sur la disponibilité.
 - **Fondement :** une alerte d'exploitation ne suffit pas à déclarer la
   reprise ; la suite de vérification reste exigée.
 
-### POL-EXPL-VERIFICATION — Preuves de rétablissement non réunies
+### POL-EXPL-VERIFICATION : Preuves de rétablissement non réunies
 
 - **Sévérité / priorité / temporisation :** warning / 90 / 120 s
 - **Source :** alertmanager
@@ -197,7 +197,7 @@ résilient qu'à moitié. L'intégrité comptable y prime sur la disponibilité.
 
 ---
 
-## 4. Politiques de détection d'exécution — SIEM (`infra/policies/30-execution.yaml`)
+## 4. Politiques de détection d'exécution : SIEM (`infra/policies/30-execution.yaml`)
 
 Falco observe les appels système des conteneurs. Ces politiques ne
 remplacent pas le détecteur d'anomalies : elles couvrent des comportements
@@ -206,7 +206,7 @@ de service, écriture dans un binaire système) que le modèle statistique n'a
 pas vocation à qualifier. **Elles ne bloquent jamais la bordure** : elles
 quarantinent le conteneur, la bonne réponse à une exécution suspecte.
 
-### POL-SIEM-CONTAINER — Exécution suspecte dans un conteneur
+### POL-SIEM-CONTAINER : Exécution suspecte dans un conteneur
 
 - **Sévérité / priorité / temporisation :** critical / 250 / 300 s
 - **Source :** falco
@@ -214,7 +214,7 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
   `Privilege`, **ou** `severity == critical`
 - **Playbook :** PB-SIEM-CONFINER-CONTENEUR
 
-### POL-SIEM-ECRITURE — Écriture dans un binaire système
+### POL-SIEM-ECRITURE : Écriture dans un binaire système
 
 - **Sévérité / priorité / temporisation :** critical / 249 / 300 s
 - **Source :** falco
@@ -226,22 +226,22 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
 
 ## 5. Playbooks de sécurité (`infra/playbooks/10-securite.yaml`)
 
-### PB-A1-CONFINER-ET-REDEMARRER — Confinement d'une rafale et remise en service
+### PB-A1-CONFINER-ET-REDEMARRER : Confinement d'une rafale et remise en service
 
 - **Déclencheur :** `POL-A1-RAFALE`
 - **Vérification finale exigée :** oui
 - **Phases traversées :** Confinement → Remise en état → Vérification
 - **Actions :**
-  1. `bloquer-source` (Confinement) — `edge.block_ip` sur `${event.source_ip}`,
+  1. `bloquer-source` (Confinement) : `edge.block_ip` sur `${event.source_ip}`,
      TTL 900 s, délai 15 s, `abort`, critique. Coupe la source à la bordure,
      sans redémarrage de celle-ci.
-  2. `revoquer-jetons` (Confinement) — `auth.revoke_by_source`, délai 15 s,
+  2. `revoquer-jetons` (Confinement) : `auth.revoke_by_source`, délai 15 s,
      `continue_anyway`. Invalide les jetons émis depuis cette adresse.
-  3. `redemarrer-paiement` (Remise en état) — `docker.restart` du conteneur
+  3. `redemarrer-paiement` (Remise en état) : `docker.restart` du conteneur
      `alphaplat-api-payment`, grâce 5 s, délai 90 s, `continue`.
-  4. `attendre-sante` (Remise en état) — `docker.wait_healthy` sur
+  4. `attendre-sante` (Remise en état) : `docker.wait_healthy` sur
      `alphaplat-api-payment`, délai 120 s, `continue`.
-  5. `verifier` (Vérification) — `verify.recovery_suite`.
+  5. `verifier` (Vérification) : `verify.recovery_suite`.
 - **Vérification finale :** la suite de vérification de bout en bout
   (santé, transaction synthétique, intégrité comptable, confinement effectif,
   absence de dérive d'image, intégrité de l'authentification).
@@ -250,28 +250,28 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
   confinement précède la remise en service : redémarrer sans bloquer la
   source reviendrait à réadmettre l'attaque.
 
-### PB-A2-ROTATION-DE-CLES — Confinement et remplacement de la clé de signature
+### PB-A2-ROTATION-DE-CLES : Confinement et remplacement de la clé de signature
 
 - **Déclencheur :** `POL-A2-IDENTITES`
 - **Vérification finale exigée :** oui
 - **Phases traversées :** Confinement → Éradication → Remise en état → Vérification
 - **Actions :**
-  1. `bloquer-source` (Confinement) — `edge.block_ip` sur `${event.source_ip}`,
+  1. `bloquer-source` (Confinement) : `edge.block_ip` sur `${event.source_ip}`,
      TTL 1800 s, délai 15 s, `abort`, critique.
-  2. `revoquer-jetons` (Confinement) — `auth.revoke_by_source`, délai 15 s,
+  2. `revoquer-jetons` (Confinement) : `auth.revoke_by_source`, délai 15 s,
      `continue_anyway`. Retire les jetons de rafraîchissement issus de cette
      adresse.
-  3. `rotation-cle` (Éradication) — `auth.rotate_signing_key`, délai 20 s,
+  3. `rotation-cle` (Éradication) : `auth.rotate_signing_key`, délai 20 s,
      `abort`, critique. Remplace la clé RS256 : **tous** les jetons émis
      deviennent invalides, sans énumération.
-  4. `instantane` (Remise en état) — `ledger.snapshot`, délai 30 s,
+  4. `instantane` (Remise en état) : `ledger.snapshot`, délai 30 s,
      `continue_anyway`. Photographie le grand livre après confinement.
-  5. `redemarrer-auth` (Remise en état) — `docker.restart` du conteneur
+  5. `redemarrer-auth` (Remise en état) : `docker.restart` du conteneur
      `alphaplat-api-auth`, grâce 5 s, délai 90 s, `continue`. Le service
      repart sur la nouvelle clé.
-  6. `attendre-sante` (Remise en état) — `docker.wait_healthy` sur
+  6. `attendre-sante` (Remise en état) : `docker.wait_healthy` sur
      `alphaplat-api-auth`, délai 120 s, `continue`.
-  7. `verifier` (Vérification) — `verify.recovery_suite`.
+  7. `verifier` (Vérification) : `verify.recovery_suite`.
 - **Vérification finale :** suite de vérification complète, dont le contrôle
   qu'aucun jeton signé par une clé compromise n'est accepté.
 - **Durée attendue :** la rotation de clé (~20 s) et le redémarrage du
@@ -279,48 +279,48 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
   compatible avec la cible MTTR < 180 s. Coût assumé : tout client est
   déconnecté, pas seulement l'attaquant, mais le coût (reconnexion) est borné.
 
-### PB-A3-CONFINER-ET-REPARER — Confinement d'une injection et contrôle comptable
+### PB-A3-CONFINER-ET-REPARER : Confinement d'une injection et contrôle comptable
 
 - **Déclencheur :** `POL-A3-INJECTION`
 - **Vérification finale exigée :** oui
 - **Phases traversées :** Confinement → Éradication → Remise en état → Vérification
 - **Actions :**
-  1. `bloquer-source` (Confinement) — `edge.block_ip` sur `${event.source_ip}`,
+  1. `bloquer-source` (Confinement) : `edge.block_ip` sur `${event.source_ip}`,
      TTL 3600 s, délai 15 s, `abort`, critique.
-  2. `instantane` (Confinement) — `ledger.snapshot`, délai 30 s,
+  2. `instantane` (Confinement) : `ledger.snapshot`, délai 30 s,
      `continue_anyway`. Prend le grand livre immédiatement après
      confinement.
-  3. `geler-compte` (Éradication) — `ledger.freeze_account` sur le compte
+  3. `geler-compte` (Éradication) : `ledger.freeze_account` sur le compte
      exposé (`CUST-000001`, `frozen: true`), délai 20 s, `continue_anyway`.
      Le gel est préféré à la correction automatique d'un solde : on n'écrit
      pas dans les comptes tant qu'un humain n'a pas statué.
-  4. `reconcilier` (Remise en état) — `ledger.reconcile`, délai 30 s,
+  4. `reconcilier` (Remise en état) : `ledger.reconcile`, délai 30 s,
      `continue`. Recalcule les soldes depuis le journal des jambes.
-  5. `verifier` (Vérification) — `verify.recovery_suite`.
+  5. `verifier` (Vérification) : `verify.recovery_suite`.
 - **Vérification finale :** intégrité comptable conforme et transaction de
   vérification ; le compte gelé reste gelé en attendant la décision humaine.
 - **Durée attendue :** budget dominé par les instantanés et la
   réconciliation (quelques dizaines de secondes). Le gel laisse un état
-  qui attend un humain — la seule étape de la boucle qui exige l'intervention
+  qui attend un humain : la seule étape de la boucle qui exige l'intervention
   humaine en aval.
 
-### PB-SIEM-CONFINER-CONTENEUR — Quarantaine d'un conteneur suspect
+### PB-SIEM-CONFINER-CONTENEUR : Quarantaine d'un conteneur suspect
 
 - **Déclencheur :** `POL-SIEM-CONTAINER` ou `POL-SIEM-ECRITURE`
 - **Vérification finale exigée :** non (le rétablissement n'est pas automatique)
 - **Phases traversées :** Confinement → Vérification
 - **Actions :**
-  1. `isoler` (Confinement) — `docker.isolate` du conteneur
+  1. `isoler` (Confinement) : `docker.isolate` du conteneur
      `${event.container}`, délai 20 s, `abort`, critique. Le conteneur est
      retiré du réseau applicatif (quarantaine) plutôt que redémarré :
      redémarrer détruirait les preuves, la quarantaine les préserve tout en
      coupant la capacité de nuisance.
-  2. `informer` (Confinement) — `notify.operator`, sévérité critical, délai
+  2. `informer` (Confinement) : `notify.operator`, sévérité critical, délai
      5 s, `continue_anyway`. Informe l'opérateur de permanence.
-  3. `escalader` (Vérification) — `escalate.human`, délai 5 s,
+  3. `escalader` (Vérification) : `escalate.human`, délai 5 s,
      `continue_anyway`. La levée de quarantaine exige une décision humaine
      (analyse forensique requise).
-- **Vérification finale :** aucune suite automatique — la main est rendue
+- **Vérification finale :** aucune suite automatique : la main est rendue
   à l'opérateur. L'état reste en attente de décision humaine.
 - **Durée attendue :** quelques secondes (isolation + notification +
   escalade). Ce playbook ne se clôt pas tout seul : c'est un point d'arrêt
@@ -330,36 +330,36 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
 
 ## 6. Playbooks d'exploitation (`infra/playbooks/20-exploitation.yaml`)
 
-### PB-REDEMARRAGE-SERVICE — Redémarrage contrôlé et vérification fonctionnelle
+### PB-REDEMARRAGE-SERVICE : Redémarrage contrôlé et vérification fonctionnelle
 
 - **Déclencheur :** `POL-EXPL-INDISPONIBLE` ou `POL-EXPL-VERIFICATION`
 - **Vérification finale exigée :** oui
 - **Phases traversées :** Remise en état → Vérification
 - **Actions :**
-  1. `redemarrer` (Remise en état) — `docker.restart` du service signalé
+  1. `redemarrer` (Remise en état) : `docker.restart` du service signalé
      `${event.service}`, grâce 5 s, délai 90 s, `abort`, critique.
-  2. `attendre-sante` (Remise en état) — `docker.wait_healthy` sur
+  2. `attendre-sante` (Remise en état) : `docker.wait_healthy` sur
      `${event.service}`, délai 120 s, `continue`.
-  3. `verifier` (Vérification) — `verify.recovery_suite`.
+  3. `verifier` (Vérification) : `verify.recovery_suite`.
 - **Vérification finale :** un redémarrage n'est jamais la preuve d'un
-  rétablissement ; la suite complète — dont un paiement réel de bout en bout —
+  rétablissement ; la suite complète : dont un paiement réel de bout en bout -
   doit passer.
 - **Durée attendue :** le redémarrage (~90 s) plus l'attente de santé
   dominent le budget.
 
-### PB-INTEGRITE-COMPTABLE — Restauration de l'invariant comptable
+### PB-INTEGRITE-COMPTABLE : Restauration de l'invariant comptable
 
 - **Déclencheur :** `POL-EXPL-INTEGRITE`
 - **Vérification finale exigée :** oui
 - **Phases traversées :** Éradication → Remise en état → Vérification
 - **Actions :**
-  1. `instantane-fautif` (Éradication) — `ledger.snapshot`, délai 30 s,
+  1. `instantane-fautif` (Éradication) : `ledger.snapshot`, délai 30 s,
      `continue_anyway`. Photographie l'état fautif **avant** toute écriture :
      c'est la seule trace exploitable pour l'analyse.
-  2. `reconcilier` (Remise en état) — `ledger.reconcile`, délai 30 s,
+  2. `reconcilier` (Remise en état) : `ledger.reconcile`, délai 30 s,
      `abort`, critique. Recalcule les soldes depuis le journal des jambes,
      source d'autorité.
-  3. `verifier` (Vérification) — `verify.recovery_suite`. Contrôle
+  3. `verifier` (Vérification) : `verify.recovery_suite`. Contrôle
      d'intégrité et paiement de vérification.
 - **Vérification finale :** un solde n'est jamais corrigé à la main ; il est
   recalculé. L'ordre (instantané d'abord, puis recalcul) est imposé pour
@@ -371,25 +371,25 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
 
 ## 7. Playbook de reprise par supervision (`infra/playbooks/30-alertes.yaml`)
 
-### PB-ALERTE-REPRISE — Reprise vérifiée d'un service signalé par la supervision
+### PB-ALERTE-REPRISE : Reprise vérifiée d'un service signalé par la supervision
 
 - **Déclencheur :** `POL-ALERTE-INJECTION`, `POL-ALERTE-EXFILTRATION`,
   `POL-ALERTE-AUTH` ou `POL-ALERTE-LATENCE`
 - **Vérification finale exigée :** oui
 - **Phases traversées :** Éradication → Remise en état → Vérification
 - **Actions :**
-  1. `instantane` (Éradication) — `ledger.snapshot`, délai 30 s,
+  1. `instantane` (Éradication) : `ledger.snapshot`, délai 30 s,
      `continue_anyway`. Point de retour avant toute manipulation d'état.
-  2. `redemarrage` (Remise en état) — `docker.restart` du service signalé
+  2. `redemarrage` (Remise en état) : `docker.restart` du service signalé
      `${event.service}`, grâce 5 s, délai 45 s, `abort`.
-  3. `attente-sante` (Remise en état) — `docker.wait_healthy` sur
+  3. `attente-sante` (Remise en état) : `docker.wait_healthy` sur
      `${event.service}`, délai 130 s, `abort`.
-  4. `verification` (Vérification) — `verify.recovery_suite`. Transaction
+  4. `verification` (Vérification) : `verify.recovery_suite`. Transaction
      synthétique de bout en bout et contrôle comptable.
-  5. `notification` (Vérification) — `notify.operator`, délai 10 s,
+  5. `notification` (Vérification) : `notify.operator`, délai 10 s,
      `continue_anyway`. Trace de la reprise dans la salle d'opérations.
 - **Vérification finale :** transaction synthétique de bout en bout et
-  contrôle comptable ; aucune action destructive — un service sain est
+  contrôle comptable ; aucune action destructive : un service sain est
   simplement redémarré. **Ce playbook ne confine pas** : une alerte
   Prometheus ne transporte pas l'adresse d'origine. Sa valeur est la
   redondance : il agit même si le modèle d'anomalie est indisponible.
@@ -441,9 +441,9 @@ quarantinent le conteneur, la bonne réponse à une exécution suspecte.
 | `ledger.snapshot` | api-ledger | Instantané du grand livre dans le volume dédié | Non (trace) |
 | `ledger.reconcile` | api-ledger | Recalcule les soldes depuis le journal des jambes | Oui (récalcul) |
 | `ledger.freeze_account` | api-ledger | Gèle un compte exposé, en attente d'un contrôle humain | Oui (par décision humaine) |
-| `verify.recovery_suite` | moteur | Suite de vérification de bout en bout | — (preuve) |
-| `notify.operator` | moteur | Trace de l'événement dans la salle d'opérations | — (information) |
-| `escalate.human` | moteur | Rend la main à un opérateur | — (escalade) |
+| `verify.recovery_suite` | moteur | Suite de vérification de bout en bout | : (preuve) |
+| `notify.operator` | moteur | Trace de l'événement dans la salle d'opérations | : (information) |
+| `escalate.human` | moteur | Rend la main à un opérateur | : (escalade) |
 
 ### 8.4 Lecture des priorités
 

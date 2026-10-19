@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-LABEL org.opencontainers.image.title="AlphaPay — amont factice (banc d'essai)"
+LABEL org.opencontainers.image.title="AlphaPay : amont factice (banc d'essai)"
 
 WORKDIR /app
 COPY server.py /app/server.py

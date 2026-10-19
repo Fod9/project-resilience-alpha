@@ -1,4 +1,4 @@
-"""AlphaPay — détecteur d'anomalies par apprentissage non supervisé.
+"""AlphaPay : détecteur d'anomalies par apprentissage non supervisé.
 
 Boucle de fonctionnement
 ------------------------
@@ -8,7 +8,7 @@ Boucle de fonctionnement
    nominal, puis le soumet au modèle Isolation Forest ;
 3. le score obtenu est comparé au seuil calibré (quantile 99,8 du nominal) ;
 4. une anomalie n'est déclarée qu'après `CONSECUTIVE_WINDOWS` fenêtres
-   consécutives au-dessus du seuil — ce qui élimine les dépassements isolés
+   consécutives au-dessus du seuil : ce qui élimine les dépassements isolés
    inhérents au choix du quantile.
 
 Aucune règle n'intervient dans la décision. Les seuils de latence, de taux
@@ -85,7 +85,7 @@ async def _arreter() -> None:
 ctx = build_app(
     service_name="detector",
     version=VERSION,
-    title="AlphaPay — Détection d'anomalies",
+    title="AlphaPay : Détection d'anomalies",
     description=(
         "Modélisation non supervisée du trafic nominal et qualification des "
         "écarts comme anomalies."
@@ -368,7 +368,7 @@ async def _boucle() -> None:
         await asyncio.sleep(SCAN_INTERVAL_SECONDS)
         try:
             await _cycle()
-        except Exception as erreur:  # noqa: BLE001 — la boucle ne doit jamais mourir
+        except Exception as erreur:  # noqa: BLE001 : la boucle ne doit jamais mourir
             events.warn(
                 "detector.cycle_failed",
                 message="échec d'un cycle de détection",

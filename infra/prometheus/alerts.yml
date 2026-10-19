@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Règles d'alerte Prometheus
+#  AlphaPay : Règles d'alerte Prometheus
 # =============================================================================
 #  Ces règles constituent le second chemin de détection, indépendant du modèle
 #  d'apprentissage. Si le détecteur est indisponible ou si son modèle est

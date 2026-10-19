@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""AlphaPay — banc offensif (Red Team).
+"""AlphaPay : banc offensif (Red Team).
 
 Ce script s'exécute depuis le **poste attaquant**, distinct du poste hôte. Il
 n'utilise aucune bibliothèque exotique : uniquement la bibliothèque standard,
 pour qu'il puisse tourner sur n'importe quelle machine de la salle sans
 préparation.
 
-Avertissement — cadre légal et éthique
+Avertissement : cadre légal et éthique
 --------------------------------------
 Ce banc n'est destiné qu'à la plateforme AlphaPay fictive, déployée sur le
 réseau du workshop. Les adresses visées sont celles du poste hôte de son propre
@@ -23,9 +23,9 @@ Ce que le script fait
 
 Scénarios
 ---------
-A1  rafale volumétrique       — déni de service applicatif
-A2  bourrage d'identifiants   — tentative de compromission de comptes
-A3  injection applicative     — injections SQL et XSS, tentative d'exfiltration
+A1  rafale volumétrique       : déni de service applicatif
+A2  bourrage d'identifiants   : tentative de compromission de comptes
+A3  injection applicative     : injections SQL et XSS, tentative d'exfiltration
 
 Usage
 -----
@@ -130,7 +130,7 @@ class BancOffensif:
     # -- scénarios ---------------------------------------------------------
 
     def rafale(self, duree: float, debit: int, concurrence: int) -> None:
-        """A1 — déni de service applicatif."""
+        """A1 : déni de service applicatif."""
         print(f"  A1 : rafale de {debit} req/s pendant {duree:.0f} s ({concurrence} fils)")
 
         def tir(_: int) -> None:
@@ -157,7 +157,7 @@ class BancOffensif:
                     time.sleep(0.1 - ecoule)
 
     def bourrage_identifiants(self, duree: float, concurrence: int) -> None:
-        """A2 — bourrage d'identifiants."""
+        """A2 : bourrage d'identifiants."""
         print(f"  A2 : bourrage d'identifiants pendant {duree:.0f} s ({concurrence} fils)")
 
         def tir(_: int) -> None:
@@ -179,7 +179,7 @@ class BancOffensif:
                 time.sleep(0.2)
 
     def injection(self, duree: float) -> None:
-        """A3 — injections applicatives."""
+        """A3 : injections applicatives."""
         print(f"  A3 : injections SQL et XSS pendant {duree:.0f} s")
         fin = time.time() + duree
         while time.time() < fin:
@@ -282,7 +282,7 @@ class BancOffensif:
 
 def main() -> int:
     analyseur = argparse.ArgumentParser(
-        description="Banc offensif AlphaPay — usage strictement limité à la plateforme fictive du workshop."
+        description="Banc offensif AlphaPay : usage strictement limité à la plateforme fictive du workshop."
     )
     analyseur.add_argument("--scenario", required=True, choices=["A1", "A2", "A3"])
     analyseur.add_argument("--target", required=True, help="URL de la bordure, ex. http://192.168.137.1")
@@ -299,7 +299,7 @@ def main() -> int:
 
     banc = BancOffensif(arguments.target, insecure=arguments.insecure)
 
-    print(f"=== AlphaPay — banc offensif — scénario {arguments.scenario} ===")
+    print(f"=== AlphaPay : banc offensif : scénario {arguments.scenario} ===")
     print(f"  cible : {banc.cible}")
     statut, _ = banc.requete("/healthz", timeout=6.0)
     if statut != 200:

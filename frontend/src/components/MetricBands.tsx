@@ -25,32 +25,36 @@ export function BandesMesures({
   const seuilRatio = seuil > 0 ? Math.min(seuil / (seuil * 2), 1) : 0.5;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-4 bg-surface-2 px-4 py-3 xl:grid-cols-4">
       <Bande
-        titre="Score d'anomalie et seuil calibré"
-        valeur={score.toFixed(4)}
-        sous={`seuil ${seuil.toFixed(4)} · dépassement ×${(detection?.exceedance ?? 0).toFixed(2)}`}
+        titre="Score anomalie"
+        valeur={score.toFixed(3)}
+        sous={`seuil ${seuil.toFixed(3)}`}
         ratio={ratio}
         repere={seuilRatio}
         alerte={detection?.anomalous ?? false}
       />
       <Bande
-        titre="Trafic observé"
-        valeur={`${valeurFenetre(fenetre, "requests_per_second").toFixed(1)} req/s`}
-        sous={`${fenetre?.events_in_window ?? 0} événements · ${valeurFenetre(fenetre, "unique_source_ips").toFixed(0)} adresses`}
+        titre="Trafic"
+        valeur={valeurFenetre(fenetre, "requests_per_second").toFixed(1)}
+        sous={`req/s · ${fenetre?.events_in_window ?? 0} évt`}
         ratio={Math.min(valeurFenetre(fenetre, "requests_per_second") / 120, 1)}
       />
       <Bande
-        titre="Latence p99 mesurée à la bordure"
+        titre="Latence p99"
         valeur={`${valeurFenetre(fenetre, "latency_p99_ms").toFixed(0)} ms`}
-        sous={`p95 ${valeurFenetre(fenetre, "latency_p95_ms").toFixed(0)} ms`}
+        sous={`p95 ${valeurFenetre(fenetre, "latency_p95_ms").toFixed(0)} ms à la bordure`}
         ratio={Math.min(valeurFenetre(fenetre, "latency_p99_ms") / 3000, 1)}
       />
       <Bande
-        titre="Signatures hostiles interceptées"
-        valeur={`${(valeurFenetre(fenetre, "injection_token_ratio") * 100).toFixed(1)} %`}
-        sous={`XSS ${(valeurFenetre(fenetre, "xss_token_ratio") * 100).toFixed(1)} % · blocages WAF ${(valeurFenetre(fenetre, "waf_block_ratio") * 100).toFixed(1)} %`}
-        ratio={Math.min(valeurFenetre(fenetre, "injection_token_ratio") / 0.2, 1)}
+        titre="WAF"
+        valeur={`${(valeurFenetre(fenetre, "waf_block_ratio") * 100).toFixed(1)} %`}
+        sous={
+          valeurFenetre(fenetre, "waf_block_ratio") > 0
+            ? `injection ${(valeurFenetre(fenetre, "injection_token_ratio") * 100).toFixed(1)} % · XSS ${(valeurFenetre(fenetre, "xss_token_ratio") * 100).toFixed(1)} %`
+            : "aucun blocage"
+        }
+        ratio={Math.min(valeurFenetre(fenetre, "waf_block_ratio") / 0.3, 1)}
       />
     </div>
   );
@@ -73,12 +77,15 @@ function Bande({
 }) {
   const couleur = alerte ? "bg-incident" : "bg-accent";
   return (
-    <div className="carte px-3 py-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="etiquette">{titre}</span>
-        <span className={`tabular text-lg ${alerte ? "text-incident" : "text-ink"}`}>{valeur}</span>
-      </div>
-      <div className="relative mt-2 barre">
+    <div className="flex flex-col gap-1.5">
+      <span className="etiquette">{titre}</span>
+      <span
+        className={`font-display text-2xl font-extrabold leading-none ${alerte ? "text-incident" : "text-ink"}`}
+      >
+        {valeur}
+      </span>
+      <span className="font-mono text-[0.625rem] text-ink-dim">{sous}</span>
+      <div className="relative mt-1 barre">
         <div
           className={`h-full ${couleur} rounded-full`}
           style={{ width: `${Math.max(ratio * 100, 0)}%` }}
@@ -119,7 +126,7 @@ export function PlaybookPanel({
 }) {
   const incident = detail?.incident;
   const actions = detail?.actions ?? [];
-  const etat = incident?.state ?? "—";
+  const etat = incident?.state ?? "·";
 
   return (
     <section className="carte flex flex-col min-h-0">
@@ -175,7 +182,7 @@ export function PlaybookPanel({
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-xs font-mono text-ink truncate">{action.action}</span>
                     <span className="text-[0.625rem] font-mono text-ink-dim shrink-0">
-                      {action.duration_ms ?? "—"} ms
+                      {action.duration_ms ?? "·"} ms
                     </span>
                   </div>
                   <div className="text-[0.625rem] text-ink-dim truncate">

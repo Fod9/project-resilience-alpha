@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Politiques de détection d'exécution (SIEM)
+#  AlphaPay : Politiques de détection d'exécution (SIEM)
 # =============================================================================
 #  Falco observe les appels système des conteneurs. Ces règles ne remplacent pas
 #  le détecteur d'anomalies : elles couvrent des comportements dont la

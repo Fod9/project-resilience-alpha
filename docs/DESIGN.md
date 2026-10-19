@@ -1,7 +1,7 @@
-# PROJECT RESILIENCE-ALPHA — Conception détaillée
+# PROJECT RESILIENCE-ALPHA : Conception détaillée
 
 > AlphaPay · Conception technique, modèles, contrats, plan de sprint
-> Complément de `ARCHITECTURE.md` — v1.0
+> Complément de `ARCHITECTURE.md` : v1.0
 
 ---
 
@@ -84,7 +84,7 @@ CREATE INDEX idx_audit_source ON auth.audit_log(source_ip);
 **Révocation de clé de signature** : la table `auth.signing_keys` porte les paires
 RS256 avec état (`active`, `retired`, `compromised`) ; `auth.rotate_signing_key`
 génère une nouvelle paire et marque l'ancienne `compromised`, ce qui invalide
-immédiatement tous les JWT émis — action clé du scénario A2.
+immédiatement tous les JWT émis : action clé du scénario A2.
 
 ```sql
 CREATE TABLE auth.signing_keys (
@@ -324,7 +324,7 @@ mesure l'écart.
   est isolée en moins de coupures. Non supervisé, robuste en grande dimension,
   entraînement en quelques secondes, modèle sérialisé < 5 Mo, aucune GPU.
 - **Variante comparative fournie** : autoencodeur dense (`ml/autoencoder.py`,
-  PyTorch) — l'erreur de reconstruction sert de score. Objectif : répondre à une
+  PyTorch) : l'erreur de reconstruction sert de score. Objectif : répondre à une
   question de jury sur les alternatives, pas de chemin critique.
 
 ### 2.2 Vecteur de features (18 dimensions, fenêtre 60 s)
@@ -378,10 +378,10 @@ python -m ml.train --baseline-minutes 60 --out ml/artifacts/model.joblib
 
 Deux niveaux, tous deux exposés par l'API et affichés au jury :
 
-- **Local** — pour la fenêtre courante, écart normalisé de chaque feature par
+- **Local** : pour la fenêtre courante, écart normalisé de chaque feature par
   rapport à la baseline (`z_i = (x_i − μ_i) / σ_i`) ; les 3 plus grands `|z|` sont
   renvoyés comme `top_features`. C'est l'explication montrée en direct.
-- **Global** — *permutation importance* recalculée sur un jeu d'anomalies
+- **Global** : *permutation importance* recalculée sur un jeu d'anomalies
   synthétiques (`ml/evaluate.py`) : classement des features les plus
   discriminantes, à documenter dans le dossier.
 
@@ -391,7 +391,7 @@ Deux niveaux, tous deux exposés par l'API et affichés au jury :
 - Empoisonnement : la baseline est **figée** (hash SHA-256 publiée) ; aucune
   ré-écriture automatique du modèle. Fait notable pour la partie gouvernance.
 - Dérive : `ml/evaluate.py` recalcule le taux de faux positifs sur 30 min de
-  trafic nominal — critère de sortie du sprint J2.
+  trafic nominal : critère de sortie du sprint J2.
 
 ### 2.6 API du détecteur
 
@@ -407,7 +407,7 @@ GET  /healthz /readyz /metrics
 
 ## 3. Conception de l'assistant RAG
 
-### 3.1 Corpus (tout est interne au dépôt — exigence E11)
+### 3.1 Corpus (tout est interne au dépôt : exigence E11)
 
 | Type | Sources |
 |------|---------|
@@ -446,10 +446,10 @@ question ──► garde-fou d'entrée ──► embedding (nomic-embed-text, 76
   (« ignore les instructions », « système », « execute », …) ; refus hors périmètre ;
   débit limité à 10 questions/min ; le compte PostgreSQL utilisé est
   `svc_readonly` (aucun droit d'écriture) ; aucun outil exposé au LLM (pas de
-  *function calling*) — l'assistant ne peut **rien** déclencher.
+  *function calling*) : l'assistant ne peut **rien** déclencher.
 - **Dégradation** : si Ollama est indisponible, l'API renvoie
   `503 {detail:"assistant_indisponible", retrieval_only:[…]}` avec les extraits
-  pertinents — le post-mortem reste exploitable (`ASSISTANT_MODE=retrieval_only`).
+  pertinents : le post-mortem reste exploitable (`ASSISTANT_MODE=retrieval_only`).
 
 ### 3.3 API
 
@@ -487,33 +487,33 @@ POST /api/assistant/reindex            (rôle operator, relance l'ingestion)
 | `pol-auth-stuffing` | `auth_failure_ratio > 0.6` + `auth_attempts_per_identity > 20` | `pb-revoke-and-lock` | A2 |
 | `pol-privilege-exfil` | événement Falco `Warning/Critical` **ou** `outgoing_bytes_ratio > 5` | `pb-isolate-and-restore` | A3 |
 | `pol-data-integrity` | échec du contrôle d'intégrité du grand livre | `pb-ledger-restore` | A3 |
-| `pol-fallback` | anomalie `high` sans politique spécifique | `pb-conservative-isolate` | — |
+| `pol-fallback` | anomalie `high` sans politique spécifique | `pb-conservative-isolate` | : |
 
 ### 4.3 Journal des actions (whitelist fermée)
 
 | Action | Connecteur | Effet | Réversible |
 |--------|-----------|-------|-----------|
 | `waf.block_ip` | edge admin API | ajoute l'IP à la blacklist dynamique, TTL | oui |
-| `waf.unblock_ip` | edge admin API | libère l'IP | — |
+| `waf.unblock_ip` | edge admin API | libère l'IP | : |
 | `waf.set_rate_limit` | edge admin API | limite rps par IP/route | oui |
 | `auth.revoke_by_source` | api-auth admin | révoque tous les refresh tokens d'une IP source | non |
 | `auth.revoke_token` | api-auth admin | révoque un token précis | non |
 | `auth.lock_account` | api-auth admin | verrouille temporairement un compte ciblé | oui (TTL) |
 | `auth.rotate_signing_key` | api-auth admin | nouvelle paire RS256, l'ancienne `compromised` → **invalide tous les JWT** | non |
 | `docker.isolate` | docker-proxy | déconnecte un conteneur de `net-app` (quarantaine réseau) | oui |
-| `docker.unisolate` | docker-proxy | reconnecte | — |
-| `docker.restart` | docker-proxy | redémarre proprement | — |
-| `docker.rollback` | docker-proxy | recrée le conteneur depuis l'image de référence (empreinte vérifiée) | — |
+| `docker.unisolate` | docker-proxy | reconnecte | : |
+| `docker.restart` | docker-proxy | redémarre proprement | : |
+| `docker.rollback` | docker-proxy | recrée le conteneur depuis l'image de référence (empreinte vérifiée) | : |
 | `docker.scale` | docker-proxy | ajuste le nombre de réplicas | oui |
-| `ledger.snapshot` | api-ledger admin | produit un instantané cohérent | — |
+| `ledger.snapshot` | api-ledger admin | produit un instantané cohérent | : |
 | `ledger.restore` | api-ledger admin | restaure depuis le dernier instantané sain | non |
 | `ledger.reconcile` | api-ledger admin | recalcule les soldes depuis les jambes | oui |
 | `ledger.freeze_account` | api-ledger admin | gèle un compte | oui |
 | `vault.rotate_secret` | Vault | rotation d'un secret exposé | non |
-| `ansible.run_playbook` | ansible | playbook de durcissement correctif | — |
-| `notify.dashboard` | interne | publie un événement | — |
-| `verify.recovery_suite` | interne | lance la vérification complète | — |
-| `escalate.human` | interne | arrête l'automatisation, notifie | — |
+| `ansible.run_playbook` | ansible | playbook de durcissement correctif | : |
+| `notify.dashboard` | interne | publie un événement | : |
+| `verify.recovery_suite` | interne | lance la vérification complète | : |
+| `escalate.human` | interne | arrête l'automatisation, notifie | : |
 
 ### 4.4 Suite de vérification (cœur de l'exigence E6/E7)
 
@@ -540,7 +540,7 @@ le « simple redémarrage » structurellement insuffisant : V2, V3, V4 et V5
 - **Coupe-circuit** : 3 échecs consécutifs d'exécution → arrêt de l'automatisation
   et escalade.
 - **TTL obligatoire** sur toute action réversible (blocage : 900 s par défaut).
-- `DRY_RUN=true` par défaut ; `DEMO_MODE=true` active l'exécution réelle — l'état
+- `DRY_RUN=true` par défaut ; `DEMO_MODE=true` active l'exécution réelle : l'état
   est affiché en permanence sur le dashboard.
 - **Audit intégral** : toute action (y compris refusée) est écrite dans
   `ops.actions` et poussée dans Loki avec le `trace_id`.
@@ -548,16 +548,16 @@ le « simple redémarrage » structurellement insuffisant : V2, V3, V4 et V5
 ### 4.6 API du moteur
 
 ```
-POST /api/ingest/alert        (HMAC) — Alertmanager
-POST /api/ingest/falco        (HMAC) — Falcosidekick
-POST /api/ingest/anomaly      (HMAC) — détecteur
+POST /api/ingest/alert        (HMAC) : Alertmanager
+POST /api/ingest/falco        (HMAC) : Falcosidekick
+POST /api/ingest/anomaly      (HMAC) : détecteur
 GET  /api/incidents?state=&limit=
 GET  /api/incidents/{id}      → incident + actions + vérifications + timeline
 GET  /api/incidents/{id}/timeline
 GET  /api/state               → {global_state, mttd_ms, mttr_ms, services[]}
 GET  /api/services            → état des 18 conteneurs (via docker-proxy)
 POST /api/actions/{action}    (rôle operator, hors automatisation : répétition manuelle)
-POST /api/demo/run            (rôle operator : lance le scénario complet — confort de démo)
+POST /api/demo/run            (rôle operator : lance le scénario complet : confort de démo)
 GET  /api/metrics-preview     → séries pour les graphiques du dashboard
 GET  /healthz /readyz /metrics
 ```
@@ -637,7 +637,7 @@ frontend/
 ### 6.2 Temps réel
 
 - **SSE** (`GET /api/ops/stream`) pour les événements, le score d'anomalie et les
-  transitions d'état — léger, traversant WSL2 sans configuration.
+  transitions d'état : léger, traversant WSL2 sans configuration.
 - **Polling** 2 s en repli automatique si `EventSource` échoue, avec badge
   « mode dégradé » visible.
 - Les 18 cartes de services proviennent de `/api/services` (docker-proxy) et
@@ -647,7 +647,7 @@ frontend/
 
 1. **Bandeau** plein largeur : état global + durée de l'incident + compteurs.
 2. **Colonne gauche** : services (un rouge = l'incident se voit).
-3. **Centre-haut** : 4 courbes — tx/s (baisse), latence p95 (pic), taux d'erreur
+3. **Centre-haut** : 4 courbes : tx/s (baisse), latence p95 (pic), taux d'erreur
    (pic), score d'anomalie (franchissement du seuil, ligne pointillée).
 4. **Centre-bas** : timeline verticale des événements, du premier signal à
    `recovery.completed`, avec l'origine de chaque signal (ML / Falco / WAF / alerte).
@@ -660,7 +660,7 @@ frontend/
 Thème sombre « salle d'opérations », une seule couleur d'accent, vert/ambre/rouge
 réservés exclusivement à la sémantique d'état (pas de décoration colorée).
 Typographie : une seule famille sans-serif, deux graisses ; chiffres tabulaires
-obligatoires pour les métriques. Aucun dégradé superflu : la lisibilité prime —
+obligatoires pour les métriques. Aucun dégradé superflu : la lisibilité prime -
 un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
 
 ---
@@ -680,7 +680,7 @@ un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
 
 ---
 
-## 8. Sécurité — conception
+## 8. Sécurité : conception
 
 ### 8.1 Durcissement des conteneurs
 
@@ -700,7 +700,7 @@ un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
 | Au démarrage | Vault (mode dev, scellé au plus juste) seed depuis `secrets/*.enc.yaml` |
 | En mémoire | injection par variables d'environnement, jamais par arguments de ligne de commande |
 | Rotation | action `vault.rotate_secret` appelée par le moteur de remédiation après un incident |
-| Interdits | `.env` réel, `.pem`, `id_rsa`, jetons — tous dans `.gitignore`, plus un hook `pre-commit` `gitleaks` |
+| Interdits | `.env` réel, `.pem`, `id_rsa`, jetons : tous dans `.gitignore`, plus un hook `pre-commit` `gitleaks` |
 
 ### 8.3 Contrôle d'accès
 
@@ -713,7 +713,7 @@ un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
 
 ### 8.4 Red Team
 
-- `redteam/attack.py` — CLI `argparse`, scénarios `A1|A2|A3|baseline|all`,
+- `redteam/attack.py` : CLI `argparse`, scénarios `A1|A2|A3|baseline|all`,
   `--target` obligatoire, **refus de démarrer** si la cible sort de
   `192.168.137.0/24` ou resolve vers une IP publique, `--confirm-authorized` requis.
 - Marqueur d'horodatage : la première requête envoie un en-tête
@@ -780,4 +780,4 @@ resilience-alpha/
 
 ---
 
-*Document de conception — v1.0*
+*Document de conception : v1.0*

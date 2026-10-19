@@ -152,7 +152,7 @@ def entrainer(
 def _importances_permutation(
     modele: Any, normalise: Any, np: Any, graine: int
 ) -> dict[str, float]:
-    """Importance globale par permutation — explicabilité du modèle.
+    """Importance globale par permutation : explicabilité du modèle.
 
     L'erreur quadratique entre le score nominal et le score obtenu après
     permutation d'une variable mesure l'apport de cette variable. Aucune

@@ -60,7 +60,7 @@ export const ecrire = <T>(chemin: string, corps: unknown, entetes?: Record<strin
   requete<T>(chemin, { method: "POST", body: JSON.stringify(corps), headers: entetes });
 
 // =============================================================================
-//  Types — miroir des contrats exposés par les services
+//  Types : miroir des contrats exposés par les services
 // =============================================================================
 
 export type EtatGlobal = "NOMINAL" | "INCIDENT" | "RECOVERED" | "FAILED";

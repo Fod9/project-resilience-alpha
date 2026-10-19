@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — déploiement complet, idempotent et rejouable
+#  AlphaPay : déploiement complet, idempotent et rejouable
 # =============================================================================
 #  Le playbook est volontairement en lecture seule sur l'existant : il vérifie,
 #  complète ce qui manque, construit, démarre, puis attend que la plateforme

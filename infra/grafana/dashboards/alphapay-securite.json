@@ -1,6 +1,6 @@
 {
   "uid": "alphapay-securite",
-  "title": "AlphaPay — Securite",
+  "title": "AlphaPay : Securite",
   "description": "Decisions du WAF, regles declenchees, adresses filtrees et evenements de detection d'execution.",
   "tags": [
     "alphapay",

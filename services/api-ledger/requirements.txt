@@ -1,4 +1,4 @@
-# Dépendances de api-ledger — AlphaPay
+# Dépendances de api-ledger : AlphaPay
 # Socle commun + spécificités du service.
 fastapi>=0.115,<1.0
 httpx>=0.27,<1.0

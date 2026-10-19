@@ -1,10 +1,8 @@
 ALPHAPAY
 PROJECT RESILIENCE-ALPHA · PLATEFORME DE PAIEMENT FICTIVE
 PAIEMENT
-SALLE D'OPÉRATIONS
-EXERCICE
-2026
-LE SYSTÈME
+TABLEAU DE BORD
+SERVICES
 COMPOSANTS
 19
 DÉVELOPPEMENT
@@ -50,23 +48,27 @@ politiques
 12 politiques actives
 playbooks
 7 playbooks declaratifs
-SCORE D'ANOMALIE ET SEUIL CALIBRÉ
-0.0072
-seuil 0.2510 · dépassement ×0.03
-TRAFIC OBSERVÉ
-0.0 req/s
-1 événements · 0 adresses
-LATENCE P99 MESURÉE À LA BORDURE
-0 ms
-p95 0 ms
-SIGNATURES HOSTILES INTERCEPTÉES
+SCORE ANOMALIE
+0.064
+seuil 0.251
+seuil 0.251
+TRAFIC
+0.3
+req/s · 27 évt
+req/s · 27 évt
+LATENCE P99
+12 ms
+p95 12 ms à la bordure
+p95 12 ms à la bordure
+WAF
 0.0 %
-XSS 0.0 % · blocages WAF 0.0 %
-L'INCIDENT
+aucun blocage
+aucun blocage
+INCIDENTS
 ÉTAT DE LA PLATEFORME
 NOMINAL
 INCIDENT EN COURS DEPUIS
-—
+·
 CIBLE DE DÉTECTION
 60 s
 CIBLE DE RÉTABLISSEMENT
@@ -95,3 +97,5 @@ lecture seule · sans capacité d'action
 DEMANDER
 
 Les réponses proviennent exclusivement de la documentation du dépôt, via un modèle local. Aucune donnée ne quitte le poste hôte.
+
+AlphaPay 2026©

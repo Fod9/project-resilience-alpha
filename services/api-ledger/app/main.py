@@ -1,4 +1,4 @@
-"""AlphaPay — tenue de compte en partie double.
+"""AlphaPay : tenue de compte en partie double.
 
 Invariant central
 -----------------
@@ -45,7 +45,7 @@ VERSION = "1.0.0"
 ctx = build_app(
     service_name="api-ledger",
     version=VERSION,
-    title="AlphaPay — Grand livre",
+    title="AlphaPay : Grand livre",
     description=(
         "Soldes, transactions en partie double, contrôle d'intégrité, "
         "instantanés et réconciliation."
@@ -175,7 +175,7 @@ async def lire_transaction(identifiant: str) -> dict[str, Any]:
 
 @app.get("/integrity", tags=["contrôle"])
 async def integrite() -> dict[str, Any]:
-    """Contrôle d'intégrité comptable — appelé par la suite de vérification."""
+    """Contrôle d'intégrité comptable : appelé par la suite de vérification."""
     set_route_label("/integrity")
 
     desequilibre = await fetch_one(
@@ -225,7 +225,7 @@ async def creer_transaction(
 ) -> dict[str, Any]:
     """Enregistre une transaction équilibrée, ou renvoie celle déjà connue.
 
-    L'idempotence est portée par (devise, somme des débits) — utile lorsque la
+    L'idempotence est portée par (devise, somme des débits) : utile lorsque la
     bordure rejoue une requête après un délai d'attente.
     """
     set_route_label("/transactions")
@@ -312,7 +312,7 @@ async def creer_transaction(
                         "WHERE id = %s",
                         (delta, compte["id"]),
                     )
-    except Exception as exc:  # noqa: BLE001 — reprise en cas de doublon concurrent
+    except Exception as exc:  # noqa: BLE001 : reprise en cas de doublon concurrent
         if "idempotency_key" in str(exc):
             raise conflict(
                 "rejeu_concurrent",

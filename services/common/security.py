@@ -56,8 +56,8 @@ def verify_webhook(
     """Valide une notification entrante.
 
     Trois formes acceptées, toutes comparées à temps constant :
-      1. `hmac-sha256=<hex>` — signature du corps (forme recommandée) ;
-      2. `<hex>` — signature du corps sans préfixe (Alertmanager, Prometheus) ;
+      1. `hmac-sha256=<hex>` : signature du corps (forme recommandée) ;
+      2. `<hex>` : signature du corps sans préfixe (Alertmanager, Prometheus) ;
       3. le secret partagé lui-même (Falcosidekick, qui n'implémente pas HMAC).
     """
     if not secret:

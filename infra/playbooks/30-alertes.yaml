@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Playbook de reprise déclenché par les alertes de supervision
+#  AlphaPay : Playbook de reprise déclenché par les alertes de supervision
 # =============================================================================
 #  Ce playbook ne confine pas : une alerte Prometheus ne transporte pas
 #  l'adresse d'origine de l'attaque. Il remet le service en état et le vérifie.

@@ -1,5 +1,5 @@
 # =============================================================================
-#  AlphaPay — Bordure : WAF applicatif (ModSecurity v3 + OWASP CRS) + reverse proxy
+#  AlphaPay : Bordure : WAF applicatif (ModSecurity v3 + OWASP CRS) + reverse proxy
 # =============================================================================
 #  L'image de base fournit :
 #    * nginx compilé avec ngx_http_modsecurity_module ;
@@ -13,7 +13,7 @@
 # =============================================================================
 FROM owasp/modsecurity-crs:nginx-alpine
 
-LABEL org.opencontainers.image.title="AlphaPay — Bordure WAF"
+LABEL org.opencontainers.image.title="AlphaPay : Bordure WAF"
 LABEL org.opencontainers.image.description="WAF applicatif ModSecurity + OWASP CRS, reverse proxy et journalisation JSON"
 
 # L'image s'exécute sous l'utilisateur `nginx` ; les étapes de construction qui
