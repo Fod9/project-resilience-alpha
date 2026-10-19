@@ -33,7 +33,7 @@ et ses connecteurs (proxy d'administration Docker, coffre de secrets), la
 salle d'opérations (Grafana, Loki, dashboards) et la base PostgreSQL
 unique, avec un rôle par service au moindre privilège.
 
-La pile compte **23 conteneurs** sur **5 réseaux Docker cloisonnés**
+La pile compte **22 services** sur **5 réseaux Docker cloisonnés**
 (`net-edge`, `net-app`, `net-data`, `net-obs`, `net-mgmt`), dont **trois
 strictement internes** (`net-data`, `net-obs`, `net-mgmt`). Seuls la bordure
 (port 443) et, en profil de démonstration, les accès Grafana/Prometheus
@@ -316,7 +316,7 @@ dispositif :
 
 | Exigence DORA | Rapport au dispositif |
 |---------------|----------------------|
-| Inventaire des systèmes d'information critiques (art. 6) | Le dispositif fournit l'inventaire par conteneur, réseau et volume (23 conteneurs, 5 réseaux dont 3 internes) ; les systèmes critiques se distinguent : bordure, trois services applicatifs, base, chaîne de détection. |
+| Inventaire des systèmes d'information critiques (art. 6) | Le dispositif fournit l'inventaire par conteneur, réseau et volume (22 services, 5 réseaux dont 3 internes) ; les systèmes critiques se distinguent : bordure, trois services applicatifs, base, chaîne de détection. |
 | Évaluation des risques ICT (art. 8) | L'analyse EBIOS RM (section 2) est la méthode retenue. DORA exige qu'elle tienne compte des fournisseurs essentiels et de la concentration : la concentration (base unique, modèle unique) est un risque identifié, traité par la redondance des chemins de détection et la reproductibilité du modèle. |
 | Incidents ICT : classification et notification (art. 19) | Pour chaque incident, le moteur produit la gravité, la politique déclenchée, les actions, le MTTD/MTTR et l'état final : la matière première d'une notification. La classification « incident majeur » et les canaux vers l'autorité compétente relèvent de l'organisation. |
 | Tests et exercices (art. 24-25) | Le banc offensif borné (A1, A2, A3 ; durée et volume plafonnés, refus de cibler une adresse hors périmètre autorisé, marquage horodaté) est l'équivalent miniature d'un exercice type TLPT : il rejoue les scénarios de manière reproductible et bornée. Un TLPT complet (adversaire habilité, non annoncé) est hors portée du sprint. |

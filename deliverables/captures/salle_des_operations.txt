@@ -47,16 +47,16 @@ GOUVERNANCE
 politiques
 12 politiques actives
 playbooks
-7 playbooks declaratifs
+7 playbooks déclaratifs
 SCORE ANOMALIE
-0,016
+0,041
 seuil 0,251
 TRAFIC
-0,3
-req/s · 26 évt
+0,0
+req/s · 1 évt
 LATENCE P99
-4 ms
-p95 4 ms à la bordure
+0 ms
+p95 0 ms à la bordure
 WAF
 0,0 %
 aucun blocage

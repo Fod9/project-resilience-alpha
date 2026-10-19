@@ -348,7 +348,7 @@ Le durcissement appliqué est décrit en détail dans
 
 ```
 resilience-alpha/
-├── docker-compose.yml           Orchestration des 23 composants
+├── docker-compose.yml           Orchestration des 22 services
 ├── .env.example                 Modèle de configuration (aucun secret réel)
 ├── docs/
 │   ├── ARCHITECTURE.md          Architecture, choix techniques et justifications

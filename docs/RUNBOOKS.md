@@ -1,6 +1,6 @@
 # Manuel de procédures : PROJECT RESILIENCE-ALPHA
 
-Procédures d'exploitation de la plateforme AlphaPay (23 conteneurs, 5
+Procédures d'exploitation de la plateforme AlphaPay (22 services, 5
 réseaux cloisonnés). Chaque procédure précise son objectif, son
 déclencheur, ses étapes avec les commandes exactes, le résultat attendu
 et la vérification. Le répertoire de travail est la racine du projet
@@ -47,7 +47,7 @@ de la bordure, sous l'en-tête `X-Admin-Token`, dont la valeur est
 
 ## R1 : Démarrage à froid de la pile
 
-**Objectif** : mettre en service les 23 conteneurs depuis un hôte
+**Objectif** : mettre en service les 22 services depuis un hôte
 préparé, puis vérifier la santé de la bordure et du moteur.
 
 **Déclencheur** : hôte préparé (Docker, compose v2), fichier `.env`
@@ -74,7 +74,7 @@ présent (sinon, R1b).
    docker compose ps
    ```
 
-   **Résultat attendu** : 23 conteneurs en statut `running`, santé ok
+   **Résultat attendu** : 18 conteneurs en statut `running`, santé ok (les services d'amorçage s'arrêtent une fois leur tâche faite)
    sur les services qui en déclarent.
 
 3. Vérification de la bordure et du moteur :
