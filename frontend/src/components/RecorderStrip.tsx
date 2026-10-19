@@ -11,13 +11,16 @@ import type { EvenementChronologie, Incident } from "../api";
  */
 
 const COULEUR_SOURCE: Record<string, string> = {
-  redteam: "#8A6717",
-  detector: "#D9A227",
-  alertmanager: "#E8B03A",
-  falco: "#D64545",
-  remediation: "#3FB27F",
-  operator: "#8A94A3",
-  edge: "#8A94A3",
+  // Thème clair : les marqueurs sont posés sur du papier, donc plus sourds que
+  // sur un fond sombre. La source reste lisible par la teinte, jamais par
+  // l'éclat.
+  redteam: "#B4523F",
+  detector: "#2E6B5A",
+  alertmanager: "#96690C",
+  falco: "#9C2B24",
+  remediation: "#2F6B4F",
+  operator: "#5C6670",
+  edge: "#8A9284",
 };
 
 const JALONS_REMARQUABLES: Record<string, string> = {
@@ -91,7 +94,7 @@ export default function RecorderStrip({
               gauche={position(mttdDebut)}
               largeur={position(mttdFin) - position(mttdDebut)}
               haut={54}
-              couleur="#D9A227"
+              couleur="#B4523F"
               libelle={`détection ${((incident?.mttd_ms ?? 0) / 1000).toFixed(1)} s`}
             />
           )}
@@ -100,7 +103,7 @@ export default function RecorderStrip({
               gauche={position(ouvert)}
               largeur={position(mttrFin) - position(ouvert)}
               haut={80}
-              couleur="#3FB27F"
+              couleur="#2F6B4F"
               libelle={`reprise ${((incident?.mttr_ms ?? 0) / 1000).toFixed(1)} s`}
             />
           )}
@@ -110,7 +113,7 @@ export default function RecorderStrip({
             const t = Date.parse(evenement.occurred_at);
             if (Number.isNaN(t)) return null;
             const x = position(t);
-            const couleur = COULEUR_SOURCE[evenement.source] ?? "#8A94A3";
+            const couleur = COULEUR_SOURCE[evenement.source] ?? "#8A9284";
             const haut = index % 2 === 0 ? 0 : 22;
             return (
               <div key={`${evenement.occurred_at}-${index}`}>

@@ -66,7 +66,7 @@ export default function ServiceRail({
                     key={composant.nom}
                     className={[
                       "flex items-center gap-2.5 px-3 py-1.5 border-l-2",
-                      vise ? "border-l-brass bg-brass/5" : "border-l-transparent",
+                      vise ? "border-l-accent bg-accent/5" : "border-l-transparent",
                     ].join(" ")}
                   >
                     <span className={`pastille ${style.pastille} ${style.forme}`} />

@@ -71,7 +71,7 @@ function Bande({
   repere?: number;
   alerte?: boolean;
 }) {
-  const couleur = alerte ? "bg-incident" : "bg-brass";
+  const couleur = alerte ? "bg-incident" : "bg-accent";
   return (
     <div className="carte px-3 py-2.5">
       <div className="flex items-baseline justify-between gap-3">
@@ -141,7 +141,7 @@ export function PlaybookPanel({
                 <div
                   className={[
                     "h-1 rounded-full",
-                    atteinte ? "bg-nominal" : engage ? "bg-brass/40" : "bg-surface-2",
+                    atteinte ? "bg-nominal" : engage ? "bg-accent/40" : "bg-surface-2",
                   ].join(" ")}
                 />
                 <div

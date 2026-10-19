@@ -3,13 +3,15 @@
 @tailwind utilities;
 
 /* =============================================================================
-   AlphaPay — socle de style
+   AlphaPay — socle de style, thème clair « grand livre »
    Jetons et règles issues de docs/DESIGN-SYSTEM.md
    ============================================================================= */
 
 @layer base {
   :root {
-    color-scheme: dark;
+    /* Le thème est clair : le navigateur doit adapter ses propres contrôles
+       (barres de défilement, champs) au fond papier. */
+    color-scheme: light;
   }
 
   html,
@@ -20,13 +22,23 @@
 
   body {
     @apply bg-base text-ink font-sans antialiased;
-    /* La salle d'opérations est un écran d'exploitation : on supprime le
-       défilement élastique et on garde un fond uniforme. */
+    /* Écran d'exploitation : pas de défilement élastique, fond uniforme. */
     overscroll-behavior: none;
+    /* Inter est conçue pour l'écran : on active ses réglages optiques et on
+       aligne les chiffres en colonnes. */
+    font-feature-settings: "cv05" 1, "ss01" 1;
+    text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    @apply bg-brass/30;
+    @apply bg-accent/20;
+  }
+
+  /* Les filets de papier comptable : c'est la structure du sujet, pas une
+     décoration. Un registre est fait de lignes. */
+  hr,
+  .regle {
+    @apply border-0 border-t border-line;
   }
 
   /* Chiffres tabulaires partout où des mesures sont affichées : sans cela, les
@@ -39,23 +51,38 @@
 
 @layer components {
   /* --- Mot d'état : la signature visuelle du tableau de bord -----------------
-     Un seul mot, très grand, lisible à trois mètres par le jury. C'est
-     l'information que l'on doit pouvoir lire sans s'approcher de l'écran. */
+     Un seul mot, très grand, lisible à trois mètres par le jury. En Bitter,
+     il prend l'aspect d'un tampon imprimé sur un document. */
   .mot-etat {
     @apply font-display font-bold uppercase tracking-etat leading-[0.85];
-    font-size: clamp(2.75rem, 6vw, 5rem);
+    font-size: clamp(2.75rem, 6vw, 5.125rem);
   }
 
   .etiquette {
     @apply font-display uppercase tracking-marque text-[0.6875rem] text-ink-dim;
   }
 
+  /* --- Feuille : la surface de base ----------------------------------------
+     Aucun coin arrondi : le papier comptable n'en a pas. Un rayon nul est ici
+     un choix de sujet, pas une négligence. */
   .carte {
-    @apply bg-surface border border-line rounded-sm;
+    @apply bg-surface border border-line;
   }
 
   .carte-entete {
     @apply flex items-center justify-between px-3 py-2 border-b border-line;
+  }
+
+  /* --- Fiche : bloc encadré posé sur une feuille --------------------------- */
+  .fiche {
+    @apply bg-surface border border-line;
+  }
+
+  /* --- Filet de marge -------------------------------------------------------
+     Le trait imprimé à gauche d'un registre, qui sépare la marge numérique du
+     corps des écritures. C'est la signature : il court sur toute la hauteur. */
+  .filet-marge {
+    @apply border-r border-marge;
   }
 
   /* --- Pastille d'état de service -------------------------------------------
@@ -85,6 +112,6 @@
 @layer utilities {
   /* Barre de progression d'une étape de remédiation. */
   .barre {
-    @apply h-1 rounded-full bg-surface-2 overflow-hidden;
+    @apply h-1 bg-line overflow-hidden;
   }
 }

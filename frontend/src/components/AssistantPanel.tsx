@@ -45,12 +45,12 @@ export default function AssistantPanel() {
             onChange={(evenement) => setQuestion(evenement.target.value)}
             placeholder="Que fait le playbook en cas de bourrage d'identifiants ?"
             maxLength={1000}
-            className="flex-1 bg-base border border-line rounded-sm px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-dim/60 focus:outline-none focus:border-brass"
+            className="flex-1 bg-base border border-line rounded-sm px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-dim/60 focus:outline-none focus:border-accent"
           />
           <button
             type="submit"
             disabled={occupe}
-            className="px-3 py-1.5 text-xs font-display uppercase tracking-marque border border-brass text-brass rounded-sm hover:bg-brass/10 disabled:opacity-40"
+            className="px-3 py-1.5 text-xs font-display uppercase tracking-marque border border-accent text-accent rounded-sm hover:bg-accent/10 disabled:opacity-40"
           >
             {occupe ? "…" : "Demander"}
           </button>
@@ -77,7 +77,7 @@ export default function AssistantPanel() {
               <ul className="space-y-1">
                 {reponse.citations.map((citation) => (
                   <li key={citation.label} className="text-[0.6875rem] text-ink-dim">
-                    <span className="font-mono text-brass">{citation.label}</span>{" "}
+                    <span className="font-mono text-accent">{citation.label}</span>{" "}
                     {citation.heading || citation.source}
                     <span className="font-mono"> ({citation.similarity.toFixed(3)})</span>
                   </li>

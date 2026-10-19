@@ -1,18 +1,10 @@
 ALPHAPAY
-PROJECT RESILIENCE-ALPHA — plateforme fictive
+PROJECT RESILIENCE-ALPHA · PLATEFORME DE PAIEMENT FICTIVE
 PAIEMENT
 SALLE D'OPÉRATIONS
-ÉTAT DE LA PLATEFORME
-NOMINAL
-INCIDENT EN COURS DEPUIS
-—
-CIBLE DE DÉTECTION
-60 s
-CIBLE DE RÉTABLISSEMENT
-180 s
-ACTIONS SUR LA FENÊTRE
-0 / 6
-SCORE D'ANOMALIE (30 DERNIÈRES FENÊTRES)
+EXERCICE
+2026
+LE SYSTÈME
 COMPOSANTS
 19
 DÉVELOPPEMENT
@@ -59,38 +51,29 @@ politiques
 playbooks
 7 playbooks declaratifs
 SCORE D'ANOMALIE ET SEUIL CALIBRÉ
-0.0837
-seuil 0.2510 · dépassement ×0.33
+0.0072
+seuil 0.2510 · dépassement ×0.03
 TRAFIC OBSERVÉ
-0.2 req/s
-19 événements · 1 adresses
+0.0 req/s
+1 événements · 0 adresses
 LATENCE P99 MESURÉE À LA BORDURE
-4 ms
-p95 4 ms
+0 ms
+p95 0 ms
 SIGNATURES HOSTILES INTERCEPTÉES
 0.0 %
 XSS 0.0 % · blocages WAF 0.0 %
-MODÈLE
-isolation-forest-trafic-reel
-aucune règle codée en dur
-FENÊTRES CONSÉCUTIVES
-0 / 2
-confirmation avant qualification
-ORIGINE DOMINANTE
-192.168.64.3
-1 adresses distinctes
-VARIABLES LES PLUS DÉVIANTES
-avg_payload_bytes ×4.1σ · payload_bytes_stddev ×3.4σ
-CIBLE PROBABLE
-api-ledger
-indice de lecture, la décision vient de la politique
-BANDE-ENREGISTREUR
-derniers événements · 3 jalons
-attaque 11:01:48
-attaque 10:58:33
-attaque 10:46:10
-10:46:02
-maintenant
+L'INCIDENT
+ÉTAT DE LA PLATEFORME
+NOMINAL
+INCIDENT EN COURS DEPUIS
+—
+CIBLE DE DÉTECTION
+60 s
+CIBLE DE RÉTABLISSEMENT
+180 s
+ACTIONS SUR LA FENÊTRE
+0 / 6
+SCORE D'ANOMALIE (30 DERNIÈRES FENÊTRES)
 PLAYBOOK DE REPRISE
 en attente
 CONFINEMENT
@@ -100,6 +83,13 @@ VÉRIFICATION
 
 Aucune action engagée. Le panneau se remplit dès la sélection d'une politique.
 
+BANDE-ENREGISTREUR
+derniers événements · 3 jalons
+attaque 11:01:48
+attaque 10:58:33
+attaque 10:46:10
+10:46:02
+maintenant
 ASSISTANT DOCUMENTAIRE
 lecture seule · sans capacité d'action
 DEMANDER

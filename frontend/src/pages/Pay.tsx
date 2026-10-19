@@ -85,7 +85,7 @@ export default function Pay() {
             <select
               value={source}
               onChange={(evenement) => setSource(evenement.target.value)}
-              className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-brass"
+              className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-accent"
             >
               {comptes.length === 0 && <option value={source}>{source}</option>}
               {comptes.map((compte) => (
@@ -101,7 +101,7 @@ export default function Pay() {
             <input
               value={destination}
               onChange={(evenement) => setDestination(evenement.target.value)}
-              className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-brass"
+              className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-accent"
             />
           </label>
 
@@ -112,7 +112,7 @@ export default function Pay() {
                 value={montant}
                 onChange={(evenement) => setMontant(evenement.target.value)}
                 inputMode="decimal"
-                className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono tabular focus:outline-none focus:border-brass"
+                className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono tabular focus:outline-none focus:border-accent"
               />
             </label>
             <label className="block">
@@ -120,7 +120,7 @@ export default function Pay() {
               <input
                 value={reference}
                 onChange={(evenement) => setReference(evenement.target.value)}
-                className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-brass"
+                className="mt-1 w-full bg-base border border-line rounded-sm px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-accent"
               />
             </label>
           </div>
@@ -128,7 +128,7 @@ export default function Pay() {
           <button
             type="submit"
             disabled={occupe}
-            className="w-full py-2.5 font-display uppercase tracking-marque text-sm border border-brass text-brass rounded-sm hover:bg-brass/10 disabled:opacity-40"
+            className="w-full py-2.5 font-display uppercase tracking-marque text-sm border border-accent text-accent rounded-sm hover:bg-accent/10 disabled:opacity-40"
           >
             {occupe ? "Traitement…" : "Payer"}
           </button>

@@ -1,5 +1,9 @@
 # AlphaPay — Système de design
 
+> **État courant : thème clair « grand livre ».** La version initiale de ce
+> document décrivait un thème sombre ; elle a été remplacée. Les valeurs font
+> désormais foi dans `front...[truncated]
+
 > Direction artistique, tokens et structure d'interface
 > Source de vérité commune aux maquettes Figma et à l'implémentation Tailwind.
 

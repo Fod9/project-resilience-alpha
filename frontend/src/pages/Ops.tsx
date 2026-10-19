@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type DetailIncident, type FenetreVariables, type RapportDetection } from "../api";
 import { useSonde } from "../hooks";
 import AssistantPanel from "../components/AssistantPanel";
@@ -10,10 +10,12 @@ import StateHeader from "../components/StateHeader";
 /**
  * Salle d'opérations.
  *
- * Organisation en lecture descendante : l'état global en haut, les composants à
- * gauche, les mesures au centre, la reprise à droite, la chronologie en bas.
- * Un jury qui entre dans la salle doit pouvoir répondre en trois secondes à la
- * question « le service est-il rétabli ? ».
+ * Parti pris de mise en page : deux feuillets séparés par une gouttière, sous
+ * une grille réglée, avec le filet de marge imprimé à gauche — la structure
+ * d'un grand livre ouvert. Le feuillet de gauche porte le système, celui de
+ * droite l'incident. Ce n'est pas une grille de cartes : un registre se lit
+ * page par page, et le jury doit pouvoir suivre une seule histoire, celle de
+ * la reprise.
  */
 export default function Ops() {
   const etat = useSonde(api.etat, 3000);
@@ -42,118 +44,73 @@ export default function Ops() {
   }, [etat.donnees?.incident?.id, etat.actualiseA]);
 
   const points = useMemo(
-    () => (chronologie.donnees?.events ?? [])
-      .filter((evenement) => evenement.kind === "state.changed" || evenement.source === "detector")
-      .map((evenement) => Number((evenement.payload as { score?: number })?.score ?? 0))
-      .filter((valeur) => valeur > 0)
-      .slice(0, 30)
-      .reverse(),
+    () =>
+      (chronologie.donnees?.events ?? [])
+        .filter((evenement) => evenement.kind === "state.changed" || evenement.source === "detector")
+        .map((evenement) => Number((evenement.payload as { score?: number })?.score ?? 0))
+        .filter((valeur) => valeur > 0)
+        .slice(0, 30)
+        .reverse(),
     [chronologie.donnees],
   );
 
   const scoreCourant = useMemo(
-    () => points.length > 0 ? points : [detection.donnees?.score ?? 0],
+    () => (points.length > 0 ? points : [detection.donnees?.score ?? 0]),
     [points, detection.donnees],
   );
 
   const composants = composantsAttendus(etat.donnees);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <StateHeader etat={etat.donnees} points={scoreCourant} />
+    <main className="min-h-0 flex-1 grid grid-cols-1 xl:grid-cols-ops bg-base">
+      {/* --- Marge comptable : le filet imprimé et son intitulé -------------- */}
+      <aside className="filet-marge hidden flex-col items-end gap-2 px-3 py-6 xl:flex">
+        <span className="h-2.5 w-2.5 bg-marge" />
+        <span className="font-display text-[0.4375rem] uppercase tracking-marque text-marge">
+          Exercice
+        </span>
+        <span className="font-mono text-[0.5rem] tracking-wide text-ink-dim">2026</span>
+      </aside>
 
-      <div className="flex-1 min-h-0 p-3 grid gap-3 grid-cols-1 xl:grid-cols-ops overflow-auto">
+      {/* --- Feuillet du système -------------------------------------------- */}
+      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line bg-surface px-6 py-6 xl:border-r">
+        <TitreFeuillet>Le système</TitreFeuillet>
         <ServiceRail composants={composants} incident={etat.donnees?.incident ?? null} />
+        <BandesMesures fenetre={fenetre.donnees} detection={detection.donnees} />
+      </section>
 
-        <div className="flex flex-col gap-3 min-h-0">
-          <BandesMesures fenetre={fenetre.donnees} detection={detection.donnees} />
-          <Indicateurs
-            detection={detection.donnees}
-            fenetre={fenetre.donnees}
-            erreurs={{
-              etat: etat.erreur,
-              fenetre: fenetre.erreur,
-              detection: detection.erreur,
-            }}
-          />
-          <RecorderStrip
-            evenements={chronologie.donnees?.events ?? []}
-            incident={etat.donnees?.incident ?? null}
-          />
-        </div>
-
-        <div className="flex flex-col gap-3 min-h-0">
-          <PlaybookPanel detail={detail} erreur={etat.erreur} />
-          <AssistantPanel />
-        </div>
+      {/* --- Gouttière : la pliure du livre --------------------------------- */}
+      <div className="hidden bg-base xl:block">
+        <div className="mx-auto h-full w-px bg-line" />
       </div>
-    </div>
+
+      {/* --- Feuillet de l'incident ----------------------------------------- */}
+      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto bg-surface px-6 py-6">
+        <TitreFeuillet>L'incident</TitreFeuillet>
+        <div className="fiche px-6 py-6">
+          <StateHeader etat={etat.donnees} points={scoreCourant} />
+        </div>
+        <PlaybookPanel detail={detail} erreur={etat.erreur} />
+        <RecorderStrip
+          incident={etat.donnees?.incident ?? null}
+          evenements={chronologie.donnees?.events ?? []}
+        />
+        <AssistantPanel />
+      </section>
+    </main>
   );
 }
 
-function Indicateurs({
-  detection,
-  fenetre,
-  erreurs,
-}: {
-  detection: RapportDetection | null;
-  fenetre: FenetreVariables | null;
-  erreurs: { etat: string | null; fenetre: string | null; detection: string | null };
-}) {
-  const diagnostic = fenetre?.diagnostics;
-  const actives = Object.entries(erreurs).filter(([, valeur]) => valeur !== null);
-
+/**
+ * Intitulé de feuillet : un libellé en petites capitales surmonté d'un filet
+ * appuyé. C'est la règle imprimée qui ouvre une section dans un registre.
+ */
+function TitreFeuillet({ children }: { children: ReactNode }) {
   return (
-    <div className="carte px-3 py-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-        <Item
-          libelle="Modèle"
-          valeur={detection?.model_version ?? "non chargé"}
-          note={detection?.rules_used === false ? "aucune règle codée en dur" : undefined}
-        />
-        <Item
-          libelle="Fenêtres consécutives"
-          valeur={`${detection?.consecutive_windows ?? 0} / 2`}
-          note="confirmation avant qualification"
-        />
-        <Item
-          libelle="Origine dominante"
-          valeur={diagnostic?.dominant_source_ip || "—"}
-          note={`${diagnostic?.source_ips_distinctes ?? 0} adresses distinctes`}
-        />
-        <Item
-          libelle="Variables les plus déviantes"
-          valeur={(detection?.top_features ?? [])
-            .slice(0, 2)
-            .map((f) => `${f.feature} ×${f.z.toFixed(1)}σ`)
-            .join(" · ") || "—"}
-        />
-        <Item
-          libelle="Cible probable"
-          valeur={detection?.suspected_target ?? "—"}
-          note="indice de lecture, la décision vient de la politique"
-        />
-      </div>
-
-      {actives.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-line text-[0.625rem] font-mono text-degraded">
-          {actives.map(([nom, message]) => (
-            <div key={nom}>
-              {nom} : {message}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Item({ libelle, valeur, note }: { libelle: string; valeur: string; note?: string }) {
-  return (
-    <div className="min-w-[9rem]">
-      <div className="etiquette mb-0.5">{libelle}</div>
-      <div className="text-xs font-mono text-ink">{valeur}</div>
-      {note && <div className="text-[0.5625rem] text-ink-dim">{note}</div>}
+    <div className="flex flex-col gap-2 border-b-2 border-line-fort pb-2">
+      <span className="font-display text-[0.5625rem] uppercase tracking-marque text-ink-dim">
+        {children}
+      </span>
     </div>
   );
 }

@@ -7,12 +7,18 @@ et la vérification. Le répertoire de travail est la racine du projet
 (`/opt/data/projects/resilience-alpha`) ; la variable d'environnement
 `CIBLE` désigne l'URL publique de la bordure (par défaut
 `http://localhost`, ou `https://localhost` avec les certificats
-auto-signés).
-
-L'index des procédures figure ci-dessous. Pour le détail des politiques
+auto-signés). Pour le détail des politiques
 et des playbooks du moteur, se reporter à `runbooks/PLAYBOOKS.md` ; pour
 les arbitrages, la PCA/PRA et la mise en regard réglementaire, à
 `GOUVERNANCE.md`.
+
+Nota sur les noms : les commandes `docker compose stop/start ...` utilisent
+le **nom de service** tel que défini dans `docker-compose.yml` (par
+exemple `edge`, `postgres`, `api-ledger`, `detector`, `remediation`) ; les
+commandes `docker logs` et `docker exec` utilisent le **nom de
+conteneur**, préfixé `alphaplat-` (par exemple `alphaplat-edge`,
+`alphaplat-detector`, `alphaplat-remediation`). L'index des procédures
+figure ci-dessous.
 
 - **R1** — Démarrage à froid de la pile
 - **R2** — Diagnostic d'un service indisponible
@@ -169,46 +175,50 @@ délais, restitution.
 **Déclencheur** : lecture a posteriori après un incident, ou
 préparation du point de situation.
 
-1. Liste des incidents :
+1. Liste des incidents (borne de détection, délai MTTD/MTTR, playbook) :
 
    ```bash
    curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/supervision/incidents?limit=10"
    ```
 
-2. Détail de l'incident (remplacer `ID_INCIDENT`) :
+2. Détail de l'incident (remplacer `ID_INCIDENT`) : le point de lecture
+   principal, qui regroupe d'un seul appel l'incident, sa chronologie
+   d'événements, les actions exécutées et les vérifications :
 
    ```bash
    curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/supervision/incidents/ID_INCIDENT"
    ```
 
-3. Chronologie horodatée, de l'événement au retour à la normale :
+   La réponse expose `incident` (état, sévérité, `mttd_ms`, `mttr_ms`,
+   `source_ip`, `playbook_id`), `events` (chronologie horodatée de
+   l'événement au retour à la normale), `actions` (étapes, paramètres,
+   statut, durée) et `verifications` (points de contrôle de
+   restitution).
+
+3. Chronologie globale du moteur (tous incidents confondus) et dernières
+   vérifications en fenêtre glissante :
 
    ```bash
    curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/incidents/ID_INCIDENT/timeline"
+        "$CIBLE/api/supervision/timeline?limit=120"
+   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+        "$CIBLE/api/supervision/verifications?limit=5"
    ```
 
-4. Vérifications de restitution (états d'exécution) :
+4. Rejouer la suite de vérification de restitution à la demande (admin) :
 
    ```bash
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/verify?incident=ID_INCIDENT"
-   ```
-
-5. Indicateurs cibles atteints (MTTD / MTTR) :
-
-   ```bash
-   curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
-        "$CIBLE/api/supervision/metrics?limit=5"
+   curl -s -X POST -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+        "$CIBLE/api/actions/verify"
    ```
 
 **Vérification** : le détail porte la politique (par exemple
-`POL-A3-INJECTION`), le signalement d'origine et l'identifiant de
-suivi ; la chronologie donne les bornes de détection et de restitution
-; les vérifications sont toutes à l'état `reussie` ; les délais MTTD
-et MTTR respectent les cibles (inférieurs à 60 s et 180 s).
+`POL-A3-INJECTION`), l'adresse d'origine et les bornes de détection ;
+les vérifications sont toutes passées (`passed: true`) ; les délais
+`mttd_ms` et `mttr_ms` respectent les cibles (inférieurs à 60 s et 180 s,
+cibles exposées par `/api/supervision/state`).
 
 ## R4 — Déblocage d'une adresse par erreur
 
@@ -230,13 +240,13 @@ témoin horodaté (`/etc/nginx/dynamic/reload-witness.json`, champs
    depuis la chronologie de l'incident (R3) ou le journal de bordure :
 
    ```bash
-   docker logs svc-edge | grep -i blocklist | tail -20
+   docker logs alphaplat-edge | grep -i blocklist | tail -20
    ```
 
 2. Retirer la ligne de l'adresse de la liste, depuis le conteneur :
 
    ```bash
-   docker exec svc-edge sh -c \
+   docker exec alphaplat-edge sh -c \
      'sed -i "/192\.168\.137\.20/d" /etc/nginx/dynamic/blocklist.conf'
    ```
 
@@ -247,7 +257,7 @@ témoin horodaté (`/etc/nginx/dynamic/reload-witness.json`, champs
    témoin publié :
 
    ```bash
-   docker exec svc-edge \
+   docker exec alphaplat-edge \
      'cat /etc/nginx/dynamic/reload-witness.json'
    ```
 
@@ -366,8 +376,8 @@ MTTD / MTTR.
    bash tests/e2e.sh A1 > preuve_e2e.txt
    curl -s -H "X-Admin-Token: $ADMIN_API_TOKEN" \
         "$CIBLE/api/supervision/incidents" > preuve_incidents.json
-   docker logs svc-detector --since 30m > preuve_detector.log
-   docker logs svc-remediation --since 30m > preuve_remediation.log
+   docker logs alphaplat-detector --since 30m > preuve_detector.log
+   docker logs alphaplat-remediation --since 30m > preuve_remediation.log
    ```
 
 **Vérification** : le rapport de bout en bout est « vert » (MTTD < 60 s,
@@ -397,20 +407,17 @@ alerte `AlphaPayLedgerImbalance` (intégrité comptable).
    **Résultat attendu** : un instantané est créé (horodatage,
    empreinte) ; la liste des instantanés est renvoyée.
 
-2. Sauvegarder la base de données PostgreSQL (volume `pgdata`). La
-   base est accessible avec l'utilisateur `postgres` :
+2. Sauvegarder la base de données PostgreSQL (volume `pgdata`). La base
+   est accessible avec l'utilisateur `postgres` ; `pg_dumpall` exige un
+   serveur en service, donc la base doit être en marche :
 
    ```bash
-   docker run --rm \
-     -v alphapay_alphaplat-pgdata:/data \
-     alphaplat-postgres:1.0.0 pg_dumpall -U postgres -f /data/ledger.sql
-   docker run --rm \
-     -v alphapay_alphaplat-pgdata:/data \
-     -v "$PWD/backup:/out" alpine:3.20 cp /data/ledger.sql /out/
+   mkdir -p backup
+   docker exec alphaplat-postgres pg_dumpall -U postgres > backup/ledger.sql
    sha256sum backup/ledger.sql
    ```
 
-   **Résultat attendu** : un fichier `ledger.sql` est produit sur
+   **Résultat attendu** : un fichier `backup/ledger.sql` est produit sur
    l'hôte ; son empreinte sha256 est consignée pour la traçabilité.
 
 3. Vérifier l'intégrité comptable avant toute restauration :
@@ -429,17 +436,15 @@ alerte `AlphaPayLedgerImbalance` (intégrité comptable).
         "$CIBLE/api/ledger/admin/restore"
    ```
 
-   ou restaurer la base depuis le fichier de sauvegarde (base arrêtée) :
+   ou restaurer la base depuis le fichier de sauvegarde (base en service
+   ; le flux `psql` lit l'archive depuis l'hôte via le flux standard
+   d'entrée du conteneur) :
 
    ```bash
-   docker compose stop postgres
-   docker run --rm \
-     -v alphapay_alphaplat-pgdata:/data \
-     -v "$PWD/backup:/in" alphaplat-postgres:1.0.0 \
-     sh -c "psql -U postgres -v ON_ERROR_STOP=1 < /in/ledger.sql"
-   docker compose start postgres
+   docker exec -i alphaplat-postgres psql -U postgres -v ON_ERROR_STOP=1 \
+     -f - < backup/ledger.sql
    ```
 
-**Vérification** : l'instantané ou la sauvegarde est intègre ; la
-cohérence comptable est de nouveau attestée ; les soldes de référence
-sont restaurés.
+   **Vérification** : l'instantané ou la sauvegarde est intègre ; la
+   cohérence comptable est de nouveau attestée ; les soldes de référence
+   sont restaurés.

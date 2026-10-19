@@ -20,7 +20,7 @@ const LIBELLES: Record<EtatGlobal, string> = {
 const COULEURS: Record<EtatGlobal, { texte: string; fond: string; bord: string }> = {
   NOMINAL: { texte: "text-nominal", fond: "bg-nominal/10", bord: "border-nominal/40" },
   INCIDENT: { texte: "text-incident", fond: "bg-incident/10", bord: "border-incident/50" },
-  RECOVERED: { texte: "text-brass", fond: "bg-brass/10", bord: "border-brass/40" },
+  RECOVERED: { texte: "text-accent", fond: "bg-accent/10", bord: "border-accent/40" },
   FAILED: { texte: "text-incident", fond: "bg-incident/10", bord: "border-incident/50" },
 };
 
@@ -139,7 +139,7 @@ function Bande({ points }: { points: number[] }) {
   return (
     <svg viewBox={`0 0 ${largeur} ${hauteur}`} className="w-full h-10" role="img"
          aria-label="Évolution du score d'anomalie">
-      <polyline points={trace} fill="none" stroke="#D9A227" strokeWidth="1.5" />
+      <polyline points={trace} fill="none" stroke="#2E6B5A" strokeWidth="1.5" />
     </svg>
   );
 }
