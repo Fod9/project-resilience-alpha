@@ -28,15 +28,15 @@ export function BandesMesures({
     <div className="grid grid-cols-2 gap-4 bg-surface-2 px-4 py-3 xl:grid-cols-4">
       <Bande
         titre="Score anomalie"
-        valeur={score.toFixed(3)}
-        sous={`seuil ${seuil.toFixed(3)}`}
+        valeur={score.toFixed(3).replace(".", ",")}
+        sous={`seuil ${seuil.toFixed(3).replace(".", ",")}`}
         ratio={ratio}
         repere={seuilRatio}
         alerte={detection?.anomalous ?? false}
       />
       <Bande
         titre="Trafic"
-        valeur={valeurFenetre(fenetre, "requests_per_second").toFixed(1)}
+        valeur={valeurFenetre(fenetre, "requests_per_second").toFixed(1).replace(".", ",")}
         sous={`req/s · ${fenetre?.events_in_window ?? 0} évt`}
         ratio={Math.min(valeurFenetre(fenetre, "requests_per_second") / 120, 1)}
       />
@@ -48,7 +48,7 @@ export function BandesMesures({
       />
       <Bande
         titre="WAF"
-        valeur={`${(valeurFenetre(fenetre, "waf_block_ratio") * 100).toFixed(1)} %`}
+        valeur={`${(valeurFenetre(fenetre, "waf_block_ratio") * 100).toFixed(1).replace(".", ",")} %`}
         sous={
           valeurFenetre(fenetre, "waf_block_ratio") > 0
             ? `injection ${(valeurFenetre(fenetre, "injection_token_ratio") * 100).toFixed(1)} % · XSS ${(valeurFenetre(fenetre, "xss_token_ratio") * 100).toFixed(1)} %`
@@ -98,7 +98,6 @@ function Bande({
           />
         )}
       </div>
-      <div className="mt-1.5 text-[0.625rem] font-mono text-ink-dim">{sous}</div>
     </div>
   );
 }

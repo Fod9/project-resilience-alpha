@@ -49,20 +49,16 @@ politiques
 playbooks
 7 playbooks declaratifs
 SCORE ANOMALIE
-0.064
-seuil 0.251
-seuil 0.251
+0,016
+seuil 0,251
 TRAFIC
-0.3
-req/s · 27 évt
-req/s · 27 évt
+0,3
+req/s · 26 évt
 LATENCE P99
-12 ms
-p95 12 ms à la bordure
-p95 12 ms à la bordure
+4 ms
+p95 4 ms à la bordure
 WAF
-0.0 %
-aucun blocage
+0,0 %
 aucun blocage
 INCIDENTS
 ÉTAT DE LA PLATEFORME
