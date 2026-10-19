@@ -143,16 +143,16 @@ async def _generer_paire() -> tuple[str, str]:
 async def cle_active() -> dict[str, Any]:
     ligne = await fetch_one(
         "SELECT kid, private_pem, public_pem FROM auth.signing_keys "
-        "WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+        "WHERE state = 'active' ORDER BY created_at DESC LIMIT 1"
     )
     if ligne is not None:
         return ligne
     privee, publique = await _generer_paire()
     kid = f"k-{uuid.uuid4().hex[:12]}"
     await execute(
-        "INSERT INTO auth.signing_keys (kid, algo, private_pem, public_pem, status) "
-        "VALUES (%s, %s, %s, %s, 'active') ON CONFLICT (kid) DO NOTHING",
-        (kid, ALGORITHM, privee, publique),
+        "INSERT INTO auth.signing_keys (kid, private_pem, public_pem, state) "
+        "VALUES (%s, %s, %s, 'active') ON CONFLICT (kid) DO NOTHING",
+        (kid, privee, publique),
     )
     events.emit("auth.signing_key.created", kid=kid, algo=ALGORITHM)
     ligne = await fetch_one(
@@ -171,14 +171,14 @@ async def rotation_cle() -> str:
     async with _transaction() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "UPDATE auth.signing_keys SET status = 'compromised', "
-                "retired_at = now() WHERE status = 'active' AND kid = %s",
+                "UPDATE auth.signing_keys SET state = 'compromised', "
+                "retired_at = now() WHERE state = 'active' AND kid = %s",
                 (actuelle["kid"],),
             )
             await cur.execute(
-                "INSERT INTO auth.signing_keys (kid, algo, private_pem, public_pem, status) "
-                "VALUES (%s, %s, %s, %s, 'active')",
-                (nouveau_kid, ALGORITHM, privee, publique),
+                "INSERT INTO auth.signing_keys (kid, private_pem, public_pem, state) "
+                "VALUES (%s, %s, %s, 'active')",
+                (nouveau_kid, privee, publique),
             )
     events.warn(
         "auth.signing_key.rotated",
@@ -449,7 +449,7 @@ async def introspecter(charge: IntrospectRequest) -> dict[str, Any]:
 async def jwks() -> dict[str, Any]:
     """Clés publiques actives. Seule la clé active est publiée."""
     lignes = await fetch_all(
-        "SELECT kid, public_pem FROM auth.signing_keys WHERE status = 'active' "
+        "SELECT kid, public_pem FROM auth.signing_keys WHERE state = 'active' "
         "ORDER BY created_at DESC"
     )
     cles = []
@@ -614,10 +614,10 @@ async def tourner_cle(x_admin_token: str | None = Header(default=None)) -> dict[
 async def lister_cles(x_admin_token: str | None = Header(default=None)) -> dict[str, Any]:
     _exiger_admin(x_admin_token)
     lignes = await fetch_all(
-        "SELECT kid, algo, status, created_at, retired_at FROM auth.signing_keys "
+        "SELECT kid, state, created_at, retired_at FROM auth.signing_keys "
         "ORDER BY created_at DESC"
     )
-    return {"keys": [dict(ligne) for ligne in lignes]}
+    return {"keys": [dict(ligne) for ligne in lignes], "algo": ALGORITHM}
 
 
 @app.get("/users/{username}/exists", include_in_schema=False)

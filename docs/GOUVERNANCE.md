@@ -167,7 +167,7 @@ Organisation par couche, en distinguant prévention, détection, réaction.
 | Type | Mesure |
 |------|--------|
 | Détection | Modèle d'anomalie non supervisé (forêt d'isolation) : 18 variables, fenêtre glissante de 60 s, seuil calibré au 99,8e centile du trafic nominal simulé. Le signalement qualifié identifie l'adresse d'origine pressentie, ce qui rend le confinement possible. |
-| Détection | Règles d'alerte Prometheus formant le deuxième chemin, indépendant du modèle : onze règles couvrant l'anomalie, l'injection, l'exfiltration, le service indisponible, le taux d'erreurs, la latence, le déséquilibre comptable, l'échec de vérification, l'authentification, les révolutions de jetons et le blocage WAF. Ces alertes ne transportent pas d'adresse d'origine : elles remettent en état et vérifient, sans confinement. |
+| Détection | Règles d'alerte Prometheus formant le deuxième chemin, indépendant du modèle : onze règles couvrant l'anomalie, l'injection, l'exfiltration, le service indisponible, le taux d'erreurs, la latence, le déséquilibre comptable, l'échec de vérification, l'authentification, les révocations de jetons et le blocage WAF. Ces alertes ne transportent pas d'adresse d'origine : elles remettent en état et vérifient, sans confinement. |
 | Détection | Supervision runtime (Falco) : shell dans un conteneur, écriture dans un binaire système, connexion sortante inattendue — comportements à malveillance intrinsèque que le modèle statistique ne qualifie pas. |
 | Prévention de la défaillance | Redondance des chemins : les priorités du chemin « modèle » sont supérieures, car il est le plus complet (il sait quelle adresse bloquer). |
 
@@ -175,7 +175,7 @@ Organisation par couche, en distinguant prévention, détection, réaction.
 
 | Type | Mesure |
 |------|--------|
-| Réaction | Dix politiques déclaratives (`infra/policies/`) associant un signalement qualifié à un scénario connu et à un playbook ; sept playbooks (`infra/playbooks/`) dont chaque étape est rattachée à une phase (confinement, éradication, remise en état, vérification) visible dans la salle d'opérations. |
+| Réaction | Douze politiques déclaratives (`infra/policies/`) associant un signalement qualifié à un scénario connu et à un playbook ; sept playbooks (`infra/playbooks/`) dont chaque étape est rattachée à une phase (confinement, éradication, remise en état, vérification) visible dans la salle d'opérations. |
 | Prévention de l'erreur | Couvre-feu : 6 actions automatiques maximum par fenêtre de 300 secondes. |
 | Prévention | Liste blanche d'adresses non bloquables (poste hôte, postes d'encadrement, réseau d'administration) : le blocage en est refusé et journalisé. |
 | Prévention | Délai d'expiration obligatoire sur toute action réversible (900 s par défaut pour un blocage) : un blocage ne devient pas pérenne sans renouvellement. |

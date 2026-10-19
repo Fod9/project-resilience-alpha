@@ -126,8 +126,8 @@ réponse d'un service, ou étape de vérification du moteur bloquée.
 2. Journal du service suspect (remplacer `SVC`) :
 
    ```bash
-   docker logs --since 15m svc-SVC
-   docker logs svc-remediation | grep -i "SVC\|recherche" | tail -20
+   docker logs --since 15m alphaplat-SVC
+   docker logs alphaplat-remediation | grep -i "SVC\|recherche" | tail -20
    ```
 
 3. Circuit complet et dernière action du moteur :
