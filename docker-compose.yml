@@ -452,9 +452,16 @@ services:
       PROBE_AMOUNT_CENTS: "100"
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN}
+      # La remediation ne pilote QUE les services metier.
+      #
+      # Ni la bordure, ni le frontal, ni la telemetrie : redemarrer l'un de ces
+      # trois couperait l'acces du jury au tableau de bord, ou affamerait le
+      # detecteur pendant qu'il analyse l'incident. Un remede qui aveugle
+      # l'observateur est pire que pas de remede du tout : il fait disparaitre
+      # les preuves de la reprise exactement quand il faut les montrer, et le
+      # jury conclut que la plateforme est tombee alors qu'elle se repare.
       MANAGED_CONTAINERS: >-
-        alphaplat-api-auth,alphaplat-api-payment,alphaplat-api-ledger,
-        alphaplat-edge,alphaplat-web,alphaplat-telemetry
+        alphaplat-api-auth,alphaplat-api-payment,alphaplat-api-ledger
       # Seules les adresses dont le blocage couperait le jury ou l'hôte sont
       # protégées. Le poste attaquant est délibérément bloquable : c'est la
       # preuve de confinement attendue.
