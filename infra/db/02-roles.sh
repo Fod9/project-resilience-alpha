@@ -33,14 +33,6 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON DATABASE :"db_name" FROM PUBLIC;
 GRANT CONNECT ON DATABASE :"db_name" TO postgres;
 
--- L'extension pgvector s'installe dans le schema `public`. Or le bloc
--- ci-dessus en a retire l'usage a tout le monde. Un role qui manipule des
--- vecteurs doit donc le recevoir explicitement, sinon PostgreSQL repond
--- "type vector does not exist" au lieu d'un refus de privilege, message
--- trompeur qui fait perdre un temps considerable. Seuls les deux roles qui
--- touchent des vecteurs le recoivent.
-GRANT USAGE ON SCHEMA public TO svc_rag, svc_readonly;
-
 -- ---------------------------------------------------------------------------
 --  2. Création des rôles
 -- ---------------------------------------------------------------------------
@@ -68,6 +60,17 @@ CREATE ROLE monitoring      LOGIN PASSWORD :'monitoring_pw'
 GRANT CONNECT ON DATABASE :"db_name" TO
   svc_auth, svc_payment, svc_ledger, svc_detector,
   svc_remediation, svc_rag, svc_readonly, monitoring;
+
+-- L'extension pgvector s'installe dans le schema `public`, dont le bloc 1 vient
+-- de retirer l'usage a tout le monde. Les deux roles qui manipulent des vecteurs
+-- doivent donc le recevoir explicitement, sinon PostgreSQL repond
+-- "type vector does not exist" au lieu d'un refus de privilege, message
+-- trompeur qui fait perdre un temps considerable.
+--
+-- Cette instruction vient OBLIGATOIREMENT apres la creation des roles : accorder
+-- un droit a un role inexistant est une erreur fatale, et le script s'arrete
+-- avec ON_ERROR_STOP, ce qui laisserait la base sans aucun role applicatif.
+GRANT USAGE ON SCHEMA public TO svc_rag, svc_readonly;
 
 -- ---------------------------------------------------------------------------
 --  3. Délais de garde : une requête ne peut pas immobiliser une connexion
