@@ -1,0 +1,17 @@
+# Fins de ligne : la pile s'exécute dans des conteneurs Linux, y compris
+# lorsqu'elle est préparée depuis un poste Windows. Sans ces règles, un clonage
+# Windows (core.autocrlf=true, réglage par défaut de l'installateur Docker
+# Desktop) livre les scripts en CRLF : l'interpréteur cherche alors un fichier
+# dont le nom se termine par un retour chariot et répond « not found ». C'est
+# exactement ce qui interrompt le lancement du surveillant de liste de blocage
+# de la bordure, et qui casse le rechargement automatique de nginx.
+*.sh              text eol=lf
+*.py              text eol=lf
+*.sql             text eol=lf
+*.yml             text eol=lf
+*.yaml            text eol=lf
+*.json            text eol=lf
+*.md              text eol=lf
+*.conf.template   text eol=lf
+Dockerfile        text eol=lf
+.env.example      text eol=lf

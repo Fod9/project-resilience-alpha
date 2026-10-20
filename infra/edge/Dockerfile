@@ -55,10 +55,22 @@ RUN chown 101:10001 /etc/nginx/dynamic \
  && chmod 0770 /etc/nginx/dynamic
 
 COPY entrypoint/99-blocklist-watcher.sh /docker-entrypoint.d/99-blocklist-watcher.sh
-RUN chmod 0755 /docker-entrypoint.d/99-blocklist-watcher.sh
+# Les fins de ligne sont normalisees ici, et pas seulement dans le depot : un
+# contexte de construction prepare depuis Windows peut livrer ces scripts en
+# CRLF, et l'interpreteur cherche alors un fichier dont le nom se termine par un
+# retour chariot. Le lancement echoue alors en « not found » et le rechargement
+# automatique de la bordure ne fonctionne plus.
+RUN sed -i 's/\r$//' /docker-entrypoint.d/99-blocklist-watcher.sh \
+ && chmod 0755 /docker-entrypoint.d/99-blocklist-watcher.sh
 
 COPY entrypoint/blocklist-watcher.sh /usr/local/share/alphapay/blocklist-watcher.sh
-RUN chmod 0755 /usr/local/share/alphapay/blocklist-watcher.sh
+RUN sed -i 's/\r$//' /usr/local/share/alphapay/blocklist-watcher.sh \
+ && chmod 0755 /usr/local/share/alphapay/blocklist-watcher.sh
+
+# Meme raison pour les modeles de configuration nginx : un retour chariot en fin
+# de ligne dans la carte de blocage ou dans le format de journal produirait une
+# configuration valide en apparence mais fausse a l'usage.
+RUN find /etc/nginx/templates -type f -exec sed -i 's/\r$//' {} +
 
 # Retour à l'utilisateur non privilégié de l'image : nginx n'a besoin ni de
 # root ni de capacités particulières pour écouter sur 8080 et 8443.

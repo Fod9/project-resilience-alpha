@@ -12,8 +12,11 @@ COPY 02-roles.sh     /docker-entrypoint-initdb.d/02-roles.sh
 COPY 03-seed.sql     /docker-entrypoint-initdb.d/03-seed.sql
 
 # 02-roles.sh doit être exécutable pour que l'entrée officielle l'invoque avec
-# bash plutôt que de le sourcer (le script utilise `set -e`).
-RUN chmod 0644 /docker-entrypoint-initdb.d/01-schema.sql \
+# bash plutôt que de le sourcer (le script utilise `set -e`). Ses fins de ligne
+# sont normalisées : préparé depuis Windows, le script arriverait en CRLF et
+# l'entrée le refuserait, laissant la base sans rôles applicatifs.
+RUN sed -i 's/\r$//' /docker-entrypoint-initdb.d/02-roles.sh \
+ && chmod 0644 /docker-entrypoint-initdb.d/01-schema.sql \
  && chmod 0755 /docker-entrypoint-initdb.d/02-roles.sh \
  && chmod 0644 /docker-entrypoint-initdb.d/03-seed.sql
 
