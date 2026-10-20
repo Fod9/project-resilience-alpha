@@ -109,6 +109,10 @@ export interface DetailIncident {
   actions: Array<{
     step_id: string;
     action: string;
+    /** Phase du playbook a laquelle appartient cette etape (CONTAINING,
+     *  ERADICATING, RECOVERING, VERIFYING). Permet d'afficher jusqu'ou la
+     *  reprise est allee, meme lorsque l'incident finit en FAILED. */
+    phase?: string;
     status: string;
     duration_ms: number | null;
     result: Record<string, unknown> | null;

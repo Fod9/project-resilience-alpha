@@ -127,6 +127,25 @@ export function PlaybookPanel({
   const actions = detail?.actions ?? [];
   const etat = incident?.state ?? "·";
 
+  // Jusqu'ou la reprise est reellement allee.
+  //
+  // L'etat de l'incident ne suffit pas : un incident qui echoue passe a FAILED,
+  // valeur absente de l'echelle des phases. L'index retombait alors a zero et
+  // les quatre jalons s'affichaient gris, effacant le confinement et la
+  // revocation des jetons qui avaient pourtant abouti. On croise donc l'etat
+  // avec les phases des actions reellement executees.
+  //
+  // Consequence utile devant un jury : un playbook qui a confine puis echoue
+  // montre un confinement vert et une remise en etat rouge, au lieu de quatre
+  // jalons gris qui ne distinguent plus « la reprise a echoue » de « la reprise
+  // n'a jamais commence ».
+  const phaseEtat = indexPhase(etat);
+  const phaseAtteinte = actions.reduce(
+    (avance, action) =>
+      action.status === "ok" ? Math.max(avance, indexPhase(action.phase ?? "")) : avance,
+    phaseEtat,
+  );
+
   return (
     <section className="bloc gap-2">
       <div className="bloc-titre">
@@ -141,7 +160,7 @@ export function PlaybookPanel({
           {(() => {
             const engage = actions.some((action) => action.status === "ok");
             return PHASES.map((phase) => {
-            const atteinte = indexPhase(etat) >= indexPhase(phase.cle);
+            const atteinte = phaseAtteinte >= indexPhase(phase.cle);
             return (
               <div key={phase.cle} className="flex-1">
                 <div

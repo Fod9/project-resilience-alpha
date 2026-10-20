@@ -764,10 +764,21 @@ async def detail_incident(identifiant: str) -> dict[str, Any]:
         "WHERE incident_id = %s ORDER BY id",
         (identifiant,),
     )
+    # La phase d'une etape n'est pas stockee en base : elle appartient au
+    # playbook. On la rattache ici, sinon l'interface ne peut pas savoir jusqu'ou
+    # la reprise est allee. Elle ne verrait que l'etat final de l'incident, qui
+    # vaut FAILED et n'indique plus rien du chemin parcouru.
+    playbook = _etat["playbooks"].get(str(incident["playbook_id"] or ""))
+    phase_par_etape = {
+        etape.id: etape.phase for etape in (playbook.steps if playbook else ())
+    }
     return {
         "incident": dict(incident),
         "events": [dict(e) for e in evenements],
-        "actions": [dict(a) for a in actions],
+        "actions": [
+            {**dict(a), "phase": phase_par_etape.get(str(a["step_id"] or ""), "")}
+            for a in actions
+        ],
         "verifications": [dict(v) for v in verifications],
     }
 
