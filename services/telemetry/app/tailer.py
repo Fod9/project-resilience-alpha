@@ -37,6 +37,31 @@ class SuiveurDeFichiers:
             self._position(chemin)
         self._amorce = True
 
+    def ajouter(self, chemins: Iterable[str]) -> list[str]:
+        """Ajoute les chemins pas encore suivis, et renvoie les nouveaux.
+
+        Les fichiers de journaux n'existent pas tous au démarrage : chaque
+        service crée le sien au premier événement qu'il écrit, et le répertoire
+        lui-même peut être monté après le lancement. Une liste figée au départ
+        ignore donc à jamais tout ce qui apparaît ensuite — et la télémétrie
+        peut passer sa vie entière avec zéro fichier suivi, donc zéro événement,
+        sans le moindre message d'erreur. C'est exactement ce qui s'était
+        produit : le répertoire a été créé six secondes après le démarrage, et
+        les 279 fenêtres publiées ensuite étaient toutes vides.
+        """
+        nouveaux = [
+            chemin
+            for chemin in chemins
+            if chemin not in self._chemins and chemin not in self._positions
+        ]
+        for chemin in nouveaux:
+            self._chemins.append(chemin)
+            if self._amorce:
+                # On se place à la fin : un fichier découvert en cours de route ne
+                # doit pas rejouer tout son historique comme un pic de trafic.
+                self._position(chemin)
+        return nouveaux
+
     def lire(self) -> list[tuple[str, str]]:
         """Renvoie la liste des nouvelles lignes, sous forme (chemin, contenu)."""
         if not self._amorce:

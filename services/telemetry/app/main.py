@@ -264,6 +264,17 @@ async def _boucle() -> None:
         if maintenant - dernier_cycle < WINDOW_STRIDE_SECONDS:
             continue
         dernier_cycle = maintenant
+        # La liste des journaux est relue a chaque cycle. Les services creent leur
+        # fichier au premier evenement ecrit, et le repertoire lui-meme peut etre
+        # monte apres le demarrage : une liste figee au lancement laisserait la
+        # telemetrie surveiller zero fichier pour toujours, en silence.
+        nouveaux = suiveur.ajouter(_liste_fichiers())
+        if nouveaux:
+            events.emit(
+                "telemetry.files_added",
+                files=len(nouveaux),
+                total=len(suiveur.chemins),
+            )
         try:
             _cycle(suiveur)
         except Exception as erreur:  # noqa: BLE001 : la boucle ne doit jamais mourir
