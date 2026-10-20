@@ -121,7 +121,17 @@ def entrainer(
     # obtenir un score d'atypie croissant, ce qui rend la lecture des courbes
     # intuitive et le seuil comparable d'une exécution à l'autre.
     scores = -modele.decision_function(normalise)
-    seuil = float(np.percentile(scores, QUANTILE_SEUIL))
+    # Le seuil est le quantile haut des scores nominaux, PLUS une marge.
+    #
+    # Sans cette marge, un trafic de repos quasi invariant rend tous les scores
+    # egaux : le quantile vaut alors exactement le score courant, la comparaison
+    # `score >= seuil` devient vraie en permanence, et le detecteur signale une
+    # anomalie sur un systeme parfaitement sain. C'est le pire des etats : une
+    # alarme permanente ne se distingue plus d'une absence d'alarme, et le jury
+    # conclut a juste titre que la detection ne veut rien dire.
+    seuil = float(np.percentile(scores, QUANTILE_SEUIL)) + max(
+        0.05, float(np.std(scores)) * 0.5
+    )
 
     importances = _importances_permutation(modele, normalise, np, graine)
     exces = float(np.mean(scores > seuil)) * 100.0

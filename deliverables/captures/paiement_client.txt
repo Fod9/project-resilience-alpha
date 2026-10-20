@@ -6,7 +6,7 @@ Effectuer un paiement
 Plateforme de paiement fictive. Aucune donnée réelle n'est traitée.
 
 COMPTE ÉMETTEUR
-CUST-000001 : 2 498,50 €
+CUST-000001 : 2 499,00 €
 CUST-000002 : 1 200,00 €
 CUST-000003 : 850,00 €
 COMPTE DESTINATAIRE
@@ -19,7 +19,7 @@ Invariant comptable respecté
 
 COMPTES DE DÉMONSTRATION
 CUST-000001
-2 498,50 €
+2 499,00 €
 CUST-000002
 1 200,00 €
 CUST-000003

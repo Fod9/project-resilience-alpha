@@ -41,31 +41,32 @@ coffre de secrets
 falco
 détection d'exécution
 SCORE ANOMALIE
--0,002
-seuil 0,251
+0,000
+seuil 0,000
 TRAFIC
-0,4
-req/s · 36 évt
+0,0
+req/s · 0 évt
 LATENCE P99
-5 ms
-p95 4 ms à la bordure
+0 ms
+p95 0 ms à la bordure
 WAF
 0,0 %
 aucun blocage
 INCIDENTS
 ÉTAT DE LA PLATEFORME
-NOMINAL
+INCIDENT
 INCIDENT EN COURS DEPUIS
-·
+02:06
 CIBLE DE DÉTECTION
 60 s
 CIBLE DE RÉTABLISSEMENT
 180 s
 ACTIONS SUR LA FENÊTRE
-0 / 6
+5 / 6
 SCORE D'ANOMALIE (30 DERNIÈRES FENÊTRES)
+Preuves de rétablissement non réunies
 PROGRESSION DE LA REPRISE
-en attente
+PB-REDEMARRAGE-SERVICE
 CONFINEMENT
 ÉRADICATION
 REMISE EN ÉTAT
@@ -74,11 +75,22 @@ VÉRIFICATION
 Aucune action engagée. Le panneau se remplit dès la sélection d'une politique.
 
 BANDE-ENREGISTREUR
-derniers événements · 3 jalons
-attaque 11:01:48
-attaque 10:58:33
-attaque 10:46:10
-10:46:02
+incident 6c35bcb8 · 14 jalons
+phase 10:23:56
+détection 10:23:56
+clôture 10:23:35
+phase 10:23:35
+phase 10:23:35
+action 10:23:35
+phase 10:23:35
+action 10:23:35
+phase 10:23:35
+action 10:23:35
+phase 10:23:35
+action 10:23:35
+phase 10:23:33
+détection 10:23:33
+10:23:25
 maintenant
 ASSISTANT DOCUMENTAIRE
 lecture seule · sans capacité d'action
