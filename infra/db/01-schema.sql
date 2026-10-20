@@ -149,6 +149,16 @@ CREATE TABLE ops.incidents (
   opened_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   closed_at     TIMESTAMPTZ
 );
+
+-- La reference est generee par la base, pas par l'application : une unicite
+-- calculee cote application finit par entrer en collision sous charge, et une
+-- reference absente ferait echouer l'ouverture d'incident sur une contrainte
+-- NOT NULL -- c'est-a-dire au pire moment possible.
+CREATE SEQUENCE IF NOT EXISTS ops.incident_seq;
+ALTER TABLE ops.incidents
+  ALTER COLUMN reference SET DEFAULT
+  ('INC-' || to_char(now(), 'YYYY') || '-'
+         || lpad(nextval('ops.incident_seq')::text, 4, '0'));
 CREATE INDEX idx_inc_state ON ops.incidents(state);
 CREATE INDEX idx_inc_open  ON ops.incidents(opened_at DESC);
 

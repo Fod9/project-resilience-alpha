@@ -132,7 +132,7 @@ async def _ouvrir_incident(
     mttd_ms = _mttd_ms(sac)
     await execute(
         "INSERT INTO ops.incidents "
-        "(id, state, severity, title, source_ip, mttd_ms, playbook_id, summary) "
+        "(id, state, severity, title, source_ip, mttd_ms, playbook_id, correlation) "
         "VALUES (%s, 'DETECTING', %s, %s, NULLIF(%s, '')::inet, %s, %s, %s::jsonb)",
         (
             identifiant,
@@ -207,7 +207,7 @@ async def _maj_etat(incident_id: str, etat: str) -> None:
 async def _cloturer(incident_id: str, etat: str, resume: dict[str, Any]) -> None:
     mttr = resume.get("mttr_seconds")
     await execute(
-        "UPDATE ops.incidents SET state = %s, closed_at = now(), summary = %s::jsonb, "
+        "UPDATE ops.incidents SET state = %s, closed_at = now(), correlation = %s::jsonb, "
         "mttr_ms = %s WHERE id = NULLIF(%s, '')::uuid",
         (
             etat,
