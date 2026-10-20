@@ -91,15 +91,38 @@ export default function ServiceRail({
 
 /** Compose la liste attendue des composants, avec leur état observé. */
 export function composantsAttendus(etat: EtatSupervision | null): EtatComposant[] {
-  const actif = etat?.state === "INCIDENT";
-  return [
+  const incident = etat?.incident ?? null;
+  const playbook = incident?.playbook_id ?? "";
+
+  // Le service reellement vise par le playbook en cours.
+  //
+  // L'interface ne dispose d'aucun releve de sante par composant : elle ne peut
+  // donc pas afficher un etat qu'elle ne connait pas. L'ancienne version
+  // repondait a ce manque par un vert ecrit en dur sur treize services, et trois
+  // autres passaient a l'orange des qu'un incident existait. Resultat : le rail
+  // affichait « tout va bien » pendant qu'on redemarrait un service, et il
+  // designait toujours les memes trois composants au lieu du vrai.
+  //
+  // On marque donc celui qui est effectivement touche, et lui seul. C'est
+  // moins riche qu'un releve de sante complet, mais c'est vrai.
+  const vise = new Set<string>();
+  if (playbook.includes("A1")) vise.add("api-payment");
+  if (playbook.includes("A2")) vise.add("api-auth");
+  if (playbook.includes("A3")) vise.add("edge");
+  if (playbook.includes("INTEGRITE")) vise.add("api-ledger");
+  if (playbook.includes("INDISPONIBLE")) vise.add("api-payment");
+  if (playbook.includes("CONTAINER")) vise.add("edge");
+  const santeVisee: EtatComposant["sante"] =
+    incident?.state === "FAILED" ? "indisponible" : "degrade";
+
+  const composants: EtatComposant[] = [
     { nom: "web", role: "interface React", colonne: "dev", sante: "ok" },
-    { nom: "api-auth", role: "authentification", colonne: "dev", sante: actif ? "degrade" : "ok" },
-    { nom: "api-payment", role: "orchestration paiement", colonne: "dev", sante: actif ? "degrade" : "ok" },
+    { nom: "api-auth", role: "authentification", colonne: "dev", sante: "ok" },
+    { nom: "api-payment", role: "orchestration paiement", colonne: "dev", sante: "ok" },
     { nom: "api-ledger", role: "grand livre partie double", colonne: "dev", sante: "ok" },
     { nom: "postgres", role: "PostgreSQL + pgvector", colonne: "dev", sante: "ok" },
     { nom: "edge", role: "WAF ModSecurity + CRS", colonne: "cyber", sante: "ok" },
-    { nom: "remediation", role: "moteur de reprise", colonne: "cyber", sante: actif ? "degrade" : "ok" },
+    { nom: "remediation", role: "moteur de reprise", colonne: "cyber", sante: "ok" },
     { nom: "vault", role: "coffre de secrets", colonne: "cyber", sante: "ok" },
     { nom: "falco", role: "détection d'exécution", colonne: "cyber", sante: "ok" },
     { nom: "telemetry", role: "agrégation des journaux", colonne: "ia", sante: "ok" },
@@ -111,4 +134,8 @@ export function composantsAttendus(etat: EtatSupervision | null): EtatComposant[
     { nom: "loki", role: "journaux centralisés", colonne: "infra", sante: "ok" },
     { nom: "alertmanager", role: "routage d'alertes", colonne: "infra", sante: "ok" },
   ];
+
+  return composants.map((composant) =>
+    vise.has(composant.nom) ? { ...composant, sante: santeVisee } : composant,
+  );
 }

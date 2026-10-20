@@ -24,6 +24,7 @@ export default function Ops() {
   const chronologie = useSonde(api.chronologie, 5000);
 
   const [detail, setDetail] = useState<DetailIncident | null>(null);
+  const [detailErreur, setDetailErreur] = useState<string | null>(null);
 
   useEffect(() => {
     const identifiant = etat.donnees?.incident?.id;
@@ -32,11 +33,18 @@ export default function Ops() {
     api
       .incident(identifiant)
       .then((valeur) => {
-        if (!annule) setDetail(valeur);
+        if (annule) return;
+        setDetail(valeur);
+        setDetailErreur(null);
       })
-      .catch(() => {
-        /* l'incident peut être clos entre deux interrogations : on conserve
-           le dernier détail connu plutôt que de vider le panneau. */
+      .catch((probleme: unknown) => {
+        // Ne pas masquer l'echec. C'est ce silence qui faisait afficher
+        // « Aucune action engagee » alors que le panneau n'avait simplement pas
+        // pu lire le detail de l'incident : l'operateur croyait qu'aucune
+        // action n'avait ete tentee, alors que la lecture avait echoue.
+        if (!annule) {
+          setDetailErreur(probleme instanceof Error ? probleme.message : String(probleme));
+        }
       });
     return () => {
       annule = true;
@@ -90,7 +98,7 @@ export default function Ops() {
         <div className="fiche px-6 py-6">
           <StateHeader etat={etat.donnees} points={scoreCourant} />
         </div>
-        <PlaybookPanel detail={detail} erreur={messageEtat} />
+        <PlaybookPanel detail={detail} erreur={messageEtat ?? detailErreur} />
         <RecorderStrip
           incident={etat.donnees?.incident ?? null}
           evenements={chronologie.donnees?.events ?? []}
