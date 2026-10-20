@@ -61,6 +61,15 @@ export default function Ops() {
 
   const composants = composantsAttendus(etat.donnees);
 
+  // Une indisponibilite passagere n'est pas une panne. Au premier demarrage, les
+  // services s'initialisent pendant une a deux minutes : le tableau de bord doit
+  // le dire clairement au lieu d'afficher une erreur rouge devant le jury.
+  const indisponible =
+    etat.indisponible || detection.indisponible || fenetre.indisponible || chronologie.indisponible;
+  const messageEtat = indisponible
+    ? "Plateforme en cours de démarrage : les services s'initialisent, cette vue se remplira d'elle-même."
+    : etat.erreur;
+
   return (
     <main className="min-h-0 flex-1 grid grid-cols-1 grid-rows-[minmax(0,1fr)_auto] xl:grid-cols-ops bg-base">
       {/* --- Feuillet des services ------------------------------------------ */}
@@ -81,7 +90,7 @@ export default function Ops() {
         <div className="fiche px-6 py-6">
           <StateHeader etat={etat.donnees} points={scoreCourant} />
         </div>
-        <PlaybookPanel detail={detail} erreur={etat.erreur} />
+        <PlaybookPanel detail={detail} erreur={messageEtat} />
         <RecorderStrip
           incident={etat.donnees?.incident ?? null}
           evenements={chronologie.donnees?.events ?? []}
