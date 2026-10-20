@@ -38,10 +38,20 @@ def ajuster_sur_mesures(
 ) -> dict[str, Any]:
     """Réajuste le modèle sur des vecteurs réellement observés.
 
-    Le cœur d'ajustement n'est pas réécrit : on réutilise `ml.train.entrainer`
-    en substituant sa source de données. Cela garantit que le modèle recalibré
-    est produit par exactement le même code que le modèle embarqué : même
-    normalisation, même seuil, mêmes explications.
+    Deux rôles, deux sources, et c'est tout l'enjeu :
+
+    * le **modèle** est entraîné sur le générateur de trafic, qui décrit une
+      plateforme en fonctionnement : débit variable, plusieurs adresses,
+      latences étendues. C'est de cette variété que vient la capacité de
+      distinguer ;
+    * le **seuil** est réglé sur les fenêtres réellement observées, ce qui
+      garantit que le repos de *ce* poste reste en dessous.
+
+    Entraîner le modèle directement sur les fenêtres réelles — ce que faisait la
+    version précédente — revient à apprendre une distribution de variance nulle :
+    un poste au repos produit des fenêtres quasi identiques, l'Isolation Forest
+    renvoie alors le même score pour tout, et le détecteur ne distingue plus une
+    attaque d'un système sain. Il ne détecte plus rien, sans jamais échouer.
     """
     import numpy as np
 
@@ -58,17 +68,30 @@ def ajuster_sur_mesures(
         dtype=float,
     )
 
-    def _source_substituee(_duree_secondes: float = 0.0):  # noqa: ANN202
-        moyennes = {nom: float(brut[:, i].mean()) for i, nom in enumerate(FEATURE_NAMES)}
-        ecarts = {nom: float(brut[:, i].std() or 1.0) for i, nom in enumerate(FEATURE_NAMES)}
-        return brut.tolist(), moyennes, ecarts
+    # 1. Le modele vient du generateur varie, pas des fenetres reelles.
+    #
+    # La duree simulee doit etre suffisante : demander zero seconde produit un
+    # corpus vide, et l'entrainement echoue sur une moyenne sans donnees. On
+    # prend de quoi couvrir un large eventail de charge, avec un plancher lie au
+    # nombre de fenetres reelles pour rester proportionne.
+    duree_simulee = max(4500.0, 30.0 * len(vecteurs_mesures))
+    artefact = soi.entrainer(
+        duree_simulee, n_estimateurs=n_estimateurs, graine=graine
+    )
 
-    origine = soi._vecteurs_nominaux
-    soi._vecteurs_nominaux = _source_substituee
-    try:
-        artefact = soi.entrainer(0.0, n_estimateurs=n_estimateurs, graine=graine)
-    finally:
-        soi._vecteurs_nominaux = origine
+    # 2. Le seuil vient des fenetres reelles.
+    modele = artefact["modele"]
+    normaliseur = artefact["scaler"]
+    scores = -modele.decision_function(normaliseur.transform(brut))
+
+    seuil = float(np.max(scores)) + max(0.05, float(np.std(scores)) * 0.5)
+    artefact["seuil"] = seuil
+    artefact["score_moyen"] = float(np.mean(scores))
+    artefact["score_ecart_type"] = float(np.std(scores))
+    artefact["score_min"] = float(np.min(scores))
+    artefact["score_max"] = float(np.max(scores))
+    artefact["taux_detection_nominal_pct"] = float(np.mean(scores > seuil)) * 100.0
+    artefact["n_fenetres_reelles"] = len(vecteurs_mesures)
 
     artefact["version"] = f"isolation-forest-{source_libelle}"
     artefact["source_calibrage"] = source_libelle
