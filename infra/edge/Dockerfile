@@ -33,6 +33,8 @@ COPY templates/conf.d/alphaplat.conf.template \
 
 COPY templates/includes/alphapay_locations.conf.template \
      /etc/nginx/templates/includes/alphapay_locations.conf.template
+COPY templates/includes/alphapay_proxy_entetes.conf.template \
+     /etc/nginx/templates/includes/alphapay_proxy_entetes.conf.template
 COPY templates/includes/alphapay_proxy.conf.template \
      /etc/nginx/templates/includes/alphapay_proxy.conf.template
 

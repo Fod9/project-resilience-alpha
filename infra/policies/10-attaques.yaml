@@ -86,7 +86,18 @@ policies:
     severity: critical
     priority: 100
     sources: [detector, alertmanager]
-    match: any
+    # Les deux conditions décrivent *la même* rafale : débit hors pointe et taux
+    # d'erreur élevé. En `any`, une seule suffisait, et la plus faible — le taux
+    # d'erreur — se déclenchait sur des refus produits par la bordure elle-même.
+    # La politique confinait alors l'adresse la plus active de la fenêtre,
+    # c'est-à-dire l'opérateur qui consultait son tableau de bord.
+    #
+    # La latence ne figure plus parmi les conditions : une rafale refusée par la
+    # limitation de débit de la bordure n'atteint jamais l'applicatif, donc elle
+    # ne produit aucune latence. L'exiger rendrait la politique incapable de
+    # constater l'attaque réelle. La dégradation de latence est traitée pour
+    # elle-même par POL-ALERTE-LATENCE.
+    match: all
     cooldown_seconds: 180
     conditions:
       - signal: feature
@@ -97,8 +108,4 @@ policies:
         name: error_ratio
         op: ">="
         value: 0.45
-      - signal: feature
-        name: latency_p99_ms
-        op: ">="
-        value: 2500.0
     playbook: PB-A1-CONFINER-ET-REDEMARRER

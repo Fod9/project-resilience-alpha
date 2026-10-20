@@ -52,7 +52,7 @@ from common.metrics import (
 )
 from common.security import verify_admin_token, verify_webhook
 
-from .connectors import Connecteurs, Resultat
+from .connectors import ActionRefusee, Connecteurs, Resultat
 from .policies import (
     ACTIONS_AUTORISEES,
     ErreurDeConfiguration,
@@ -79,15 +79,52 @@ _etat: dict[str, Any] = {
 
 
 async def _demarrer() -> None:
+    global _tache_purge
     _etat["politiques"] = charger_politiques(POLICIES_DIR)
     _etat["playbooks"] = charger_playbooks(PLAYBOOKS_DIR)
     SERVICE_UP.labels(service="remediation", component="politiques").set(1)
+    # Les blocages arrivés à échéance sont libérés en continu : un confinement
+    # temporaire qui ne se lève jamais est un confinement définitif.
+    _tache_purge = asyncio.create_task(_boucle_expiration())
     events.emit(
         "remediation.ready",
         policies=len(_etat["politiques"]),
         playbooks=len(_etat["playbooks"]),
         dry_run=connecteurs.dry_run,
+        purge_seconds=EDGE_PURGE_SECONDS,
     )
+
+
+async def _arreter() -> None:
+    global _tache_purge
+    if _tache_purge is not None:
+        _tache_purge.cancel()
+        _tache_purge = None
+
+
+async def _boucle_expiration() -> None:
+    """Libère périodiquement les adresses dont le blocage a expiré.
+
+    `ttl_seconds` n'est qu'une intention tant que rien ne l'applique : nginx ne
+    connaît pas la notion de date, la règle resterait donc active indéfiniment.
+    """
+    while True:
+        await asyncio.sleep(EDGE_PURGE_SECONDS)
+        try:
+            liberees = await connecteurs.expirer_blocages()
+        except Exception as erreur:  # noqa: BLE001
+            events.warn(
+                "edge.purge_failed",
+                message="purge des blocages impossible",
+                error=str(erreur),
+            )
+            continue
+        if liberees:
+            events.warn(
+                "edge.block_released",
+                message="échéance atteinte, adresses libérées à la bordure",
+                adresses=liberees,
+            )
 
 
 ctx = build_app(
@@ -99,6 +136,7 @@ ctx = build_app(
         "playbooks, vérification de la reprise et journalisation des incidents."
     ),
     on_startup=_demarrer,
+    on_shutdown=_arreter,
     with_database=True,
 )
 app = ctx.app
@@ -115,6 +153,12 @@ FENETRE_ACTIONS = env_int("ACTION_WINDOW_SECONDS", 300)
 SEUIL_COUPE_CIRCUIT = env_int("CIRCUIT_BREAKER_FAILURES", 3)
 VERIFY_MAX_TENTATIVES = env_int("VERIFY_MAX_ATTEMPTS", 2)
 AUTO_ESCALADE = env_bool("AUTO_ESCALATE", True)
+#: Cadence de purge des blocages arrivés à échéance. Volontairement courte :
+#: une adresse confinée par erreur doit revenir vite, et la purge est sans
+#: effet tant qu'aucun blocage n'a expiré.
+EDGE_PURGE_SECONDS = env_int("EDGE_PURGE_SECONDS", 30)
+
+_tache_purge: asyncio.Task[None] | None = None
 
 connecteurs = Connecteurs(events)
 suite = SuiteDeVerification(connecteurs, events)
@@ -299,7 +343,15 @@ async def _executer_playbook(
         parametres = etape.rendre(contexte)
         _enregistrer_action()
         debut = time.perf_counter()
-        resultat: Resultat = await connecteurs.executer(etape.action, parametres, sac)
+        try:
+            resultat = await connecteurs.executer(etape.action, parametres, sac)
+        except ActionRefusee as refus:
+            # Un refus de garde-fou est un echec d'etape, pas un incident qui
+            # s'effondre : sans cette conversion, l'exception remontait hors de
+            # la tache, l'incident restait fige dans sa derniere phase et plus
+            # rien ne le cloturait.
+            resultat = Resultat(ok=False, action=etape.action,
+                                detail=f"action refusee : {refus}")
         duree_ms = int((time.perf_counter() - debut) * 1000)
 
         REMEDIATION_ACTIONS_TOTAL.labels(
@@ -847,6 +899,17 @@ async def lister_verifications(limit: int = 20) -> dict[str, Any]:
     return {"verifications": _etat["verifications"][-limit:]}
 
 
+@app.get("/api/supervision/blocklist", tags=["supervision"])
+async def lister_blocages() -> dict[str, Any]:
+    """Blocages actifs à la bordure, avec leur échéance et leur motif.
+
+    Un opérateur doit pouvoir répondre à « qui est confiné, jusqu'à quand et
+    pourquoi » sans ouvrir un shell dans le conteneur de bordure.
+    """
+    blocages = connecteurs.blocages_en_cours()
+    return {"count": len(blocages), "blocked": blocages}
+
+
 @app.post("/api/actions/run", tags=["administration"])
 async def declencher_playbook(
     charge: dict[str, Any],
@@ -881,6 +944,40 @@ async def verifier_maintenant(
     rapport = await suite.executer(charge or {})
     _etat["verifications"].append(rapport.resume())
     return rapport.resume()
+
+
+@app.post("/api/actions/unblock", tags=["administration"])
+async def debloquer_adresse(
+    charge: dict[str, Any],
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Sort une adresse de la liste de blocage de la bordure.
+
+    Volontairement indépendante du coupe-circuit : un opérateur confiné par
+    erreur doit pouvoir se rétablir sans dépendre de l'automatisme qui l'a
+    confiné, et sans attendre l'échéance du blocage.
+    """
+    _exiger_admin(x_admin_token)
+    adresse = str((charge or {}).get("ip") or "").strip()
+    if not adresse:
+        raise AppError(
+            422,
+            "adresse_absente",
+            "Adresse manquante",
+            "Le champ 'ip' est requis pour libérer une adresse.",
+        )
+    resultat = await connecteurs.executer(
+        "edge.unblock_ip",
+        {"ip": adresse},
+        {"source": "operator", "kind": "manual"},
+    )
+    events.emit(
+        "edge.unblock_requested",
+        message="déblocage demandé par un opérateur",
+        ip=adresse,
+        ok=resultat.ok,
+    )
+    return resultat.resume()
 
 
 @app.post("/api/actions/reset-circuit-breaker", tags=["administration"])

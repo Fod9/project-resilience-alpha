@@ -52,9 +52,19 @@ QUANTILE_SEUIL = 99.8
 def _vecteurs_nominaux(
     duree_secondes: float = 5400.0,
     pas: float = PAS_SECONDES,
+    debit_moyen: float = 0.8,
+    supplementaires: list[list[float]] | None = None,
 ) -> tuple[list[list[float]], dict[str, float], dict[str, float]]:
-    """Projette le trafic nominal simulé sur les fenêtres glissantes."""
-    flux = flux_normal(duree_secondes=duree_secondes)
+    """Projette le trafic nominal simulé sur les fenêtres glissantes.
+
+    `debit_moyen` fixe l'ordre de grandeur du régime appris, en requêtes par
+    seconde au pic. Le laisser à la valeur du générateur revient à apprendre une
+    plateforme quasi vide : les fenêtres réellement observées sur un poste qui
+    travaille sortent alors de la plage apprise, le score d'atypie sature pour
+    *tout*, et le seuil n'a plus rien à séparer. La calibration transmet donc le
+    débit observé au lieu de subir la valeur par défaut.
+    """
+    flux = flux_normal(duree_secondes=duree_secondes, debit_moyen=debit_moyen)
     reference = Reference()
     agregateur = Agregateur(window_seconds=FENETRE_SECONDES, reference=reference)
 
@@ -72,6 +82,11 @@ def _vecteurs_nominaux(
         agregateur.enrichir_reference()
         instant += pas
 
+    if supplementaires:
+        vecteurs.extend(
+            [[float(valeur) for valeur in ligne] for ligne in supplementaires]
+        )
+
     moyennes = {
         nom: statistics.fmean(v[i] for v in vecteurs) for i, nom in enumerate(FEATURE_NAMES)
     }
@@ -87,6 +102,8 @@ def entrainer(
     *,
     n_estimateurs: int = 256,
     graine: int = 20261019,
+    debit_moyen: float = 0.8,
+    supplementaires: list[list[float]] | None = None,
 ) -> dict[str, Any]:
     """Ajuste le détecteur et renvoie l'artefact complet (sérialisable)."""
     try:
@@ -98,7 +115,9 @@ def entrainer(
             "scikit-learn et numpy sont requis pour entraîner le détecteur"
         ) from erreur
 
-    vecteurs, moyennes, ecarts = _vecteurs_nominaux(duree_secondes)
+    vecteurs, moyennes, ecarts = _vecteurs_nominaux(
+        duree_secondes, debit_moyen=debit_moyen, supplementaires=supplementaires
+    )
     if len(vecteurs) < 50:
         raise RuntimeError(
             f"historique nominal insuffisant : {len(vecteurs)} fenêtres produites"
@@ -221,6 +240,13 @@ def resume(artefact: dict[str, Any]) -> str:
         "variables les plus discriminantes :",
     ]
     lignes += [f"  - {nom:28s} {part * 100:5.1f} %" for nom, part in top]
+    if "marge_separabilite" in artefact:
+        lignes += [
+            "séparation nominal / attaque (vérifiée) :",
+            f"  score nominal le plus haut  : {artefact['score_max_nominal']:.5f}",
+            f"  attaque la plus faible      : {artefact['score_min_attaque']:.5f}",
+            f"  marge                       : {artefact['marge_separabilite']:.5f}",
+        ]
     return "\n".join(lignes)
 
 

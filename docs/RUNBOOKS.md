@@ -245,31 +245,46 @@ rechargé sa configuration.
 bordure alors qu'il n'est pas à l'origine de l'attaque.
 
 Le blocage d'adresse est géré par le fichier
-`/etc/nginx/dynamic/blocklist.conf` du conteneur de bordure ; le
+`/etc/nginx/dynamic/blocklist.map` du conteneur de bordure ; le
 surveillant interne recharge nginx à chaque changement et publie un
 témoin horodaté (`/etc/nginx/dynamic/reload-witness.json`, champs
-`ts`, `fingerprint`, `result`). Ce mécanisme est décrit dans
-`GOUVERNANCE.md` et `runbooks/PLAYBOOKS.md`.
+`ts`, `fingerprint`, `result`). L'échéance et le motif de chaque
+blocage sont tenus à part, dans
+`/etc/nginx/dynamic/blocklist-state.json`. Ce mécanisme est décrit
+dans `GOUVERNANCE.md` et `runbooks/PLAYBOOKS.md`.
 
-1. Identifier le blocage à lever : relever l'adresse et l'horodatage
-   depuis la chronologie de l'incident (R3) ou le journal de bordure :
+**Voie normale : l'échéance.** Tout blocage porte un `ttl_seconds`
+(900 s par défaut) et le moteur libère les adresses arrivées à
+échéance toutes les `EDGE_PURGE_SECONDS` (30 s). Aucune intervention
+n'est donc nécessaire : attendre l'échéance suffit, et l'événement
+`edge.block_released` en trace la levée.
+
+**Voie explicite : la libération immédiate.** Lorsque l'attente n'est
+pas acceptable, demander la levée au moteur de remédiation. La route
+est indépendante du coupe-circuit : un opérateur confiné par erreur
+doit pouvoir se rétablir sans dépendre de l'automatisme qui l'a
+confiné.
+
+1. Constater les blocages en cours (adresse, échéance, motif) :
 
    ```bash
-   docker logs alphaplat-edge | grep -i blocklist | tail -20
+   curl -s http://127.0.0.1/api/supervision/blocklist
    ```
 
-2. Retirer la ligne de l'adresse de la liste, depuis le conteneur :
+2. Demander la levée, avec le jeton d'administration :
 
    ```bash
-   docker exec alphaplat-edge sh -c \
-     'sed -i "/192\.168\.137\.20/d" /etc/nginx/dynamic/blocklist.conf'
+   curl -s -X POST http://127.0.0.1/api/ops/actions/unblock \
+     -H "Content-Type: application/json" \
+     -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+     -d '{"ip": "192.168.137.20"}'
    ```
 
-   (remplacer l'adresse cible ; une liste vide est valide et signifie
-   « aucun blocage »).
+   Le résultat porte la preuve du rechargement (`edge_reload`) et la
+   liste des blocages restants (`restantes`). Le même geste existe sous
+   forme de playbook (`PB-DEBLOCAGE`, action `edge.unblock_ip`).
 
-3. Attendre le rechargement automatique du surveillant et lire le
-   témoin publié :
+3. Vérifier que la bordure a bien appliqué la nouvelle liste :
 
    ```bash
    docker exec alphaplat-edge \
@@ -285,9 +300,29 @@ témoin horodaté (`/etc/nginx/dynamic/reload-witness.json`, champs
    réenvoyer une requête représentant ce client et s'assurer qu'elle
    n'est plus rejetée (code 403 « bloqué »).
 
+**Voie de secours : la main dans le conteneur.** Si le moteur est
+lui-même indisponible :
+
+```bash
+docker exec alphaplat-edge sh -c \
+  'sed -i "/192\.168\.137\.20/d" /etc/nginx/dynamic/blocklist.map'
+```
+
+(remplacer l'adresse cible ; une liste vide est valide et signifie
+« aucun blocage »). Retirer aussi l'entrée correspondante de
+`blocklist-state.json`, sans quoi une purge ultérieure tentera de
+libérer une adresse déjà libérée.
+
 **Vérification** : le témoin de rechargement est `applied` ; la requête
 de l'adresse anciennement bloquée aboutit ; aucun régression sur les
 autres blocages en cours.
+
+**Ce qu'il ne faut pas faire** : ajouter l'adresse de l'opérateur à la
+main dans `blocklist.map` pour la retirer, ni élargir `NEVER_BLOCK_IPS`
+à une plage entière sans motif écrit. Une adresse protégée se déclare
+dans `NEVER_BLOCK_IPS` (adresses exactes, par exemple le poste
+d'opération) ou `NEVER_BLOCK_NETWORKS` (réseaux de la plateforme), et
+tout refus est journalisé en `edge.block_refused`.
 
 ## R5 : Réinitialisation complète
 

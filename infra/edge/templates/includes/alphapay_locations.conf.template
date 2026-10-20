@@ -80,6 +80,19 @@ location /api/supervision/ {
     include includes/alphapay_proxy.conf;
 }
 
+# --- Libération d'une adresse confinée : la seule route joignable depuis une
+#     adresse inscrite sur la liste de blocage. Elle inclut uniquement les
+#     en-têtes de mandatement, pas le contrôle de liste, et reste protégée par
+#     le jeton d'administration exigé par le moteur.
+location = /api/ops/actions/unblock {
+    limit_req zone=alphapay_obs burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://remediation:8000;
+    rewrite ^/api/ops/(.*)$ /api/$1 break;
+    proxy_pass $alphapay_upstream;
+    include includes/alphapay_proxy_entetes.conf;
+}
+
 # --- Interface d'ingestion et d'administration de la remédiation.
 #     Le préfixe public `/api/ops/` est ramené sous `/api/` : l'appel
 #     `/api/ops/ingest/falco` atteint ainsi la route `/api/ingest/falco` du

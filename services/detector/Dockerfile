@@ -27,6 +27,7 @@ COPY ml/__init__.py       /app/ml/__init__.py
 COPY ml/synthetic.py      /app/ml/synthetic.py
 COPY ml/train.py          /app/ml/train.py
 COPY ml/recalibrer.py     /app/ml/recalibrer.py
+COPY ml/profils_attaque.py /app/ml/profils_attaque.py
 COPY ml/artifacts         /app/artifacts
 
 RUN groupadd --gid 10001 app \

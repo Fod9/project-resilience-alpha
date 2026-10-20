@@ -52,9 +52,15 @@ def palier(debit: int, duree: int, numero: int) -> None:
     intervalle = 1.0 / debit
     with ThreadPoolExecutor(max_workers=min(debit, 24)) as ouvriers:
         while time.time() < fin:
+            # Une iteration soumet une requete par route, soit quatre requetes.
+            # Pour tenir `debit` requetes par seconde au total, l'iteration doit
+            # durer `4 / debit` secondes, donc chaque route attend `1 / debit`.
+            # Temporiser `1 / (debit * 4)` produisait quatre fois la charge
+            # demandee : le regime dit « nominal » atteignait alors l'intensite
+            # d'une attaque, et plus rien ne les distinguait.
             for route in ROUTES:
                 ouvriers.submit(tirer, route)
-                time.sleep(intervalle / len(ROUTES))
+                time.sleep(intervalle)
     print(f"palier {numero} : termine", flush=True)
 
 

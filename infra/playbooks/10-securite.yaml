@@ -247,3 +247,40 @@ playbooks:
         on_failure: continue_anyway
         params:
           reason: "quarantaine d'exécution suspecte : analyse forensique requise"
+
+  # ---------------------------------------------------------------------------
+  #  Déblocage : rendre une adresse confinée sans attendre son échéance
+  # ---------------------------------------------------------------------------
+  #  Le blocage de bordure est temporaire par construction (`ttl_seconds`), et le
+  #  moteur purge les échéances en continu. Ce playbook sert aux cas où l'attente
+  #  n'est pas acceptable : adresse confinée par erreur, poste de l'opérateur
+  #  désigné à tort, ou démonstration rejouée plusieurs fois de suite.
+  # ---------------------------------------------------------------------------
+  - id: PB-DEBLOCAGE
+    title: "Levée d'un confinement de bordure"
+    description: >-
+      Retire une adresse de la liste de blocage appliquée par la bordure. La
+      levée est explicite et tracée : elle n'est jamais silencieuse, et elle est
+      indépendante du coupe-circuit, qui protège la reprise automatique et non
+      la main de l'opérateur.
+    verification_required: false
+    steps:
+      - id: debloquer-source
+        phase: RECOVERING
+        action: edge.unblock_ip
+        description: "Retrait de l'adresse de la liste de blocage de la bordure"
+        timeout_seconds: 15
+        on_failure: abort
+        critical: true
+        params:
+          ip: "${event.source_ip}"
+
+      - id: informer
+        phase: RECOVERING
+        action: notify.operator
+        description: "Information de l'opérateur"
+        timeout_seconds: 5
+        on_failure: continue_anyway
+        params:
+          severity: info
+          message: "Adresse ${event.source_ip} retirée de la liste de blocage."

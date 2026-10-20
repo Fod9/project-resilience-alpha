@@ -106,6 +106,81 @@ SCAN_INTERVAL_SECONDS = env_float("SCAN_INTERVAL_SECONDS", 10.0)
 CONSECUTIVE_WINDOWS = env_int("CONSECUTIVE_WINDOWS", 2)
 HISTORY_MAX = env_int("DETECTOR_HISTORY_MAX", 360)
 SOURCES_FENETRE_MAX = env_int("DETECTOR_SCORE_WINDOW", 30)
+#: Debit en dessous duquel une fenetre composee des seules routes de
+#: consultation est attribuee a l'operateur qui regarde son tableau de bord,
+#: et non a un adversaire. Un navigateur sonde quelques fois par seconde ; une
+#: attaque volumetrique vise dix a cent fois plus.
+PLAFOND_CONSULTATION_RPS = env_float("DETECTOR_OBSERVATION_MAX_RPS", 20.0)
+#: Marge minimale exigee entre le score nominal et le plus faible des profils
+#: d'attaque pour considerer le seuil comme discriminant.
+ECART_SEPARABILITE_MINIMAL = 0.01
+
+
+def _seuil_separable(
+    paquet: dict[str, Any], meta: dict[str, Any]
+) -> tuple[float, dict[str, Any]]:
+    """Verifie que le seuil du modele separe encore le nominal de l'attaque.
+
+    Une Isolation Forest sature : au-dela de la plage apprise, le score d'atypie
+    plafonne pour *tout* vecteur, au repos comme en pleine attaque. Un seuil pose
+    au-dessus de ce plafond n'est donc jamais franchi : le detecteur repond, la
+    salle d'operations affiche un score et un seuil, et rien n'est jamais
+    detecte.
+
+    Le score nominal vient des metadonnees, pas du modele serialise : c'est la
+    calibration qui l'y consigne. Sans cette valeur, on ne replace pas le seuil,
+    car le poser trop bas confinerait l'operateur au repos.
+    """
+    from ml.profils_attaque import profils_du_modele
+
+    modele = paquet["modele"]
+    normaliseur = paquet["scaler"]
+    annonce = float(paquet["seuil"])
+    vecteurs = [
+        [float(profil.get(nom, 0.0)) for nom in FEATURE_NAMES]
+        for profil in profils_du_modele().values()
+    ]
+    scores = -modele.decision_function(normaliseur.transform(vecteurs))
+    plus_faible = float(min(scores))
+    info: dict[str, Any] = {
+        "seuil_annonce": round(annonce, 6),
+        "score_min_attaque": round(plus_faible, 6),
+    }
+
+    nominal_brut = meta.get("score_max_nominal")
+    if nominal_brut is None:
+        nominal_brut = meta.get("score_max")
+    if nominal_brut is None or float(nominal_brut) <= 0.0:
+        info["verdict"] = "indeterminee"
+        info["seuil_effectif"] = round(annonce, 6)
+        info["message"] = (
+            "score nominal absent des metadonnees : seuil laisse en place, "
+            "recalibrer le modele (python -m ml.recalibrer) avant de conclure"
+        )
+        return annonce, info
+
+    nominal = float(nominal_brut)
+    info["score_max_nominal"] = round(nominal, 6)
+    if annonce < plus_faible:
+        info["verdict"] = "separable"
+        info["seuil_effectif"] = round(annonce, 6)
+        return annonce, info
+
+    marge = plus_faible - nominal
+    info["marge_separabilite"] = round(marge, 6)
+    if marge > ECART_SEPARABILITE_MINIMAL:
+        corrige = nominal + 0.25 * marge
+        info["verdict"] = "corrige"
+        info["seuil_effectif"] = round(corrige, 6)
+        return corrige, info
+
+    info["verdict"] = "non_separable"
+    info["seuil_effectif"] = round(annonce, 6)
+    info["message"] = (
+        "aucune marge entre le nominal et les profils d'attaque : le seuil ne "
+        "peut pas etre rendu discriminant, recalibrer le modele"
+    )
+    return annonce, info
 
 
 # =============================================================================
@@ -129,12 +204,17 @@ def _charger_modele() -> None:
                     meta = json.load(fichier)
             _etat["modele"] = paquet
             _etat["meta"] = meta
-            ANOMALY_THRESHOLD.labels(service="detector").set(float(paquet["seuil"]))
+            seuil, verdict = _seuil_separable(paquet, meta)
+            constat = str(verdict.pop("message", "") or "seuil verifie")
+            journal = events.warn if verdict.get("verdict") != "separable" else events.emit
+            journal("detector.threshold_checked", message=constat, source=chemin_modele, **verdict)
+            paquet["seuil"] = seuil
+            ANOMALY_THRESHOLD.labels(service="detector").set(float(seuil))
             events.emit(
                 "detector.model.loaded",
                 model=paquet.get("version"),
                 source=chemin_modele,
-                threshold=float(paquet["seuil"]),
+                threshold=float(seuil),
                 features=len(paquet["feature_names"]),
             )
             return
@@ -276,8 +356,43 @@ async def _cycle() -> None:
         )
         return
 
+    # Une fenetre sans aucun evenement de bordure ne decrit aucun comportement :
+    # toutes les variables valent zero, le vecteur sort du domaine
+    # d'entrainement et le modele le note comme une anomalie franche. C'est par
+    # ce chemin qu'un poste au repos se fait declarer en rafale. On ne note donc
+    # que ce qui a ete reellement observe.
+    if int(fenetre.get("edge_events_in_window") or 0) <= 0:
+        _etat["consecutives"] = 0
+        events.emit(
+            "detector.without_traffic",
+            window_end=fenetre.get("window_end"),
+            message="fenetre sans trafic de bordure : non notee",
+        )
+        return
+
+    diagnostics = fenetre.get("diagnostics") or {}
+    # Meme raisonnement pour une fenetre composee des seules routes de
+    # consultation : elle decrit un operateur qui regarde son tableau de bord,
+    # pas un adversaire. La noter revient a confiner l'operateur, puis a nourrir
+    # l'anomalie par le refus ainsi produit.
+    #
+    # La garde est conditionnee au debit : une rafale dirigee contre ces memes
+    # routes reste une rafale. Un navigateur qui consulte son tableau de bord
+    # produit quelques requetes par seconde, jamais le debit d'une attaque
+    # volumetrique.
     vecteur = fenetre.get("features") or {}
     if not vecteur:
+        return
+    debit = float(vecteur.get("requests_per_second") or 0.0)
+    if diagnostics.get("observation_seule") and debit < PLAFOND_CONSULTATION_RPS:
+        _etat["consecutives"] = 0
+        events.emit(
+            "detector.observation_only",
+            window_end=fenetre.get("window_end"),
+            message="fenetre composee des seules routes de consultation : non notee",
+            requests_per_second=debit,
+            top_paths=diagnostics.get("top_paths"),
+        )
         return
 
     valeurs = vecteur_vers_liste(vecteur)
@@ -295,7 +410,6 @@ async def _cycle() -> None:
 
     maintenant = time.time()
     top = _expliquer(meta, vecteur)
-    diagnostics = fenetre.get("diagnostics") or {}
     rapport = {
         "detected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "window_start": fenetre.get("window_start"),

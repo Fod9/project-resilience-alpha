@@ -98,11 +98,13 @@ log_format alphapay_json escape=json
         '"path":"$uri",'
         '"route":"$alphapay_route",'
         '"status":$status,'
+        '"upstream_status":"$alphapay_upstream_seen",'
+        '"blocked_ip":$alphapay_blocked,'
+        '"waf_blocked":$alphapay_waf_blocked,'
         '"duration_s":$request_time,'
         '"bytes_in":$request_length,'
         '"bytes_out":$bytes_sent,'
         '"user_agent":"$http_user_agent",'
-        '"waf_blocked":$alphapay_waf_blocked,'
         '"redteam_marker":"$http_x_alphapay_redteam"'
       '}'
     '}';
@@ -131,9 +133,10 @@ server {
     client_max_body_size 256k;
     keepalive_timeout 30s;
 
-    if ($alphapay_blocked) {
-        return 403;
-    }
+    # La liste de blocage n'est plus évaluée ici : chaque emplacement la
+    # contrôle via `includes/alphapay_proxy.conf`, ce qui laisse joignable la
+    # route de libération (`/api/ops/actions/unblock`) depuis une adresse
+    # confinée.
 
     limit_conn alphapay_conn 60;
 
@@ -160,9 +163,7 @@ server {
     client_max_body_size 256k;
     keepalive_timeout 30s;
 
-    if ($alphapay_blocked) {
-        return 403;
-    }
+    # Idem serveur HTTP : le contrôle de liste est porté par les emplacements.
 
     limit_conn alphapay_conn 60;
 

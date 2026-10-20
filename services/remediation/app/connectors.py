@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import hashlib
+import ipaddress
 import json
 import os
 import secrets
@@ -90,6 +91,19 @@ class Connecteurs:
             for ip in env_str("NEVER_BLOCK_IPS", "127.0.0.1,::1").split(",")
             if ip.strip()
         }
+        # Réseaux jamais bloquables (notation CIDR). Ils couvrent l'infrastructure
+        # de la plateforme elle-même : bloquer l'adresse d'un de ses propres
+        # services ne protège rien et coupe l'observabilité. Le poste de
+        # l'opérateur s'ajoute à NEVER_BLOCK_IPS, en adresse exacte.
+        self.never_block_reseaux: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        for reseau in env_str("NEVER_BLOCK_NETWORKS", "").split(","):
+            reseau = reseau.strip()
+            if not reseau:
+                continue
+            try:
+                self.never_block_reseaux.append(ipaddress.ip_network(reseau, strict=False))
+            except ValueError:
+                continue
         self.managed = {
             nom.strip()
             for nom in env_str("MANAGED_CONTAINERS", "").split(",")
@@ -171,6 +185,100 @@ class Connecteurs:
     def _chemin_temoin(self) -> str:
         return os.path.join(self.edge_state_dir, "reload-witness.json")
 
+    def _chemin_etat(self) -> str:
+        """Fichier compagnon : échéance et justification de chaque blocage.
+
+        Le fichier appliqué par nginx ne peut pas porter ces informations : sa
+        syntaxe est celle d'une `map`, deux jetons par ligne, et il est relu à
+        chaque rechargement. Tenir l'état à part permet d'expirer un blocage
+        sans avoir à relire une durée dans une carte nginx, qui ne connaît pas
+        la notion de date.
+        """
+        return os.path.join(self.edge_state_dir, "blocklist-state.json")
+
+    def _lire_etat(self) -> dict[str, dict[str, Any]]:
+        try:
+            with open(self._chemin_etat(), encoding="utf-8") as fichier:
+                contenu = json.load(fichier)
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(contenu, dict):
+            return {}
+        return {
+            str(adresse): dict(meta)
+            for adresse, meta in contenu.items()
+            if isinstance(meta, dict)
+        }
+
+    def _ecrire_etat(self, etat: dict[str, dict[str, Any]]) -> None:
+        chemin = self._chemin_etat()
+        os.makedirs(os.path.dirname(chemin), exist_ok=True)
+        provisoire = f"{chemin}.{uuid.uuid4().hex}.tmp"
+        with open(provisoire, "w", encoding="utf-8") as fichier:
+            json.dump(etat, fichier, ensure_ascii=False, indent=2, sort_keys=True)
+            fichier.flush()
+            os.fsync(fichier.fileno())
+        os.replace(provisoire, chemin)
+
+    def blocages_en_cours(self) -> list[dict[str, Any]]:
+        """État lisible par l'opérateur : qui est bloqué, jusqu'à quand, pourquoi."""
+        etat = self._lire_etat()
+        maintenant = time.time()
+        lignes: list[dict[str, Any]] = []
+        for adresse in sorted(self._lire_entrees()):
+            meta = etat.get(adresse) or {}
+            echeance = float(meta.get("expire_at") or 0.0)
+            lignes.append(
+                {
+                    "ip": adresse,
+                    "expire_at": echeance or None,
+                    "expire_le": meta.get("expire_le") or "",
+                    "secondes_restantes": (
+                        max(0, int(echeance - maintenant)) if echeance else None
+                    ),
+                    "raison": meta.get("raison") or "",
+                    "incident": meta.get("incident") or "",
+                    # Un blocage sans échéance connue ne peut pas expirer : il
+                    # est signalé comme tel plutôt que présenté comme temporaire.
+                    "permanent": not echeance,
+                }
+            )
+        return lignes
+
+    async def expirer_blocages(self) -> list[str]:
+        """Retire les blocages arrivés à échéance. Rend les adresses libérées.
+
+        Sans cette purge, `ttl_seconds` n'est qu'une intention : la durée est
+        écrite dans la `map` de nginx, qui ne connaît pas la notion de date, et
+        tout blocage devient définitif. C'est acceptable contre une attaque, pas
+        pour un opérateur confiné par erreur.
+        """
+        maintenant = time.time()
+        etat = self._lire_etat()
+        expirees = [
+            adresse
+            for adresse, meta in etat.items()
+            if float(meta.get("expire_at") or 0.0) and float(meta["expire_at"]) <= maintenant
+        ]
+        if not expirees:
+            return []
+
+        entrees = self._lire_entrees()
+        for adresse in expirees:
+            entrees.pop(adresse, None)
+            etat.pop(adresse, None)
+        contenu = self._ecrire_entrees(entrees)
+        empreinte = hashlib.md5(contenu).hexdigest()
+        confirmation = await self._attendre_rechargement(empreinte)
+        self._ecrire_etat(etat)
+        self.events.emit(
+            "edge.block_expired",
+            message="blocage arrivé à échéance, adresse libérée à la bordure",
+            adresses=expirees,
+            edge_reload=confirmation,
+        )
+        return expirees
+
     def _lire_entrees(self) -> dict[str, int]:
         chemin = self._chemin_liste()
         entrees: dict[str, int] = {}
@@ -220,17 +328,44 @@ class Connecteurs:
             await asyncio.sleep(0.4)
         return dernier or {"result": "temoin-absent"}
 
+    def _raison_protection(self, adresse: str) -> str | None:
+        """Motif de protection d'une adresse, ou None si elle est bloquable.
+
+        Guardrail du cahier des charges : certaines adresses ne peuvent jamais
+        être confinées, sans quoi la plateforme se couperait l'accès à elle-même
+        ou à son opérateur.
+        """
+        if adresse in self.never_block:
+            return "liste blanche NEVER_BLOCK_IPS"
+        try:
+            candidate = ipaddress.ip_address(adresse)
+        except ValueError:
+            return None
+        for reseau in self.never_block_reseaux:
+            if candidate.version == reseau.version and candidate in reseau:
+                return f"réseau protégé {reseau}"
+        return None
+
     async def _edge_block_ip(self, params: dict[str, Any], _: dict[str, Any]) -> Resultat:
         adresse = str(params.get("ip") or "").strip()
         if not adresse:
             raise ActionRefusee("adresse IP absente")
-        if adresse in self.never_block:
+        protection = self._raison_protection(adresse)
+        if protection is not None:
+            # Le refus est journalisé : une tentative de blocage sur une adresse
+            # protégée est un événement en soi, pas un silence.
+            self.events.warn(
+                "edge.block_refused",
+                message="blocage refusé : adresse protégée",
+                ip=adresse,
+                raison=protection,
+            )
             return Resultat(
                 ok=True,
                 action="edge.block_ip",
                 skipped=True,
-                detail=f"{adresse} figure dans la liste des adresses jamais bloquées",
-                evidence={"ip": adresse, "protected": True},
+                detail=f"{adresse} figure parmi les adresses jamais bloquées ({protection})",
+                evidence={"ip": adresse, "protected": True, "raison": protection},
             )
         ttl = int(params.get("ttl_seconds") or 900)
         entrees = self._lire_entrees()
@@ -242,8 +377,22 @@ class Connecteurs:
                 detail=f"{adresse} déjà bloquée",
                 evidence={"ip": adresse, "already_blocked": True},
             )
-        entrees[adresse] = int(time.time()) + ttl
+        echeance = time.time() + max(0, ttl)
+        entrees[adresse] = int(echeance)
         contenu = self._ecrire_entrees(entrees)
+        # L'échéance est tenue hors du fichier appliqué : nginx ne connaît pas la
+        # notion de date, et sans cet état un blocage serait définitif.
+        etat = self._lire_etat()
+        etat[adresse] = {
+            "expire_at": round(echeance, 3),
+            "expire_le": dt.datetime.fromtimestamp(
+                echeance, dt.timezone.utc
+            ).isoformat(),
+            "duree_secondes": ttl,
+            "raison": str(params.get("reason") or ""),
+            "incident": str(params.get("incident_id") or ""),
+        }
+        self._ecrire_etat(etat)
         empreinte = hashlib.md5(contenu).hexdigest()
         confirmation = await self._attendre_rechargement(empreinte)
         applique = confirmation.get("result") == "applied"
@@ -258,6 +407,7 @@ class Connecteurs:
             evidence={
                 "ip": adresse,
                 "ttl_seconds": ttl,
+                "expire_le": etat[adresse]["expire_le"],
                 "fingerprint": empreinte,
                 "edge_reload": confirmation,
             },
@@ -266,7 +416,8 @@ class Connecteurs:
     async def _edge_unblock_ip(self, params: dict[str, Any], _: dict[str, Any]) -> Resultat:
         adresse = str(params.get("ip") or "").strip()
         entrees = self._lire_entrees()
-        if adresse not in entrees:
+        etat = self._lire_etat()
+        if adresse not in entrees and adresse not in etat:
             return Resultat(
                 ok=True,
                 action="edge.unblock_ip",
@@ -274,15 +425,25 @@ class Connecteurs:
                 detail=f"{adresse} n'était pas bloquée",
                 evidence={"ip": adresse},
             )
-        entrees.pop(adresse)
+        entrees.pop(adresse, None)
+        etat.pop(adresse, None)
         contenu = self._ecrire_entrees(entrees)
+        # L'état est nettoyé en même temps que la règle : le laisser derrière
+        # ferait expirer plus tard une adresse déjà libérée, et l'opérateur
+        # verrait un blocage fantôme dans la liste.
+        self._ecrire_etat(etat)
         empreinte = hashlib.md5(contenu).hexdigest()
         confirmation = await self._attendre_rechargement(empreinte)
+        reste = sorted(self._lire_entrees())
         return Resultat(
             ok=confirmation.get("result") == "applied",
             action="edge.unblock_ip",
             detail=f"{adresse} débloquée",
-            evidence={"ip": adresse, "edge_reload": confirmation},
+            evidence={
+                "ip": adresse,
+                "restantes": reste,
+                "edge_reload": confirmation,
+            },
         )
 
     async def _edge_status(self, _: dict[str, Any], __: dict[str, Any]) -> Resultat:

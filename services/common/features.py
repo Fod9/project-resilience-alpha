@@ -56,6 +56,72 @@ FAMILLES_INJECTION = (
 
 FAMILLES_XSS = ("attack-xss",)
 
+#: Routes que l'observatoire de la plateforme appelle sur lui-meme : la salle
+#: d'operations, ses sondes et les interfaces d'exploitation. Une fenetre qui ne
+#: contient *que* ces routes decrit un operateur qui regarde, jamais un
+#: adversaire. Sans cette distinction, la propre consultation du tableau de bord
+#: devient le trafic le plus actif de la fenetre, et c'est le poste de
+#: l'operateur qui se fait confiner par la politique de rafale.
+PREFIXES_OBSERVATION: tuple[str, ...] = (
+    "/api/supervision",
+    "/api/telemetry",
+    "/api/detector",
+    "/api/ops",
+    "/assets/",
+    "/ops",
+    "/pay",
+    "/healthz",
+    "/favicon",
+)
+
+
+def route_d_observation(chemin: str) -> bool:
+    """Vrai si le chemin appartient a la consultation de la plateforme."""
+    chemin = str(chemin or "")
+    if chemin in {"", "/"}:
+        return True
+    return chemin.startswith(PREFIXES_OBSERVATION)
+
+
+def erreur_applicative(evenement: "Evenement") -> bool:
+    """Vrai si la reponse traduit une erreur subie, et non un refus de defense.
+
+    Trois familles de reponses d'echec coexistent a la bordure, et les
+    confondre fausse la lecture :
+
+    * les erreurs de l'amont applicatif (4xx et 5xx produits par un service) :
+      ce sont elles que la variable doit mesurer ;
+    * la limitation de debit (503) : elle traduit une surcharge, donc un
+      symptome de l'attaque, et doit compter ;
+    * les refus de la defense elle-meme (liste de blocage, WAF) : les compter
+      rend la defense auto-entretenue. Le moteur confine une adresse, le refus
+      qui en resulte eleve le taux d'erreur, et cette hausse justifie le
+      blocage suivant. C'est le mecanisme qui confine l'operateur en boucle.
+    """
+    statut = int(evenement.fields.get("status") or 0)
+    if statut < 400:
+        return False
+    # Liste de blocage : refus applique par la plateforme a elle-meme.
+    if int(evenement.fields.get("blocked_ip") or 0) == 1:
+        return False
+    amont = str(evenement.fields.get("upstream_status") or "").strip()
+    if not amont:
+        # Journal anterieur a la tracabilite de l'amont : on retombe sur la
+        # regle precedente, moins juste mais sans casser la lecture.
+        return True
+    # `$upstream_status` peut lister plusieurs essais, separes par des virgules.
+    dernier = amont.split(",")[-1].strip()
+    if dernier in {"", "-"}:
+        # Aucun amont sollicite : le refus vient de la bordure. La limitation de
+        # debit signale une surcharge et compte comme une erreur subie ; un 403
+        # du WAF est une decision de defense et ne compte pas ici (la variable
+        # `waf_block_ratio` le mesure separement).
+        return statut == 503
+    try:
+        return int(dernier) >= 400
+    except ValueError:
+        return True
+
 
 @dataclass(slots=True)
 class Evenement:
@@ -183,8 +249,10 @@ class Agregateur:
 
         # --- trafic vu par la bordure
         nb_edge = len(requetes_edge)
-        statuts = [int(e.fields.get("status") or 0) for e in requetes_edge]
-        erreurs = sum(1 for s in statuts if s >= 400)
+        # Seules les erreurs produites par un amont comptent : les refus de la
+        # bordure (limitation de debit, liste de blocage, WAF) ne renseignent pas
+        # sur la sante de la plateforme et rendraient la defense auto-entretenue.
+        erreurs = sum(1 for e in requetes_edge if erreur_applicative(e))
         latences = [float(e.fields.get("duration_s") or 0.0) * 1000.0 for e in requetes_edge]
         adresses = {str(e.fields.get("source_ip") or "") for e in requetes_edge}
         adresses.discard("")
@@ -200,7 +268,17 @@ class Agregateur:
             chemin = str(e.fields.get("path") or "")
             if chemin:
                 compteur_chemins[chemin] = compteur_chemins.get(chemin, 0) + 1
-        blocages = sum(1 for e in requetes_edge if int(e.fields.get("waf_blocked") or 0) == 1)
+        # Un 403 sans amont est un refus de la bordure, de deux origines
+        # possibles : la liste de blocage, ou le WAF. Seul le second est une
+        # observation. Compter le premier reviendrait a mesurer la defense comme
+        # une attaque, et a faire tourner la politique d'injection sur ses
+        # propres blocages.
+        blocages = sum(
+            1
+            for e in requetes_edge
+            if int(e.fields.get("waf_blocked") or 0) == 1
+            and int(e.fields.get("blocked_ip") or 0) == 0
+        )
 
         # --- authentification
         echecs = sum(1 for e in tentatives if e.fields.get("outcome") != "success")
@@ -281,12 +359,26 @@ class Agregateur:
                     identite_compteur[identifiant] = identite_compteur.get(identifiant, 0) + 1
 
         principaux = _principaux(ip_compteur)
+        # Une fenetre entierement composee des routes de consultation decrit un
+        # operateur qui regarde la plateforme. La designer comme anormale
+        # reviendrait a confiner l'operateur pour avoir consulte son tableau de
+        # bord, puis a alimenter l'anomalie par le refus ainsi produit.
+        chemins_observes = sum(
+            nombre
+            for chemin, nombre in chemin_compteur.items()
+            if route_d_observation(chemin)
+        )
+        total_chemins = sum(chemin_compteur.values())
+        part_observation = chemins_observes / total_chemins if total_chemins else 0.0
         return {
             "top_source_ips": principaux,
             "dominant_source_ip": principaux[0]["value"] if principaux else "",
             "source_ips_distinctes": len(ip_compteur),
             "top_paths": _principaux(chemin_compteur),
             "top_identities": _principaux(identite_compteur),
+            "edge_events": sum(ip_compteur.values()),
+            "part_observation": round(part_observation, 6),
+            "observation_seule": bool(total_chemins) and chemins_observes >= total_chemins,
         }
 
     def enrichir_reference(self) -> None:

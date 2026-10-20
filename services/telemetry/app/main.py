@@ -231,6 +231,7 @@ def _cycle(suiveur: SuiveurDeFichiers) -> None:
     _dernier_vecteur = vecteur
     _publier_metriques(vecteur)
 
+    diagnostics = _agregateur.diagnostics()
     fenetre = {
         "window_start": dt.datetime.fromtimestamp(
             maintenant - WINDOW_SECONDS, dt.timezone.utc
@@ -238,9 +239,13 @@ def _cycle(suiveur: SuiveurDeFichiers) -> None:
         "window_end": dt.datetime.fromtimestamp(maintenant, dt.timezone.utc).isoformat(),
         "window_seconds": WINDOW_SECONDS,
         "events_in_window": len(_agregateur),
+        # Nombre d'evenements *de bordure* dans la fenetre. Le detecteur s'en
+        # sert pour refuser de noter une fenetre sans trafic : un vecteur tout a
+        # zero n'est pas un comportement, c'est une absence de mesure.
+        "edge_events_in_window": int(diagnostics.get("edge_events") or 0),
         "event_counts": dict(_compteurs),
         "features": {nom: round(float(valeur), 6) for nom, valeur in vecteur.items()},
-        "diagnostics": _agregateur.diagnostics(),
+        "diagnostics": diagnostics,
         # Tant que la mémoire longue n'est pas établie, la fenêtre est signalée
         # comme non exploitable : le détecteur l'ignorera plutôt que de produire
         # une anomalie fantôme à chaque redémarrage.

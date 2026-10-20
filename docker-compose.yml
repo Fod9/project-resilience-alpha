@@ -465,7 +465,21 @@ services:
       # Seules les adresses dont le blocage couperait le jury ou l'hôte sont
       # protégées. Le poste attaquant est délibérément bloquable : c'est la
       # preuve de confinement attendue.
+      #
+      # Ajoutez ici l'adresse du poste depuis lequel vous pilotez la
+      # démonstration si elle doit rester joignable pendant l'attaque, par
+      # exemple `192.168.137.1,192.168.137.20`. Une tentative de blocage sur ces
+      # adresses est refusée et journalisée (`edge.block_refused`).
       NEVER_BLOCK_IPS: "127.0.0.1,::1,192.168.137.1"
+      # Réseaux jamais bloquables : l'infrastructure de la plateforme
+      # elle-même. Bloquer un de ses propres services ne protège rien et coupe
+      # l'observabilité. Les réseaux du banc offensif (172.20/16) et de la
+      # bordure (172.21/16) restent, eux, bloquables : la preuve de confinement
+      # de la démonstration passe par là.
+      NEVER_BLOCK_NETWORKS: "172.22.0.0/16,172.23.0.0/16,172.24.0.0/16,172.25.0.0/16"
+      # Cadence de purge des blocages arrivés à échéance : un confinement
+      # temporaire qui ne se lève jamais est un confinement définitif.
+      EDGE_PURGE_SECONDS: "30"
       MAX_ACTIONS_PER_WINDOW: "6"
       ACTION_WINDOW_SECONDS: "300"
       MTTR_TARGET_SECONDS: ${MTTR_TARGET_SECONDS:-180}

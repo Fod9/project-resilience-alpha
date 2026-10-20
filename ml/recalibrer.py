@@ -27,6 +27,12 @@ import urllib.request
 from typing import Any
 
 from common.features import FEATURE_NAMES
+from ml.profils_attaque import profils_du_modele
+
+#: Marge minimale exigee entre le score nominal le plus haut et la plus faible
+#: des attaques de reference. En dessous, la separation n'est pas exploitable et
+#: la calibration doit echouer plutot que de publier un seuil inerte.
+ECART_MINIMAL = 0.01
 
 
 def ajuster_sur_mesures(
@@ -43,7 +49,9 @@ def ajuster_sur_mesures(
     * le **modèle** est entraîné sur le générateur de trafic, qui décrit une
       plateforme en fonctionnement : débit variable, plusieurs adresses,
       latences étendues. C'est de cette variété que vient la capacité de
-      distinguer ;
+      distinguer. Les fenêtres réellement observées s'y ajoutent : le générateur
+      apporte la variété, le relevé la couverture du poste, sans quoi le régime
+      mesuré sort de la plage apprise et le score sature partout ;
     * le **seuil** est réglé sur les fenêtres réellement observées, ce qui
       garantit que le repos de *ce* poste reste en dessous.
 
@@ -75,8 +83,24 @@ def ajuster_sur_mesures(
     # prend de quoi couvrir un large eventail de charge, avec un plancher lie au
     # nombre de fenetres reelles pour rester proportionne.
     duree_simulee = max(4500.0, 30.0 * len(vecteurs_mesures))
+    # Le regime appris doit couvrir le regime reellement observe. Sans cela, le
+    # generateur simule une plateforme au repos (~1 req/s au pic) alors que le
+    # poste en produit dix a trente : toutes les fenetres reelles sortent de la
+    # plage apprise, le score d'atypie sature, et le seuil n'a plus rien a
+    # separer. On transmet donc l'ordre de grandeur observe.
+    debits = [float(v.get("requests_per_second", 0.0)) for v in vecteurs_mesures]
+    debit_observe = max(0.8, float(np.percentile(debits, 90))) if debits else 0.8
     artefact = soi.entrainer(
-        duree_simulee, n_estimateurs=n_estimateurs, graine=graine
+        duree_simulee,
+        n_estimateurs=n_estimateurs,
+        graine=graine,
+        debit_moyen=debit_observe,
+        # Les fenetres reellement observees entrent dans l'apprentissage, en plus
+        # du generateur. Sans elles, le regime mesure sort de la plage apprise :
+        # le score d'atypie sature pour le repos comme pour l'attaque, et le
+        # seuil n'a plus rien a separer. Le generateur apporte la variete, le
+        # releve apporte la couverture du poste.
+        supplementaires=[list(ligne) for ligne in brut],
     )
 
     # 2. Le seuil vient des fenetres reelles.
@@ -84,12 +108,55 @@ def ajuster_sur_mesures(
     normaliseur = artefact["scaler"]
     scores = -modele.decision_function(normaliseur.transform(brut))
 
-    seuil = float(np.max(scores)) + max(0.05, float(np.std(scores)) * 0.5)
+    # 2 bis. Verifier que ce seuil separe encore quelque chose.
+    #
+    # Un seuil calibre uniquement « au-dessus du nominal » peut passer au-dessus
+    # du maximum atteignable par le modele : le score d'atypie d'une Isolation
+    # Forest sature des que le vecteur sort de la plage apprise, si bien que le
+    # maximum observe sur le repos *est* le plafond. La comparaison
+    # `score >= seuil` devient alors fausse en permanence, et le dispositif
+    # n'alerte plus jamais tout en paraissant arme.
+    #
+    # On confronte donc le seuil aux profils d'attaque de reference : il doit
+    # passer au-dessus du nominal et rester en dessous de la plus faible des
+    # attaques. Sinon la calibration echoue, et c'est voulu.
+    profils_modele = profils_du_modele()
+    vecteurs_attaques = np.asarray(
+        [
+            [float(profil.get(nom, 0.0)) for nom in FEATURE_NAMES]
+            for profil in profils_modele.values()
+        ],
+        dtype=float,
+    )
+    scores_attaque = -modele.decision_function(normaliseur.transform(vecteurs_attaques))
+
+    score_max_nominal = float(np.max(scores))
+    score_min_attaque = float(np.min(scores_attaque))
+    marge = score_min_attaque - score_max_nominal
+    if marge <= ECART_MINIMAL:
+        raise RuntimeError(
+            "calibration refusee : le seuil ne separe plus le nominal de "
+            f"l'attaque (nominal max {score_max_nominal:.5f}, attaque min "
+            f"{score_min_attaque:.5f}, marge {marge:.5f}). Un tel seuil "
+            "n'alerterait jamais. Reentrainer le modele sur un trafic nominal "
+            "qui couvre le regime de repos avant de recalibrer."
+        )
+
+    # On place le seuil a un quart de la marge au-dessus du nominal : assez haut
+    # pour ne pas confondre la pointe legitime avec une attaque, assez bas pour
+    # que la plus faible des attaques connues le franchisse.
+    seuil = score_max_nominal + max(ECART_MINIMAL, 0.25 * marge)
     artefact["seuil"] = seuil
     artefact["score_moyen"] = float(np.mean(scores))
     artefact["score_ecart_type"] = float(np.std(scores))
     artefact["score_min"] = float(np.min(scores))
     artefact["score_max"] = float(np.max(scores))
+    # Traces de la verification de separabilite : sans elles, un seuil inerte
+    # resterait indiscernable d'un seuil simplement prudent.
+    artefact["score_max_nominal"] = score_max_nominal
+    artefact["score_min_attaque"] = score_min_attaque
+    artefact["marge_separabilite"] = marge
+    artefact["profils_attaque"] = sorted(profils_modele)
     artefact["taux_detection_nominal_pct"] = float(np.mean(scores > seuil)) * 100.0
     artefact["n_fenetres_reelles"] = len(vecteurs_mesures)
 
@@ -104,7 +171,19 @@ def _lire_historique(base: str, limite: int) -> list[dict[str, Any]]:
     fenetres = charge.get("windows") or []
     # Les fenêtres de mise en route sont écartées : leurs variables dérivées de
     # la mémoire longue n'ont pas de sens, et les inclure corromprait la normale.
-    return [f for f in fenetres if not f.get("warming_up") and f.get("features")]
+    # Celles sans aucun événement de bordure le sont aussi : leur projection vaut
+    # zéro partout et décrit un poste qui ne reçoit rien, pas un régime nominal.
+    # Les garder apprendrait au modèle que « rien » est un comportement ordinaire,
+    # et rendrait toute attaque discernable d'un silence.
+    exploitables: list[dict[str, Any]] = []
+    for fenetre in fenetres:
+        if fenetre.get("warming_up") or not fenetre.get("features"):
+            continue
+        diagnostics = fenetre.get("diagnostics") or {}
+        if not int(diagnostics.get("edge_events") or 0):
+            continue
+        exploitables.append(fenetre)
+    return exploitables
 
 
 def main() -> int:
