@@ -387,7 +387,7 @@ async def _traiter(sac: dict[str, Any]) -> None:
         politique = Politique(
             id="DECLENCHEMENT-MANUEL",
             title=f"Déclenchement manuel de {force}",
-            severity="warning",
+            severity="medium",
             priority=0,
             sources=(),
             match="any",

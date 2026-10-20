@@ -91,7 +91,7 @@ policies:
       redémarrage vérifié : si la dégradation provient d'un état interne
       accumulé, elle disparaît ; sinon, la vérification échoue et la main est
       rendue à l'opérateur, ce qui évite de boucler indéfiniment.
-    severity: warning
+    severity: medium
     priority: 80
     sources: [alertmanager]
     match: any
