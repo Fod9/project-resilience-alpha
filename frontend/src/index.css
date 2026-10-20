@@ -58,8 +58,25 @@
     font-size: clamp(2.75rem, 6vw, 5.125rem);
   }
 
+  /* --- Intitulé -------------------------------------------------------------
+     Compose en sans-serif, jamais en slab serif : dans la maquette, la
+     typographie a empattements est reservee au mot d'etat et aux grands
+     chiffres. Tous les intitulés courants sont en sans-serif. */
   .etiquette {
-    @apply font-display uppercase tracking-marque text-[0.6875rem] text-ink-dim;
+    @apply font-sans font-semibold uppercase tracking-marque text-[0.6875rem] text-ink-dim;
+  }
+
+  /* --- Bloc de feuillet -----------------------------------------------------
+     La maquette ne pose pas de cadre autour des blocs : un registre se
+     structure par le filet imprime, pas par des boites. Le cadre est reserve
+     aux deux seuls endroits ou la maquette en dessine un : la carte d'etat et
+     le panneau de l'assistant. */
+  .bloc {
+    @apply flex flex-col min-h-0;
+  }
+
+  .bloc-titre {
+    @apply flex shrink-0 items-center justify-between gap-3;
   }
 
   /* --- Feuille : la surface de base ----------------------------------------
@@ -100,8 +117,15 @@
     @apply relative h-[132px] w-full;
   }
 
+  /* --- Jalon de la bande-enregistreur ---------------------------------------
+     Un losange, comme sur la maquette : un carre pose sur la pointe, centre
+     sur l'axe. Le clip-path est prefere a une rotation, qui entrerait en
+     conflit avec le positionnement en pourcentage du parent. */
   .jalon {
-    @apply absolute top-0 bottom-0 w-px;
+    @apply absolute top-1/2 h-2.5 w-2.5;
+    margin-top: -5px;
+    margin-left: -5px;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
   }
 
   .jalon-etiq {

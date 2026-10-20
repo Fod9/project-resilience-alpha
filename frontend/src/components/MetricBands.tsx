@@ -128,13 +128,13 @@ export function PlaybookPanel({
   const etat = incident?.state ?? "·";
 
   return (
-    <section className="carte flex flex-col min-h-0">
-      <div className="carte-entete shrink-0">
-        <span className="etiquette">Playbook de reprise</span>
-        <span className="text-xs font-mono text-ink-dim">{incident?.playbook_id ?? "en attente"}</span>
+    <section className="bloc gap-2">
+      <div className="bloc-titre">
+        <span className="etiquette">Progression de la reprise</span>
+        <span className="font-mono text-[0.625rem] text-ink-dim">{incident?.playbook_id ?? "en attente"}</span>
       </div>
 
-      <div className="p-3 space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         <div className="flex items-center gap-2">
           {/* `engage` distingue un playbook qui n'a rien fait d'un playbook qui
               a commencé : la barre passe alors du gris au laiton. */}

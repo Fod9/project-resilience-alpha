@@ -44,12 +44,8 @@ export default function ServiceRail({
   if (incident?.playbook_id?.includes("A3")) concernes.add("edge");
 
   return (
-    <aside className="carte overflow-hidden flex flex-col min-h-0">
-      <div className="carte-entete shrink-0">
-        <span className="etiquette">Composants</span>
-        <span className="text-xs text-ink-dim tabular">{composants.length}</span>
-      </div>
-      <div className="overflow-y-auto">
+    <aside className="bloc shrink-0">
+      <div>
         {COLONNES.map(({ cle, libelle }) => {
           const lot = composants.filter((c) => c.colonne === cle);
           if (lot.length === 0) return null;

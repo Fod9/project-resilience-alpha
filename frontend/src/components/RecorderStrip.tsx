@@ -45,10 +45,10 @@ export default function RecorderStrip({
   const utiles = evenements.filter((e) => e.kind in JALONS_REMARQUABLES);
   if (incident === null && utiles.length === 0) {
     return (
-      <section className="carte">
-        <div className="carte-entete">
+      <section className="bloc gap-2">
+        <div className="bloc-titre">
           <span className="etiquette">Bande-enregistreur</span>
-          <span className="text-xs text-ink-dim">aucun incident enregistré</span>
+          <span className="font-mono text-[0.625rem] text-ink-dim">aucun incident enregistré</span>
         </div>
         <div className="h-[132px] flex items-center justify-center text-sm text-ink-dim">
           La chronologie apparaîtra ici dès le premier signalement.
@@ -73,10 +73,10 @@ export default function RecorderStrip({
   const mttrFin = incident?.mttr_ms != null ? ouvert + incident.mttr_ms : null;
 
   return (
-    <section className="carte">
-      <div className="carte-entete">
+    <section className="bloc gap-2">
+      <div className="bloc-titre">
         <span className="etiquette">Bande-enregistreur</span>
-        <span className="text-xs text-ink-dim tabular">
+        <span className="font-mono text-[0.625rem] text-ink-dim tabular">
           {incident ? `incident ${incident.id.slice(0, 8)}` : "derniers événements"}
           {" · "}
           {utiles.length} jalons
@@ -114,7 +114,7 @@ export default function RecorderStrip({
             if (Number.isNaN(t)) return null;
             const x = position(t);
             const couleur = COULEUR_SOURCE[evenement.source] ?? "#8A9284";
-            const haut = index % 2 === 0 ? 0 : 22;
+            const haut = index % 2 === 0 ? 76 : 92;
             return (
               <div key={`${evenement.occurred_at}-${index}`}>
                 <div

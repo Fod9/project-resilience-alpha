@@ -40,12 +40,9 @@ export default function App() {
     <div className="flex h-full flex-col bg-base">
       <header className="shrink-0 border-b border-line-fort bg-base">
         <div className="flex items-center justify-between px-11 py-4">
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col">
             <span className="font-display text-2xl font-extrabold uppercase tracking-[0.1em] text-ink">
               AlphaPay
-            </span>
-            <span className="font-sans text-[0.625rem] uppercase tracking-[0.16em] text-ink-dim">
-              Project Resilience-Alpha · plateforme de paiement fictive
             </span>
           </div>
 

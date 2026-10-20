@@ -104,9 +104,7 @@ export default function Ops() {
 function TitreFeuillet({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2 border-b-2 border-line-fort pb-2">
-      <span className="font-display text-[0.5625rem] uppercase tracking-marque text-ink-dim">
-        {children}
-      </span>
+      <span className="etiquette">{children}</span>
     </div>
   );
 }
