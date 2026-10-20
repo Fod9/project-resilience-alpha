@@ -40,20 +40,15 @@ vault
 coffre de secrets
 falco
 détection d'exécution
-GOUVERNANCE
-politiques
-12 politiques actives
-playbooks
-7 playbooks déclaratifs
 SCORE ANOMALIE
-0,020
+-0,002
 seuil 0,251
 TRAFIC
 0,4
 req/s · 36 évt
 LATENCE P99
-10 ms
-p95 9 ms à la bordure
+5 ms
+p95 4 ms à la bordure
 WAF
 0,0 %
 aucun blocage

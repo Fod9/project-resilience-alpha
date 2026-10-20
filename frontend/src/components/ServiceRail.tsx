@@ -28,7 +28,6 @@ const COLONNES: Array<{ cle: EtatComposant["colonne"]; libelle: string }> = [
   { cle: "infra", libelle: "Infrastructure" },
   { cle: "ia", libelle: "IA / Données" },
   { cle: "cyber", libelle: "Cybersécurité" },
-  { cle: "gouvernance", libelle: "Gouvernance" },
 ];
 
 export default function ServiceRail({
@@ -51,7 +50,7 @@ export default function ServiceRail({
           if (lot.length === 0) return null;
           return (
             <div key={cle}>
-              <div className="px-3 pt-3 pb-1 text-[0.625rem] font-display uppercase tracking-marque text-ink-dim/70">
+              <div className="px-3 pt-2.5 pb-0.5 font-sans text-[0.5625rem] font-semibold uppercase tracking-marque text-ink-dim/70">
                 {libelle}
               </div>
               {lot.map((composant) => {
@@ -61,16 +60,18 @@ export default function ServiceRail({
                   <div
                     key={composant.nom}
                     className={[
-                      "flex items-center gap-2.5 px-3 py-1.5 border-l-2",
+                      "flex items-center gap-2.5 px-3 py-1 border-l-2",
                       vise ? "border-l-accent bg-accent/5" : "border-l-transparent",
                     ].join(" ")}
                   >
                     <span className={`pastille ${style.pastille} ${style.forme}`} />
                     <div className="min-w-0 flex-1">
-                      <div className={`text-xs font-mono truncate ${style.texte}`}>
+                      <div className={`text-[0.6875rem] leading-tight font-mono truncate ${style.texte}`}>
                         {composant.nom}
                       </div>
-                      <div className="text-[0.625rem] text-ink-dim truncate">{composant.role}</div>
+                      <div className="text-[0.5625rem] leading-tight text-ink-dim truncate">
+                        {composant.role}
+                      </div>
                     </div>
                     {composant.detail && (
                       <span className="text-[0.625rem] font-mono text-ink-dim shrink-0">
@@ -109,7 +110,5 @@ export function composantsAttendus(etat: EtatSupervision | null): EtatComposant[
     { nom: "grafana", role: "tableaux de bord", colonne: "infra", sante: "ok" },
     { nom: "loki", role: "journaux centralisés", colonne: "infra", sante: "ok" },
     { nom: "alertmanager", role: "routage d'alertes", colonne: "infra", sante: "ok" },
-    { nom: "politiques", role: `${etat?.registry?.policies ?? 0} politiques actives`, colonne: "gouvernance", sante: "ok" },
-    { nom: "playbooks", role: `${etat?.registry?.playbooks ?? 0} playbooks déclaratifs`, colonne: "gouvernance", sante: "ok" },
   ];
 }

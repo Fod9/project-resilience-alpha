@@ -64,7 +64,7 @@ export default function Ops() {
   return (
     <main className="min-h-0 flex-1 grid grid-cols-1 grid-rows-[minmax(0,1fr)_auto] xl:grid-cols-ops bg-base">
       {/* --- Feuillet des services ------------------------------------------ */}
-      <section className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line bg-surface px-6 py-6 xl:border-l">
+      <section className="flex min-h-0 flex-col gap-4 overflow-y-auto border-line bg-surface px-6 py-5 xl:border-l">
         <TitreFeuillet>Services</TitreFeuillet>
         <ServiceRail composants={composants} incident={etat.donnees?.incident ?? null} />
         <BandesMesures fenetre={fenetre.donnees} detection={detection.donnees} />
