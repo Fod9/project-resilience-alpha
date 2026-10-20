@@ -68,6 +68,17 @@ map "$status:$alphapay_upstream_seen" $alphapay_waf_blocked {
 # -----------------------------------------------------------------------------
 limit_req_zone  $binary_remote_addr zone=alphapay_auth:10m rate=15r/s;
 limit_req_zone  $binary_remote_addr zone=alphapay_api:16m  rate=60r/s;
+#
+# Zone dediee aux points d'observation du tableau de bord.
+#
+# Sans elle, l'ops room se fait couper par sa propre protection : la
+# limitation s'applique par adresse source, et depuis l'exterieur toutes les
+# requetes arrivent par la meme publication de port. Une attaque lancee
+# depuis la machine hote consomme donc le quota du navigateur qui regarde le
+# tableau de bord, et l'operateur perd sa vue au moment precis ou il en a le
+# plus besoin. Le WAF continue de proteger ces routes ; la limitation y est
+# seulement desserree.
+limit_req_zone  $binary_remote_addr zone=alphapay_obs:10m rate=300r/s;
 limit_conn_zone $binary_remote_addr zone=alphapay_conn:10m;
 
 # -----------------------------------------------------------------------------

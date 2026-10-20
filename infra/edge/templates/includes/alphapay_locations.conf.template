@@ -73,7 +73,7 @@ location /api/ledger/ {
 #     sous `/api/supervision/...`. Le contrat est donc identique en interne et
 #     en externe, ce qui évite toute divergence entre l'appelant et le service.
 location /api/supervision/ {
-    limit_req zone=alphapay_api burst=60 nodelay;
+    limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://remediation:8000;
     proxy_pass $alphapay_upstream;
@@ -85,7 +85,7 @@ location /api/supervision/ {
 #     `/api/ops/ingest/falco` atteint ainsi la route `/api/ingest/falco` du
 #     service, dont le contrat est identique en interne et en externe.
 location /api/ops/ {
-    limit_req zone=alphapay_api burst=60 nodelay;
+    limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://remediation:8000;
     rewrite ^/api/ops/(.*)$ /api/$1 break;
@@ -95,7 +95,7 @@ location /api/ops/ {
 
 # --- Détecteur : fenêtre courante, score, historique
 location /api/detector/ {
-    limit_req zone=alphapay_api burst=60 nodelay;
+    limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://detector:8000;
     rewrite ^/api/detector/(.*)$ /$1 break;
@@ -116,7 +116,7 @@ location /api/assistant/ {
 
 # --- Télémétrie : variables observées, en lecture seule
 location /api/telemetry/ {
-    limit_req zone=alphapay_api burst=60 nodelay;
+    limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://telemetry:8000;
     rewrite ^/api/telemetry/(.*)$ /$1 break;
