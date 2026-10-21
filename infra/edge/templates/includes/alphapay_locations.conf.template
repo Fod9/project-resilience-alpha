@@ -104,6 +104,21 @@ location = /api/ops/actions/unblock {
     include includes/alphapay_proxy_entetes.conf;
 }
 
+# --- Rétablissement d'un compte gelé : même régime que la libération d'une
+#     adresse. Un compte gelé par erreur doit pouvoir être rouvert par
+#     l'opérateur, sans passer par un shell.
+location = /api/ops/actions/unfreeze-account {
+    # Mêmes en-têtes que la route de libération, sans le contrôle de liste : un
+    # opérateur confiné doit pouvoir rétablir un compte, et la protection reste
+    # le jeton d'administration.
+    include includes/alphapay_proxy_entetes.conf;
+    limit_req zone=alphapay_obs burst=60 nodelay;
+    proxy_read_timeout 30s;
+    set $alphapay_upstream http://remediation:8000;
+    rewrite ^/api/ops/(.*)$ /api/$1 break;
+    proxy_pass $alphapay_upstream;
+}
+
 # --- Interface d'ingestion et d'administration de la remédiation.
 #     Le préfixe public `/api/ops/` est ramené sous `/api/` : l'appel
 #     `/api/ops/ingest/falco` atteint ainsi la route `/api/ingest/falco` du

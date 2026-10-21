@@ -1063,6 +1063,41 @@ async def debloquer_adresse(
     return resultat.resume()
 
 
+@app.post("/api/actions/unfreeze-account", tags=["administration"])
+async def retablir_compte(
+    charge: dict[str, Any] | None = None,
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Rétablit un compte gelé par un incident.
+
+    Le gel est un confinement : comme pour une adresse, l'opérateur doit pouvoir
+    le défaire lui-même. Sans cette route, un faux positif laissait le compte
+    inerte pour toujours, et la transaction synthétique de vérification, qui
+    s'appuie sur un compte client, ne pouvait plus aboutir.
+    """
+    _exiger_admin(x_admin_token)
+    compte = str((charge or {}).get("account_code") or "").strip()
+    if not compte:
+        raise AppError(
+            422,
+            "compte_absent",
+            "Compte manquant",
+            "Le champ 'account_code' est requis pour rétablir un compte.",
+        )
+    resultat = await connecteurs.executer(
+        "ledger.unfreeze_account",
+        {"account_code": compte, "reason": "rétablissement par un opérateur"},
+        {"source": "operator", "kind": "manual"},
+    )
+    events.emit(
+        "ledger.unfreeze_requested",
+        message="rétablissement de compte demandé par un opérateur",
+        account_code=compte,
+        ok=resultat.ok,
+    )
+    return resultat.resume()
+
+
 @app.post("/api/actions/reset-circuit-breaker", tags=["administration"])
 async def lever_suspension(x_admin_token: str | None = Header(default=None)) -> dict[str, Any]:
     _exiger_admin(x_admin_token)
