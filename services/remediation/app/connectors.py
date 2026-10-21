@@ -35,7 +35,7 @@ from typing import Any
 
 from common.config import env_bool, env_float, env_int, env_str
 from common.features import signature_offensive
-from common.http_client import request_json
+from common.http_client import UpstreamError, request_json
 from common.logging_setup import EventLogger
 
 # =============================================================================
@@ -1052,6 +1052,33 @@ class Connecteurs:
             evidence={"container": nom, "strategy": "restart-from-reference"},
         )
 
+    #: Route de bordure qui prouve qu'un service applicatif repond. Le statut de
+    #: sante de Docker n'est rafraichi que toutes les 10 s, avec un delai de
+    #: demarrage de 20 s : s'y fier seul faisait attendre une trentaine de
+    #: secondes apres chaque redemarrage, et l'attente s'ajoutait a chaque
+    #: tentative de verification. Une requete reelle a travers la bordure tranche
+    #: en moins d'une seconde, et c'est une meilleure preuve : elle emprunte le
+    #: chemin du client.
+    SONDES_SERVICES: dict[str, str] = {
+        "alphaplat-api-payment": "/api/payments/limits",
+        "alphaplat-api-auth": "/api/auth/.well-known/jwks.json",
+        "alphaplat-api-ledger": "/api/ledger/integrity",
+    }
+
+    async def _service_repond(self, conteneur: str) -> bool:
+        """Vrai si le service derriere ce conteneur repond a travers la bordure."""
+        chemin = self.SONDES_SERVICES.get(conteneur)
+        if not chemin:
+            return False
+        try:
+            await request_json("GET", f"{self.edge_url}{chemin}", timeout=4.0)
+            return True
+        except UpstreamError as erreur:
+            # 401 ou 403 : le service repond, il refuse seulement l'acces anonyme.
+            return int(erreur.status or 500) < 500
+        except Exception:  # noqa: BLE001
+            return False
+
     async def _docker_wait_healthy(self, params: dict[str, Any], _: dict[str, Any]) -> Resultat:
         nom = self._verifier_perimetre(str(params.get("container") or ""))
         delai = float(params.get("timeout_seconds") or 60.0)
@@ -1062,7 +1089,13 @@ class Connecteurs:
             etat = info.get("State") or {}
             sante = (etat.get("Health") or {}).get("Status")
             dernier = {"running": etat.get("Running"), "health": sante, "status": etat.get("Status")}
-            si_sain = etat.get("Running") and sante in (None, "healthy")
+            si_sain = bool(etat.get("Running")) and sante in (None, "healthy")
+            if not si_sain and bool(etat.get("Running")):
+                # La sonde Docker dit encore « starting » : on demande au service
+                # lui-meme, a travers la bordure, s'il sert deja.
+                si_sain = await self._service_repond(nom)
+                if si_sain:
+                    dernier["health"] = f"{sante or 'starting'} mais la bordure sert deja"
             if si_sain and etat.get("Status") == "running":
                 return Resultat(
                     ok=True,
@@ -1070,7 +1103,7 @@ class Connecteurs:
                     detail=f"{nom} opérationnel",
                     evidence={"container": nom, **dernier},
                 )
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(0.5)
         return Resultat(
             ok=False,
             action="docker.wait_healthy",

@@ -561,6 +561,27 @@ async def _traiter(sac: dict[str, Any]) -> None:
                 (incident_id, rapport.passed, rapport.duration_ms,
                  json.dumps(rapport.resume()["checks"])),
             )
+            # La vérification est aussi enregistrée comme *étape* : sans cette
+            # ligne, la progression de la reprise s'arrêtait à l'étape
+            # précédente et l'opérateur voyait l'application bloquée alors que
+            # la suite de vérification était en cours.
+            await execute(
+                "INSERT INTO ops.actions "
+                "(incident_id, step_id, action, params, status, started_at, finished_at, "
+                " duration_ms, result, error) "
+                "VALUES (NULLIF(%s, '')::uuid, %s, %s, %s::jsonb, %s, now(), now(), %s, "
+                "        %s::jsonb, %s)",
+                (
+                    incident_id,
+                    "verifier",
+                    "verify.recovery_suite",
+                    json.dumps({"attempt": tentative}),
+                    "ok" if rapport.passed else "failed",
+                    rapport.duration_ms,
+                    json.dumps({"passed": rapport.passed, "attempt": tentative}),
+                    None if rapport.passed else "preuves de rétablissement insuffisantes",
+                ),
+            )
             REMEDIATION_VERIFICATION_PASSED.labels(service="remediation").set(
                 1 if rapport.passed else 0
             )
