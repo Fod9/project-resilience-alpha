@@ -157,6 +157,20 @@ AUTO_ESCALADE = env_bool("AUTO_ESCALATE", True)
 #: une adresse confinée par erreur doit revenir vite, et la purge est sans
 #: effet tant qu'aucun blocage n'a expiré.
 EDGE_PURGE_SECONDS = env_int("EDGE_PURGE_SECONDS", 30)
+#: Actions qui restent exécutées coupe-circuit ouvert. Le coupe-circuit existe
+#: pour arrêter une reprise automatique qui échoue, pas pour laisser une attaque
+#: détectée sans réponse : le confinement est réversible et borné dans le temps,
+#: et l'information de l'opérateur reste nécessaire.
+ACTIONS_TOUJOURS_PERMISES = frozenset(
+    {
+        "notify.operator",
+        "escalate.human",
+        "edge.block_ip",
+        "edge.unblock_ip",
+        "auth.revoke_by_source",
+        "auth.lock_account",
+    }
+)
 
 _tache_purge: asyncio.Task[None] | None = None
 
@@ -273,15 +287,26 @@ async def _cloturer(incident_id: str, etat: str, resume: dict[str, Any]) -> None
 # =============================================================================
 
 
-def _fenetre_actions_ouverte() -> bool:
+def _fenetre_actions_ouverte(action: str) -> bool:
+    """Le plafond de la fenêtre ne compte pas les actions de confinement.
+
+    Il existe pour borner une automatisation qui s'emballe (redémarrages et
+    restaurations en chaîne). Le confinement est idempotent et réversible ;
+    le refuser au motif que la fenêtre est saturée revient à laisser une attaque
+    détectée sans réponse, ce qui est exactement ce qu'on veut éviter.
+    """
     maintenant = time.time()
     _etat["actions_recentes"] = [
         t for t in _etat["actions_recentes"] if maintenant - t < FENETRE_ACTIONS
     ]
+    if action in ACTIONS_TOUJOURS_PERMISES:
+        return True
     return len(_etat["actions_recentes"]) < MAX_ACTIONS_PAR_FENETRE
 
 
-def _enregistrer_action() -> None:
+def _enregistrer_action(action: str) -> None:
+    if action in ACTIONS_TOUJOURS_PERMISES:
+        return
     _etat["actions_recentes"].append(time.time())
 
 
@@ -302,7 +327,7 @@ async def _executer_playbook(
         # La phase affichée suit l'étape engagée : c'est ce que voit le jury.
         await _maj_etat(incident_id, etape.phase)
 
-        if not _fenetre_actions_ouverte():
+        if not _fenetre_actions_ouverte(etape.action):
             await _journaliser(
                 incident_id,
                 "action.throttled",
@@ -333,7 +358,7 @@ async def _executer_playbook(
             )
             continue
 
-        if _etat["suspendu"] and not etape.action.startswith(("notify.", "escalate.")):
+        if _etat["suspendu"] and etape.action not in ACTIONS_TOUJOURS_PERMISES:
             resultats.append(
                 {"step": etape.id, "action": etape.action, "ok": False,
                  "detail": "coupe-circuit ouvert : reprise automatique suspendue"}
@@ -341,15 +366,13 @@ async def _executer_playbook(
             continue
 
         parametres = etape.rendre(contexte)
-        _enregistrer_action()
+        _enregistrer_action(etape.action)
         debut = time.perf_counter()
+        refusee = False
         try:
             resultat = await connecteurs.executer(etape.action, parametres, sac)
         except ActionRefusee as refus:
-            # Un refus de garde-fou est un echec d'etape, pas un incident qui
-            # s'effondre : sans cette conversion, l'exception remontait hors de
-            # la tache, l'incident restait fige dans sa derniere phase et plus
-            # rien ne le cloturait.
+            refusee = True
             resultat = Resultat(ok=False, action=etape.action,
                                 detail=f"action refusee : {refus}")
         duree_ms = int((time.perf_counter() - debut) * 1000)
@@ -393,8 +416,22 @@ async def _executer_playbook(
             reprise_effectuee = True
 
         if not resultat.ok:
-            _etat["echecs_consecutifs"] += 1
-            if _etat["echecs_consecutifs"] >= SEUIL_COUPE_CIRCUIT and AUTO_ESCALADE:
+            if refusee:
+                # Un refus de garde-fou ne dit rien de la sante de la reprise :
+                # c'est une cible introuvable ou une action hors perimetre. Le
+                # compter armait le coupe-circuit, qui desarmait ensuite la
+                # plateforme entiere : une alerte sans service a redemarrer
+                # suffisait a l'empecher de contenir la prochaine attaque.
+                await _journaliser(
+                    incident_id,
+                    "action.refused",
+                    state=etape.phase,
+                    message=resultat.detail,
+                    payload={"step": etape.id, "action": etape.action},
+                )
+            else:
+                _etat["echecs_consecutifs"] += 1
+            if not refusee and _etat["echecs_consecutifs"] >= SEUIL_COUPE_CIRCUIT and AUTO_ESCALADE:
                 _etat["suspendu"] = True
                 await _journaliser(
                     incident_id,
