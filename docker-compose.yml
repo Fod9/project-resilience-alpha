@@ -449,9 +449,14 @@ services:
       # politique générale : l'instantané de départ sert de point de retour.
       AUTO_ESCALATE: "true"
       SNAPSHOT_ON_INCIDENT: "true"
-      PROBE_USERNAME: client01
+      PROBE_USERNAME: client02
       PROBE_PASSWORD: ${PROBE_PASSWORD:?PROBE_PASSWORD doit etre defini dans .env}
-      PROBE_SOURCE_ACCOUNT: CUST-000001
+      # Compte de sonde de la verification, volontairement distinct de
+      # CUST-000001 : le playbook comptable gele ce dernier, et la transaction
+      # synthetique de retablissement s'appuyait sur le meme compte. Des qu'un
+      # incident comptable gelait le compte, toutes les reprises suivantes
+      # echouaient leur preuve et la plateforme restait affichee en echec.
+      PROBE_SOURCE_ACCOUNT: CUST-000002
       PROBE_DESTINATION_ACCOUNT: MERCHANT-0001
       PROBE_AMOUNT_CENTS: "100"
       VAULT_ADDR: http://vault:8200

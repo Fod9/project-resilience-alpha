@@ -330,24 +330,15 @@ async def _executer_playbook(
         # La phase affichée suit l'étape engagée : c'est ce que voit le jury.
         await _maj_etat(incident_id, etape.phase)
 
-        if not _fenetre_actions_ouverte(etape.action):
-            await _journaliser(
-                incident_id,
-                "action.throttled",
-                severity=playbook.id,
-                message="plafond d'actions atteint sur la fenêtre courante",
-                payload={"step": etape.id, "limit": MAX_ACTIONS_PAR_FENETRE},
-            )
-            resultats.append(
-                {"step": etape.id, "action": etape.action, "ok": False,
-                 "detail": "plafond d'actions atteint"}
-            )
-            break
-
         if etape.action == "verify.recovery_suite":
             # La suite de vérification n'est pas un connecteur : elle est
             # exécutée par le moteur lui-même, après l'ensemble des étapes, de
             # façon à porter sur l'état final et non sur un état intermédiaire.
+            #
+            # Elle est traitée *avant* le contrôle de plafond, et c'est
+            # volontaire : la saturer écartait la vérification elle-même,
+            # l'incident était clos sans preuve, et la plateforme restait
+            # affichée en échec alors que tout répondait.
             await _journaliser(
                 incident_id,
                 "verification.requested",
@@ -361,6 +352,23 @@ async def _executer_playbook(
             )
             continue
 
+        if not _fenetre_actions_ouverte(etape.action):
+            await _journaliser(
+                incident_id,
+                "action.throttled",
+                severity=playbook.id,
+                message="plafond d'actions atteint sur la fenêtre courante",
+                payload={"step": etape.id, "limit": MAX_ACTIONS_PAR_FENETRE},
+            )
+            resultats.append(
+                {"step": etape.id, "action": etape.action, "ok": False,
+                 "skipped": True, "detail": "plafond d'actions atteint : étape non engagée"}
+            )
+            # On poursuit : les étapes d'information, de confinement et de
+            # vérification restent dues. Auparavant un `break` les emportait
+            # toutes, y compris la preuve de rétablissement.
+            continue
+
         if _etat["suspendu"] and etape.action not in ACTIONS_TOUJOURS_PERMISES:
             resultats.append(
                 {"step": etape.id, "action": etape.action, "ok": False,
@@ -369,7 +377,6 @@ async def _executer_playbook(
             continue
 
         parametres = etape.rendre(contexte)
-        _enregistrer_action(etape.action)
         debut = time.perf_counter()
         refusee = False
         try:
@@ -379,6 +386,14 @@ async def _executer_playbook(
             resultat = Resultat(ok=False, action=etape.action,
                                 detail=f"action refusee : {refus}")
         duree_ms = int((time.perf_counter() - debut) * 1000)
+
+        # Seules les actions réellement engagées consomment le plafond. Une étape
+        # qui n'a rien fait — adresse déjà bloquée, service déjà sain, adresse
+        # protégée — ne doit pas retirer à un incident à venir le droit d'agir.
+        # Les incidents d'alerte, qui n'agissent souvent pas, saturaient sinon le
+        # quota à eux seuls.
+        if not resultat.skipped:
+            _enregistrer_action(etape.action)
 
         REMEDIATION_ACTIONS_TOTAL.labels(
             service="remediation",

@@ -118,7 +118,10 @@ class Connecteurs:
         self.reload_timeout = env_float("EDGE_RELOAD_TIMEOUT_SECONDS", 8.0)
         self.probe_user = env_str("PROBE_USERNAME", "client01")
         self.probe_password = env_str("PROBE_PASSWORD", "AlphaPay-Client-2026!")
-        self.probe_account = env_str("PROBE_SOURCE_ACCOUNT", "CUST-000001")
+        # Le compte de sonde ne doit pas etre celui que les playbooks confinent :
+        # une sonde gelee fait echouer la preuve de retablissement de toutes les
+        # reprises suivantes.
+        self.probe_account = env_str("PROBE_SOURCE_ACCOUNT", "CUST-000002")
         self.probe_target = env_str("PROBE_DESTINATION_ACCOUNT", "MERCHANT-0001")
         self.probe_amount = env_int("PROBE_AMOUNT_CENTS", 100)
         self._probe_tokens: dict[str, Any] = {"value": None, "expires": 0.0}
