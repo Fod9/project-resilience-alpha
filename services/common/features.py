@@ -19,6 +19,7 @@ modèle non supervisé, uniquement.
 from __future__ import annotations
 
 import math
+import os
 import statistics
 from dataclasses import dataclass, field
 
@@ -80,6 +81,26 @@ PREFIXES_OBSERVATION: tuple[str, ...] = (
     "/score",
     "/features",
 )
+
+#: Marqueurs qui designent le banc offensif lui-meme. Seule une signature
+#: figurant ici peut etre confinee : un agent generique (`python-httpx`, `curl`,
+#: un navigateur) ne designe personne en particulier, et le confiner reviendrait
+#: a refuser les sondes du moteur de reprise, qui emploient la meme bibliotheque
+#: que le banc. Mesure faite : la signature `python-httpx/0.28.1` confinee
+#: rendait les cinq sondes de verification muettes, et l'incident etait clos en
+#: echec alors que la reprise avait abouti. Configurable par
+#: `BENCH_AGENT_MARKERS`, separe par des virgules.
+MARQUEURS_OFFENSIFS: tuple[str, ...] = tuple(
+    marqueur.strip()
+    for marqueur in os.environ.get("BENCH_AGENT_MARKERS", "AlphaPay-RedTeam").split(",")
+    if marqueur.strip()
+)
+
+
+def signature_offensive(agent: str) -> bool:
+    """Vrai si cet agent utilisateur est celui du banc offensif declare."""
+    agent = str(agent or "")
+    return any(marqueur.lower() in agent.lower() for marqueur in MARQUEURS_OFFENSIFS)
 
 
 def route_d_observation(chemin: str) -> bool:
@@ -382,6 +403,9 @@ class Agregateur:
         #: offensif est ainsi distinguable de celui du navigateur de l'operateur,
         #: dont les requetes de consultation sont ecartees ici.
         agent_compteur: dict[str, int] = {}
+        #: Restreint aux marqueurs du banc offensif declare : c'est cette liste,
+        #: et elle seule, qui sert a confiner par signature.
+        agent_offensif_compteur: dict[str, int] = {}
         for evenement in self._evenements:
             if evenement.source == "edge":
                 ip = str(evenement.fields.get("source_ip") or "")
@@ -397,6 +421,10 @@ class Agregateur:
                     agent = str(evenement.fields.get("user_agent") or "")
                     if agent:
                         agent_compteur[agent] = agent_compteur.get(agent, 0) + 1
+                        if signature_offensive(agent):
+                            agent_offensif_compteur[agent] = (
+                                agent_offensif_compteur.get(agent, 0) + 1
+                            )
             elif evenement.kind == "auth.attempt":
                 identifiant = str(evenement.fields.get("identity") or "")
                 if identifiant:
@@ -404,6 +432,7 @@ class Agregateur:
 
         principaux = _principaux(ip_compteur)
         agents = _principaux(agent_compteur, 3)
+        agents_offensifs = _principaux(agent_offensif_compteur, 3)
         # Une fenetre entierement composee des routes de consultation decrit un
         # operateur qui regarde la plateforme. La designer comme anormale
         # reviendrait a confiner l'operateur pour avoir consulte son tableau de
@@ -426,7 +455,8 @@ class Agregateur:
             "observation_seule": bool(total_chemins) and chemins_observes >= total_chemins,
             "adresses_consultation": sorted(adresses_consultation),
             "top_agents": agents,
-            "agent_offensif": agents[0]["value"] if agents else "",
+            "agents_offensifs": agents_offensifs,
+            "agent_offensif": agents_offensifs[0]["value"] if agents_offensifs else "",
         }
 
     def enrichir_reference(self) -> None:

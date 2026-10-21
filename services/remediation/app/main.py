@@ -171,6 +171,7 @@ ACTIONS_TOUJOURS_PERMISES = frozenset(
         "edge.unblock_signature",
         "auth.revoke_by_source",
         "auth.lock_account",
+        "ledger.unfreeze_account",
     }
 )
 

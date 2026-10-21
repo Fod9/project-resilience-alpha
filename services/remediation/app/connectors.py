@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from common.config import env_bool, env_float, env_int, env_str
+from common.features import signature_offensive
 from common.http_client import request_json
 from common.logging_setup import EventLogger
 
@@ -140,6 +141,7 @@ class Connecteurs:
             "ledger.restore": self._ledger_restore,
             "ledger.reconcile": self._ledger_reconcile,
             "ledger.freeze_account": self._ledger_freeze_account,
+            "ledger.unfreeze_account": self._ledger_unfreeze_account,
             "vault.rotate_secret": self._vault_rotate_secret,
             "payments.probe": self._payments_probe,
             "notify.operator": self._notify_operator,
@@ -516,8 +518,38 @@ class Connecteurs:
             diagnostics = await self._fenetre_courante()
             agent = str(diagnostics.get("agent_offensif") or "").strip()
         if not agent:
-            raise ActionRefusee(
-                "signature absente et aucune signature offensive identifiable dans la fenetre"
+            # Aucune signature de banc dans la fenetre : ce n'est pas un echec de
+            # l'etape, c'est le cas courant d'une attaque qui n'annonce pas son
+            # agent. L'adresse reste le critere de confinement.
+            self.events.emit(
+                "edge.signature_absent",
+                message="aucun marqueur de banc offensif dans la fenetre : confinement par adresse seul",
+            )
+            return Resultat(
+                ok=True,
+                action="edge.block_signature",
+                skipped=True,
+                detail="aucun marqueur de banc offensif identifiable : signature ignorée",
+                evidence={"agent": "", "skipped": "aucun_marqueur"},
+            )
+        if not signature_offensive(agent):
+            # Un agent generique ne designe personne : le confiner reviendrait a
+            # refuser les sondes du moteur de reprise, qui emploient la meme
+            # bibliotheque que le banc. Seuls les marqueurs declares confinent.
+            self.events.warn(
+                "edge.signature_refused",
+                message="confinement par signature refusé : agent non déclaré comme banc offensif",
+                agent=agent[:80],
+            )
+            return Resultat(
+                ok=True,
+                action="edge.block_signature",
+                skipped=True,
+                detail=(
+                    f"« {agent[:60]} » n'est pas un marqueur de banc offensif déclaré : "
+                    "signature ignorée"
+                ),
+                evidence={"agent": agent, "skipped": "agent_generique"},
             )
         ttl = int(params.get("ttl_seconds") or 900)
         entrees = self._lire_signatures()
@@ -869,8 +901,53 @@ class Connecteurs:
             evidence={"container": nom, "networks": reseaux},
         )
 
+    async def _sante_conteneur(self, nom: str) -> dict[str, Any]:
+        """État de santé d'un conteneur géré, tel que le rapporte le démon."""
+        try:
+            etat = await request_json(
+                "GET", f"{self._docker_base()}/containers/{nom}/json", timeout=10.0
+            )
+        except Exception as erreur:  # noqa: BLE001
+            return {"sain": False, "etat": f"inspection impossible ({type(erreur).__name__})"}
+        conteneur = (etat or {}).get("State") or {}
+        sonde = ((conteneur.get("Health") or {}).get("Status") or "").lower()
+        if sonde:
+            return {"sain": sonde == "healthy", "etat": sonde}
+        # Sans sonde déclarée dans l'image, un conteneur en marche est considéré
+        # sain : refuser de redémarrer sur une absence d'information serait une
+        # paralysie, pas une prudence.
+        en_marche = bool(conteneur.get("Running"))
+        return {"sain": en_marche, "etat": "running" if en_marche else "arrete"}
+
     async def _docker_restart(self, params: dict[str, Any], _: dict[str, Any]) -> Resultat:
+        """Redémarre un conteneur du périmètre géré.
+
+        Un service qui répond n'est pas redémarré sans `force` : l'alerte de
+        reprise se déclenche sur tout incident en échec, et redémarrer un service
+        sain à chaque échec entretenait une boucle de redémarrages, chaque
+        redémarrage produisant ses propres erreurs qui rallumaient l'alerte. Les
+        playbooks dont c'est l'objet demandent explicitement le redémarrage.
+        """
         nom = self._verifier_perimetre(str(params.get("container") or ""))
+        if not _vrai(params.get("force")):
+            sante = await self._sante_conteneur(nom)
+            if sante.get("sain"):
+                self.events.emit(
+                    "docker.restart_skipped",
+                    message="redémarrage ignoré : le service répond",
+                    container=nom,
+                    sante=sante.get("etat"),
+                )
+                return Resultat(
+                    ok=True,
+                    action="docker.restart",
+                    skipped=True,
+                    detail=(
+                        f"{nom} répond déjà ({sante.get('etat')}) : "
+                        "redémarrage inutile, ignoré"
+                    ),
+                    evidence={"container": nom, "health": sante, "skipped": "sain"},
+                )
         attente = int(params.get("grace_seconds") or 5)
         await request_json(
             "POST",
@@ -979,6 +1056,20 @@ class Connecteurs:
             detail=f"{corriges} compte(s) recalculé(s) depuis le journal des jambes",
             evidence=reponse,
         )
+
+    async def _ledger_unfreeze_account(self, params: dict[str, Any], contexte: dict[str, Any]) -> Resultat:
+        """Rétablit un compte gelé par erreur.
+
+        Le gel est un confinement, il doit être reversible : sans retour
+        possible, un faux positif laisse le compte inerte définitivement, et la
+        transaction synthétique de vérification, qui s'appuie sur ce même compte,
+        échoue ensuite à chaque reprise. Mesuré : un compte gelé par un incident
+        antérieur faisait échouer la preuve de rétablissement sur toutes les
+        reprises suivantes.
+        """
+        resultat = await self._ledger_freeze_account({**params, "frozen": False}, contexte)
+        resultat.action = "ledger.unfreeze_account"
+        return resultat
 
     async def _ledger_freeze_account(self, params: dict[str, Any], _: dict[str, Any]) -> Resultat:
         reponse = await self._appel_grand_livre(
@@ -1095,6 +1186,18 @@ class Connecteurs:
             detail="escalade vers un opérateur humain",
             evidence={"reason": str(params.get("reason") or "")},
         )
+
+
+def _vrai(valeur: Any) -> bool:
+    """Interprète un paramètre de playbook comme un booléen.
+
+    Les paramètres arrivent tels qu'écrits dans le YAML, donc tantôt booléens,
+    tantôt chaînes (`"true"`, `"oui"`). Un `force: true` non reconnu
+    redémarrerait un service sain, ce qui est exactement ce qu'on veut éviter.
+    """
+    if isinstance(valeur, bool):
+        return valeur
+    return str(valeur or "").strip().lower() in {"1", "true", "oui", "yes", "vrai"}
 
 
 def _import_externe() -> None:

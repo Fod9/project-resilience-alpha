@@ -66,6 +66,9 @@ _etat: dict[str, Any] = {
     "consecutives": 0,
     "anomalie_active": False,
     "score_max_recent": 0.0,
+    #: Seuil effectivement applique, publie meme sans fenetre notee : la salle
+    #: d'operations l'affiche en permanence.
+    "seuil": 0.0,
 }
 
 
@@ -209,6 +212,7 @@ def _charger_modele() -> None:
             journal = events.warn if verdict.get("verdict") != "separable" else events.emit
             journal("detector.threshold_checked", message=constat, source=chemin_modele, **verdict)
             paquet["seuil"] = seuil
+            _etat["seuil"] = float(seuil)
             ANOMALY_THRESHOLD.labels(service="detector").set(float(seuil))
             events.emit(
                 "detector.model.loaded",
@@ -512,14 +516,27 @@ async def _boucle() -> None:
 
 @app.get("/score/current", tags=["detection"])
 async def score_courant() -> dict[str, Any]:
+    """Dernière fenêtre évaluée.
+
+    En l'absence de fenêtre évaluée, la réponse reste un 200 portant
+    `available: false`. La salle d'opérations interroge cette route en
+    permanence : un 503 y produisait une erreur visible dans le navigateur,
+    comptait comme une erreur applicative dans le taux d'erreur de la télémétrie,
+    et pouvait ainsi déclencher une reprise alors que rien ne s'était produit.
+    C'est aussi l'état normal au repos, les fenêtres de consultation seule
+    n'étant pas notées.
+    """
     if _etat["dernier"] is None:
-        raise AppError(
-            503,
-            "detection_non_prete",
-            "Détection en cours d'initialisation",
-            "Aucune fenêtre n'a encore été évaluée.",
-        )
-    return dict(_etat["dernier"])
+        return {
+            "available": False,
+            "reason": "aucune fenetre evaluee",
+            "model_version": VERSION,
+            "threshold": float(_etat.get("seuil") or 0.0),
+            "consecutive_windows": int(_etat.get("consecutives") or 0),
+        }
+    rapport = dict(_etat["dernier"])
+    rapport["available"] = True
+    return rapport
 
 
 @app.get("/score/history", tags=["detection"])

@@ -325,6 +325,7 @@ ACTIONS_AUTORISEES: frozenset[str] = frozenset(
         "ledger.restore",
         "ledger.reconcile",
         "ledger.freeze_account",
+        "ledger.unfreeze_account",
         "vault.rotate_secret",
         "payments.probe",
         "verify.recovery_suite",

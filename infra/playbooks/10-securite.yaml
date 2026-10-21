@@ -74,12 +74,17 @@ playbooks:
       - id: redemarrer-paiement
         phase: RECOVERING
         action: docker.restart
-        description: "Redémarrage contrôlé du service de paiement"
+        description: >-
+          Redémarrage contrôlé du service de paiement. Demandé explicitement par
+          `force` : c'est l'objet même de cette étape. Les playbooks de reprise
+          déclenchés par alerte ne le demandent pas, afin qu'un service qui
+          répond ne soit jamais redémarré sans raison.
         timeout_seconds: 90
         on_failure: continue
         params:
           container: alphaplat-api-payment
           grace_seconds: 5
+          force: true
 
       - id: attendre-sante
         phase: RECOVERING
