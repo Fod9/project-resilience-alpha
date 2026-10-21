@@ -100,10 +100,18 @@ policies:
     match: all
     cooldown_seconds: 180
     conditions:
+      # Le seuil de debit etait fixe a 70 req/s, valeur du profil A1 declare
+      # (142 req/s) jamais atteinte en vrai : le banc, bride par la publication
+      # de ports de Docker Desktop, delivre 15 a 27 req/s mesures a la bordure.
+      # La politique refusait donc une rafale pourtant caracterisee, detectee
+      # avec un ecart de 48 ecarts-types sur le debit et un taux d'erreur de 0.9.
+      # Dix requetes par seconde restent dix-sept fois la reference de repos
+      # (0.57 req/s) et le taux d'erreur, exige en plus, distingue la rafale
+      # dune charge legitime soutenue.
       - signal: feature
         name: requests_per_second
         op: ">="
-        value: 70.0
+        value: 10.0
       - signal: feature
         name: error_ratio
         op: ">="
