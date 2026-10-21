@@ -147,7 +147,7 @@ export function PlaybookPanel({
   );
 
   return (
-    <section className="bloc gap-2">
+    <section className="bloc gap-2 shrink-0">
       <div className="bloc-titre">
         <span className="etiquette">Progression de la reprise</span>
         <span className="font-mono text-[0.625rem] text-ink-dim">{incident?.playbook_id ?? "en attente"}</span>

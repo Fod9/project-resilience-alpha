@@ -22,6 +22,7 @@ reste ouvert et l'escalade humaine est engagée.
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -67,6 +68,10 @@ class RapportDeVerification:
 
 
 class SuiteDeVerification:
+    #: Reprises par sonde, et delai entre deux tentatives.
+    TENTATIVES_SONDE = 3
+    DELAI_SONDE = 2.0
+
     def __init__(self, connecteurs: Connecteurs, events: EventLogger) -> None:
         self.connecteurs = connecteurs
         self.events = events
@@ -127,20 +132,44 @@ class SuiteDeVerification:
                 evidence={"error": f"{type(erreur).__name__}: {erreur}"},
             )
 
+    async def _sonde(self, chemin: str) -> tuple[bool, str]:
+        """Sonde une route de la bordure, avec reprise avant de conclure.
+
+        Juste apres un redemarrage, la bordure peut encore tenir une connexion
+        vers le processus precedent, et repondre 502 le temps de la constater.
+        Une sonde unique condamnait alors un service qui se relevait, et
+        l'incident etait clos en echec pour quelques centaines de millisecondes.
+        Trois tentatives couvrent cette fenetre sans masquer une panne durable,
+        qui echoue les trois fois.
+        """
+        derniere = "inconnue"
+        for tentative in range(1, self.TENTATIVES_SONDE + 1):
+            try:
+                await request_json("GET", f"{self.edge_url}{chemin}", timeout=8.0)
+                return True, "ok"
+            except UpstreamError as erreur:
+                # Un 401 ou un 403 prouve que le service est vivant et qu'il
+                # route : la sonde est anonyme, et ces routes exigent un jeton.
+                # Les compter comme une panne condamnait chaque verification, et
+                # tout incident etait clos « preuves non reunies » alors que la
+                # plateforme etait retablie.
+                if erreur.status in (401, 403):
+                    return True, f"http {erreur.status} (service vivant)"
+                derniere = f"http {erreur.status}"
+            except Exception as erreur:  # noqa: BLE001
+                derniere = type(erreur).__name__
+            if tentative < self.TENTATIVES_SONDE:
+                await asyncio.sleep(self.DELAI_SONDE)
+        return False, derniere
+
     async def _services_healthy(self) -> Controle:
         resultats: dict[str, Any] = {}
         tous_sains = True
         for chemin in ("/api/auth/.well-known/jwks.json", "/api/ledger/integrity",
                        "/api/payments/limits"):
-            try:
-                await request_json("GET", f"{self.edge_url}{chemin}", timeout=8.0)
-                resultats[chemin] = "ok"
-            except UpstreamError as erreur:
-                resultats[chemin] = f"http {erreur.status}"
-                tous_sains = False
-            except Exception as erreur:  # noqa: BLE001
-                resultats[chemin] = f"{type(erreur).__name__}"
-                tous_sains = False
+            sain, detail = await self._sonde(chemin)
+            resultats[chemin] = detail
+            tous_sains = tous_sains and sain
         return Controle(
             name="services_healthy", passed=tous_sains, evidence={"probes": resultats}
         )

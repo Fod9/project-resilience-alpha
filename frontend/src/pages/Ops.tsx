@@ -95,7 +95,7 @@ export default function Ops() {
       {/* --- Feuillet des incidents ----------------------------------------- */}
       <section className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line bg-surface px-6 py-6 xl:border-r">
         <TitreFeuillet>Incidents</TitreFeuillet>
-        <div className="fiche px-6 py-6">
+        <div className="fiche px-6 py-6 shrink-0">
           <StateHeader etat={etat.donnees} points={scoreCourant} />
         </div>
         <PlaybookPanel detail={detail} erreur={messageEtat ?? detailErreur} />

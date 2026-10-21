@@ -30,7 +30,7 @@ export default function AssistantPanel() {
   }
 
   return (
-    <section className="border border-line bg-surface-2 flex flex-col min-h-0">
+    <section className="border border-line bg-surface-2 flex flex-col min-h-0 shrink-0">
       <div className="carte-entete shrink-0">
         <span className="etiquette">Assistant documentaire</span>
         <span className="text-[0.625rem] font-mono text-ink-dim">

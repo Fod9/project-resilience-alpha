@@ -73,7 +73,7 @@ export default function RecorderStrip({
   const mttrFin = incident?.mttr_ms != null ? ouvert + incident.mttr_ms : null;
 
   return (
-    <section className="bloc gap-2">
+    <section className="bloc gap-2 shrink-0">
       <div className="bloc-titre">
         <span className="etiquette">Bande-enregistreur</span>
         <span className="font-mono text-[0.625rem] text-ink-dim tabular">

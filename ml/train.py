@@ -53,7 +53,6 @@ def _vecteurs_nominaux(
     duree_secondes: float = 5400.0,
     pas: float = PAS_SECONDES,
     debit_moyen: float = 0.8,
-    supplementaires: list[list[float]] | None = None,
 ) -> tuple[list[list[float]], dict[str, float], dict[str, float]]:
     """Projette le trafic nominal simulé sur les fenêtres glissantes.
 
@@ -82,11 +81,6 @@ def _vecteurs_nominaux(
         agregateur.enrichir_reference()
         instant += pas
 
-    if supplementaires:
-        vecteurs.extend(
-            [[float(valeur) for valeur in ligne] for ligne in supplementaires]
-        )
-
     moyennes = {
         nom: statistics.fmean(v[i] for v in vecteurs) for i, nom in enumerate(FEATURE_NAMES)
     }
@@ -103,7 +97,6 @@ def entrainer(
     n_estimateurs: int = 256,
     graine: int = 20261019,
     debit_moyen: float = 0.8,
-    supplementaires: list[list[float]] | None = None,
 ) -> dict[str, Any]:
     """Ajuste le détecteur et renvoie l'artefact complet (sérialisable)."""
     try:
@@ -115,9 +108,7 @@ def entrainer(
             "scikit-learn et numpy sont requis pour entraîner le détecteur"
         ) from erreur
 
-    vecteurs, moyennes, ecarts = _vecteurs_nominaux(
-        duree_secondes, debit_moyen=debit_moyen, supplementaires=supplementaires
-    )
+    vecteurs, moyennes, ecarts = _vecteurs_nominaux(duree_secondes, debit_moyen=debit_moyen)
     if len(vecteurs) < 50:
         raise RuntimeError(
             f"historique nominal insuffisant : {len(vecteurs)} fenêtres produites"

@@ -129,6 +129,11 @@ groups:
         labels:
           severity: critical
           categorie: reprise
+          # Le playbook de reprise a besoin d'une cible : sans ce libelle, il
+          # demandait un redemarrage sans conteneur, l'action etait refusee, et
+          # l'alerte se rallumait a chaque incident en echec. Le service de
+          # paiement est la cible par defaut de la remise en etat.
+          service: api-payment
         annotations:
           resume: "Une tentative de reprise autonome s'est soldée par un échec."
           detail: >-

@@ -64,9 +64,11 @@ def _charge_de_l_heure(instant: float) -> float:
     return creux * nuit
 
 
-def _evenement_http(rng: random.Random, instant: float, charge: float) -> Evenement:
+def _evenement_http(
+    rng: random.Random, instant: float, charge: float, population: int = len(ADRESSES)
+) -> Evenement:
     chemin = _choisir_chemin(rng)
-    adresse = rng.choice(ADRESSES)
+    adresse = rng.choice(ADRESSES[: max(1, population)])
     statut = rng.choice(_CODES)
     # La latence suit la charge : plus il y a de trafic, plus le service ralentit.
     latence_s = max(0.004, rng.gauss(0.020 + 0.010 * charge, 0.008))
@@ -96,7 +98,9 @@ def _evenement_http(rng: random.Random, instant: float, charge: float) -> Evenem
     )
 
 
-def _evenement_service(rng: random.Random, instant: float, charge: float) -> Evenement | None:
+def _evenement_service(
+    rng: random.Random, instant: float, charge: float, population: int = len(ADRESSES)
+) -> Evenement | None:
     if rng.random() > 0.45:
         return None
     identifiant = rng.choice(UTILISATEURS)
@@ -108,13 +112,15 @@ def _evenement_service(rng: random.Random, instant: float, charge: float) -> Eve
             "identity": identifiant,
             "route": "/payments",
             "status": 201 if rng.random() < 0.85 else 400,
-            "source_ip": rng.choice(ADRESSES),
+            "source_ip": rng.choice(ADRESSES[: max(1, population)]),
             "duration_ms": max(3.0, rng.gauss(25.0 + 15.0 * charge, 9.0)),
         },
     )
 
 
-def _evenement_auth(rng: random.Random, instant: float) -> Evenement:
+def _evenement_auth(
+    rng: random.Random, instant: float, population: int = len(ADRESSES)
+) -> Evenement:
     utilisateur = rng.choice(UTILISATEURS)
     # Taux d'échec ordinaire : mot de passe oublié, jeton expiré.
     echec = rng.random() < 0.09
@@ -125,7 +131,7 @@ def _evenement_auth(rng: random.Random, instant: float) -> Evenement:
         fields={
             "identity": utilisateur,
             "outcome": "failure" if echec else "success",
-            "source_ip": rng.choice(ADRESSES),
+            "source_ip": rng.choice(ADRESSES[: max(1, population)]),
             "role": "customer" if utilisateur.startswith("client") else "operator",
         },
     )
@@ -147,19 +153,23 @@ def flux_normal(
     budget = 0.0
     while instant < duree_secondes:
         charge = _charge_de_l_heure(instant) * rng.uniform(0.85, 1.15)
-        # Le débit est tenu par accumulation fractionnaire. Sur un système peu
-        # sollicité, tirer un nombre entier de requêtes à chaque pas produirait
-        # un trafic quantifié : la normale apprise serait alors artificielle, et
-        # tout le système réel paraîtrait anormal. C'est précisément l'erreur qui
-        # rend un détecteur inutilisable en démonstration.
+        # Population d'adresses et activite d'authentification suivent la charge :
+        # une plateforme peu sollicitee n'a qu'un client et n'authentifie presque
+        # personne. Les tirer a taux fixe par pas de temps garantissait des
+        # dizaines d'adresses et d'identites par fenetre, meme au repos : le
+        # regime de repos reel, un seul client et aucune authentification, sortait
+        # alors de la normale apprise et etait declare anormal en permanence.
+        debit_instantane = max(0.0, debit_moyen * charge)
+        population = 1 if debit_instantane < 1.0 else min(len(ADRESSES), int(debit_instantane))
         budget += max(0.0, debit_moyen * charge * pas)
         while budget >= 1.0:
             budget -= 1.0
-            evenements.append(_evenement_http(rng, instant, charge))
-        service = _evenement_service(rng, instant, charge)
-        if service is not None:
-            evenements.append(service)
-        if rng.random() < 0.12:
-            evenements.append(_evenement_auth(rng, instant))
+            evenements.append(_evenement_http(rng, instant, charge, population))
+            if rng.random() < 0.25:
+                service = _evenement_service(rng, instant, charge, population)
+                if service is not None:
+                    evenements.append(service)
+            if rng.random() < 0.06:
+                evenements.append(_evenement_auth(rng, instant, population))
         instant += pas
     return evenements

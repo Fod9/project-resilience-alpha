@@ -49,9 +49,8 @@ def ajuster_sur_mesures(
     * le **modèle** est entraîné sur le générateur de trafic, qui décrit une
       plateforme en fonctionnement : débit variable, plusieurs adresses,
       latences étendues. C'est de cette variété que vient la capacité de
-      distinguer. Les fenêtres réellement observées s'y ajoutent : le générateur
-      apporte la variété, le relevé la couverture du poste, sans quoi le régime
-      mesuré sort de la plage apprise et le score sature partout ;
+      distinguer, à condition que le générateur couvre aussi le régime de repos,
+      qui est le plus fréquent sur un poste réel ;
     * le **seuil** est réglé sur les fenêtres réellement observées, ce qui
       garantit que le repos de *ce* poste reste en dessous.
 
@@ -83,24 +82,18 @@ def ajuster_sur_mesures(
     # prend de quoi couvrir un large eventail de charge, avec un plancher lie au
     # nombre de fenetres reelles pour rester proportionne.
     duree_simulee = max(4500.0, 30.0 * len(vecteurs_mesures))
-    # Le regime appris doit couvrir le regime reellement observe. Sans cela, le
-    # generateur simule une plateforme au repos (~1 req/s au pic) alors que le
-    # poste en produit dix a trente : toutes les fenetres reelles sortent de la
-    # plage apprise, le score d'atypie sature, et le seuil n'a plus rien a
-    # separer. On transmet donc l'ordre de grandeur observe.
-    debits = [float(v.get("requests_per_second", 0.0)) for v in vecteurs_mesures]
-    debit_observe = max(0.8, float(np.percentile(debits, 90))) if debits else 0.8
+    # Le modele vient du generateur seul. Mesure sur 91 fenetres reelles : lui
+    # ajouter les fenetres observees rend le corpus bimodal, un petit paquet de
+    # points reels au milieu du flux simule, et ces points, isoles au sein de
+    # chaque echantillonnage d'arbre, obtiennent les scores les plus hauts. On
+    # obtenait nominal 0.2376 contre attaque 0.1720 avec l'union, et 0.1679
+    # contre 0.1982 sans elle. Le generateur, corrige pour produire un regime de
+    # repos realiste, couvre le poste ; les fenetres reelles ne servent qu'a
+    # fixer le seuil.
     artefact = soi.entrainer(
         duree_simulee,
         n_estimateurs=n_estimateurs,
         graine=graine,
-        debit_moyen=debit_observe,
-        # Les fenetres reellement observees entrent dans l'apprentissage, en plus
-        # du generateur. Sans elles, le regime mesure sort de la plage apprise :
-        # le score d'atypie sature pour le repos comme pour l'attaque, et le
-        # seuil n'a plus rien a separer. Le generateur apporte la variete, le
-        # releve apporte la couverture du poste.
-        supplementaires=[list(ligne) for ligne in brut],
     )
 
     # 2. Le seuil vient des fenetres reelles.

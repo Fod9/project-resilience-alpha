@@ -69,7 +69,6 @@ PREFIXES_OBSERVATION: tuple[str, ...] = (
     "/api/ops",
     "/assets/",
     "/ops",
-    "/pay",
     "/healthz",
     "/favicon",
     # Le journal de bordure porte le chemin *apres* reecriture : les sondes du
@@ -87,6 +86,12 @@ def route_d_observation(chemin: str) -> bool:
     """Vrai si le chemin appartient a la consultation de la plateforme."""
     chemin = str(chemin or "")
     if chemin in {"", "/"}:
+        return True
+    # La page de paiement du client, et elle seule. L'egalite est stricte a
+    # dessein : en prefixe nu, `/pay` avalait `/payments`, qui est la route
+    # metier principale. Une rafale dirigee contre elle passait alors pour de la
+    # consultation, etait ecartee, et l'attaque n'etait plus vue du tout.
+    if chemin == "/pay" or chemin.startswith("/pay/"):
         return True
     return chemin.startswith(PREFIXES_OBSERVATION)
 
@@ -181,12 +186,24 @@ class Reference:
     ips_connues: set[str] = field(default_factory=set)
     moyenne_sortante: float = 0.0
     observations: int = 0
+    #: Fenetres recentes, pour une reference robuste aux pointes.
+    historique_sortant: list[float] = field(default_factory=list)
 
     def observer(self, adresses: set[str], moyenne_sortante: float) -> None:
         self.ips_connues.update(adresses)
         self.observations += 1
+        self.historique_sortant.append(moyenne_sortante)
+        if len(self.historique_sortant) > 60:
+            del self.historique_sortant[0]
         if self.observations == 1:
             self.moyenne_sortante = moyenne_sortante
+        elif len(self.historique_sortant) >= 5:
+            # Reference robuste : la mediane des fenetres recentes, et non une
+            # moyenne glissante. Une pointe isolee (chargement d'actifs, export)
+            # tirait la moyenne et faisait varier le ratio d'un facteur trente,
+            # ce qui rendait des fenetres parfaitement nominales plus atypiques
+            # que l'attaque elle-meme.
+            self.moyenne_sortante = statistics.median(self.historique_sortant)
         else:
             self.moyenne_sortante = (
                 (1.0 - self.alpha) * self.moyenne_sortante + self.alpha * moyenne_sortante
@@ -201,7 +218,11 @@ class Reference:
     def ratio_sortant(self, moyenne_sortante: float) -> float:
         if self.moyenne_sortante <= 0.0:
             return 1.0
-        return moyenne_sortante / self.moyenne_sortante
+        ratio = moyenne_sortante / self.moyenne_sortante
+        # Le ratio est borne : au-dela, c'est une pointe de volume sortant et non
+        # un changement de regime, et la valeur brute fabriquait des fenetres
+        # nominales plus atypiques que l'attaque.
+        return min(8.0, max(0.125, ratio))
 
     @property
     def prete(self) -> bool:
