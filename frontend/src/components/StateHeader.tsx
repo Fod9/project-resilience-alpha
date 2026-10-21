@@ -35,8 +35,15 @@ export default function StateHeader({
   const global: EtatGlobal = etat?.state ?? "NOMINAL";
   const couleurs = COULEURS[global];
 
-  const ouvertA = etat?.incident?.opened_at ? Date.parse(etat.incident.opened_at) : null;
-  const ecoule = ouvertA !== null ? Math.max(0, Math.floor((maintenant - ouvertA) / 1000)) : null;
+  const incident = etat?.incident ?? null;
+  const ouvertA = incident?.opened_at ? Date.parse(incident.opened_at) : null;
+  // Un incident clos ne s'écoule plus. Le bandeau continuait de compter alors que
+  // la plateforme affichait « Rétabli » : le temps doit se figer sur la durée
+  // totale de l'incident, et le libellé dire de quoi il parle.
+  const closA = incident?.closed_at ? Date.parse(incident.closed_at) : null;
+  const fin = closA ?? maintenant;
+  const ecoule = ouvertA !== null ? Math.max(0, Math.floor((fin - ouvertA) / 1000)) : null;
+  const enCours = global === "INCIDENT";
 
   return (
     <section className={`border-b ${couleurs.bord} ${couleurs.fond}`}>
@@ -48,9 +55,9 @@ export default function StateHeader({
 
         <div className="flex gap-8">
           <Mesure
-            libelle="Incident en cours depuis"
+            libelle={enCours ? "Incident en cours depuis" : "Durée du dernier incident"}
             valeur={ecoule === null ? "·" : formaterDuree(ecoule)}
-            accent={global === "INCIDENT" ? couleurs.texte : undefined}
+            accent={enCours ? couleurs.texte : undefined}
           />
           <Mesure
             libelle="Cible de détection"

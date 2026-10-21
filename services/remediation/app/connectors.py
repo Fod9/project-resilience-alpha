@@ -901,6 +901,70 @@ class Connecteurs:
             evidence={"container": nom, "networks": reseaux},
         )
 
+    #: Services exposes dans la salle d'operations, dans l'ordre du rail.
+    SERVICES_SUIVIS: tuple[str, ...] = (
+        "web",
+        "api-auth",
+        "api-payment",
+        "api-ledger",
+        "postgres",
+        "prometheus",
+        "grafana",
+        "loki",
+        "alertmanager",
+        "telemetry",
+        "detector",
+        "assistant",
+        "ollama",
+        "edge",
+        "remediation",
+        "vault",
+        "falco",
+    )
+
+    async def etat_services(self) -> list[dict[str, Any]]:
+        """Etat de sante des services de la pile, lu aupres du demon.
+
+        La salle d'operations affiche une pastille par service. Sans releve, elle
+        affichait un vert ecrit en dur : « tout va bien » pendant qu'un service
+        redemarrait. Chaque pastille correspond desormais a une inspection reelle
+        du conteneur, et un service arrete se voit.
+
+        Une inspection impossible donne « inconnu », pas « indisponible » : ne pas
+        savoir n'est pas la meme chose que savoir que c'est tombe.
+        """
+        releves: list[dict[str, Any]] = []
+        for service in self.SERVICES_SUIVIS:
+            conteneur = f"alphaplat-{service}"
+            try:
+                info = await request_json(
+                    "GET", f"{self._docker_base()}/containers/{conteneur}/json", timeout=5.0
+                )
+            except Exception as erreur:  # noqa: BLE001
+                releves.append(
+                    {
+                        "nom": service,
+                        "conteneur": conteneur,
+                        "sante": "inconnu",
+                        "detail": type(erreur).__name__,
+                    }
+                )
+                continue
+            etat = (info or {}).get("State") or {}
+            sonde = ((etat.get("Health") or {}).get("Status") or "").lower()
+            if not bool(etat.get("Running")):
+                sante, detail = "indisponible", str(etat.get("Status") or "arrêté")
+            elif sonde in {"", "healthy"}:
+                sante, detail = "ok", (sonde or "en marche")
+            elif sonde == "starting":
+                sante, detail = "degrade", "démarrage"
+            else:
+                sante, detail = "degrade", sonde
+            releves.append(
+                {"nom": service, "conteneur": conteneur, "sante": sante, "detail": detail}
+            )
+        return releves
+
     async def _sante_conteneur(self, nom: str) -> dict[str, Any]:
         """État de santé d'un conteneur géré, tel que le rapporte le démon."""
         try:

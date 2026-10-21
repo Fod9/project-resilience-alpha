@@ -1,4 +1,4 @@
-import type { EtatSupervision, Incident } from "../api";
+import type { EtatSupervision, Incident, ServiceEtat } from "../api";
 
 /**
  * Rail des composants : l'état de la pile, lu comme un panneau de systèmes.
@@ -90,21 +90,16 @@ export default function ServiceRail({
 }
 
 /** Compose la liste attendue des composants, avec leur état observé. */
-export function composantsAttendus(etat: EtatSupervision | null): EtatComposant[] {
+export function composantsAttendus(
+  etat: EtatSupervision | null,
+  releve?: ServiceEtat[] | null,
+): EtatComposant[] {
   const incident = etat?.incident ?? null;
   const playbook = incident?.playbook_id ?? "";
 
-  // Le service reellement vise par le playbook en cours.
-  //
-  // L'interface ne dispose d'aucun releve de sante par composant : elle ne peut
-  // donc pas afficher un etat qu'elle ne connait pas. L'ancienne version
-  // repondait a ce manque par un vert ecrit en dur sur treize services, et trois
-  // autres passaient a l'orange des qu'un incident existait. Resultat : le rail
-  // affichait « tout va bien » pendant qu'on redemarrait un service, et il
-  // designait toujours les memes trois composants au lieu du vrai.
-  //
-  // On marque donc celui qui est effectivement touche, et lui seul. C'est
-  // moins riche qu'un releve de sante complet, mais c'est vrai.
+  // Le service reellement vise par le playbook en cours : il est signale comme
+  // degrade ou indisponible meme si sa sonde le dit sain, parce que c'est lui
+  // qu'on est en train de manipuler.
   const vise = new Set<string>();
   if (playbook.includes("A1")) vise.add("api-payment");
   if (playbook.includes("A2")) vise.add("api-auth");
@@ -115,24 +110,76 @@ export function composantsAttendus(etat: EtatSupervision | null): EtatComposant[
   const santeVisee: EtatComposant["sante"] =
     incident?.state === "FAILED" ? "indisponible" : "degrade";
 
+  // Sante lue aupres du moteur, qui inspecte chaque conteneur. Sans releve (le
+  // moteur n'a pas repondu), l'etat reste « inconnu » : un vert de complaisance
+  // vaut moins qu'un aveu d'ignorance.
+  const parNom = new Map((releve ?? []).map((service) => [service.nom, service.sante]));
+  const santeDe = (nom: string): EtatComposant["sante"] =>
+    parNom.get(nom) ?? "inconnu";
+
   const composants: EtatComposant[] = [
-    { nom: "web", role: "interface React", colonne: "dev", sante: "ok" },
-    { nom: "api-auth", role: "authentification", colonne: "dev", sante: "ok" },
-    { nom: "api-payment", role: "orchestration paiement", colonne: "dev", sante: "ok" },
-    { nom: "api-ledger", role: "grand livre partie double", colonne: "dev", sante: "ok" },
-    { nom: "postgres", role: "PostgreSQL + pgvector", colonne: "dev", sante: "ok" },
-    { nom: "edge", role: "WAF ModSecurity + CRS", colonne: "cyber", sante: "ok" },
-    { nom: "remediation", role: "moteur de reprise", colonne: "cyber", sante: "ok" },
-    { nom: "vault", role: "coffre de secrets", colonne: "cyber", sante: "ok" },
-    { nom: "falco", role: "détection d'exécution", colonne: "cyber", sante: "ok" },
-    { nom: "telemetry", role: "agrégation des journaux", colonne: "ia", sante: "ok" },
-    { nom: "detector", role: "modèle Isolation Forest", colonne: "ia", sante: "ok" },
-    { nom: "assistant", role: "assistant RAG local", colonne: "ia", sante: "ok" },
-    { nom: "ollama", role: "modèle de langage local", colonne: "ia", sante: "ok" },
-    { nom: "prometheus", role: "métriques", colonne: "infra", sante: "ok" },
-    { nom: "grafana", role: "tableaux de bord", colonne: "infra", sante: "ok" },
-    { nom: "loki", role: "journaux centralisés", colonne: "infra", sante: "ok" },
-    { nom: "alertmanager", role: "routage d'alertes", colonne: "infra", sante: "ok" },
+    { nom: "web", role: "interface React", colonne: "dev", sante: santeDe("web") },
+    { nom: "api-auth", role: "authentification", colonne: "dev", sante: santeDe("api-auth") },
+    {
+      nom: "api-payment",
+      role: "orchestration paiement",
+      colonne: "dev",
+      sante: santeDe("api-payment"),
+    },
+    {
+      nom: "api-ledger",
+      role: "grand livre partie double",
+      colonne: "dev",
+      sante: santeDe("api-ledger"),
+    },
+    {
+      nom: "postgres",
+      role: "PostgreSQL + pgvector",
+      colonne: "dev",
+      sante: santeDe("postgres"),
+    },
+    { nom: "edge", role: "WAF ModSecurity + CRS", colonne: "cyber", sante: santeDe("edge") },
+    {
+      nom: "remediation",
+      role: "moteur de reprise",
+      colonne: "cyber",
+      sante: santeDe("remediation"),
+    },
+    { nom: "vault", role: "coffre de secrets", colonne: "cyber", sante: santeDe("vault") },
+    { nom: "falco", role: "détection d'exécution", colonne: "cyber", sante: santeDe("falco") },
+    {
+      nom: "telemetry",
+      role: "agrégation des journaux",
+      colonne: "ia",
+      sante: santeDe("telemetry"),
+    },
+    {
+      nom: "detector",
+      role: "modèle Isolation Forest",
+      colonne: "ia",
+      sante: santeDe("detector"),
+    },
+    {
+      nom: "assistant",
+      role: "assistant RAG local",
+      colonne: "ia",
+      sante: santeDe("assistant"),
+    },
+    { nom: "ollama", role: "modèle de langage local", colonne: "ia", sante: santeDe("ollama") },
+    {
+      nom: "prometheus",
+      role: "métriques",
+      colonne: "infra",
+      sante: santeDe("prometheus"),
+    },
+    { nom: "grafana", role: "tableaux de bord", colonne: "infra", sante: santeDe("grafana") },
+    { nom: "loki", role: "journaux centralisés", colonne: "infra", sante: santeDe("loki") },
+    {
+      nom: "alertmanager",
+      role: "routage d'alertes",
+      colonne: "infra",
+      sante: santeDe("alertmanager"),
+    },
   ];
 
   return composants.map((composant) =>

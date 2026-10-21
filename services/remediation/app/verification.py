@@ -255,11 +255,16 @@ class SuiteDeVerification:
         rechargement = temoin.get("result") == "applied"
         presente = bool(adresse) and adresse in bloques
         if not adresse and not signatures:
+            # Incident declenche par alerte, sans source identifiee : il n'y a rien
+            # a confiner. La preuve est declaree satisfaite *avec son motif*, au
+            # lieu d'un echec qui condamnait l'incident et relancait l'alerte en
+            # boucle sur un evenement deja traite.
             return Controle(
                 name="containment_effective",
-                passed=False,
+                passed=True,
                 evidence={
-                    "reason": "aucune adresse source ni signature identifiée pour le confinement",
+                    "applicable": False,
+                    "reason": "aucune source à confiner : incident déclenché par alerte",
                     "blocked": sorted(bloques),
                     "signatures": sorted(signatures),
                 },

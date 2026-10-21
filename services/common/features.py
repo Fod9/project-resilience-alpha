@@ -312,7 +312,18 @@ class Agregateur:
             if ip:
                 compteur_ips[ip] = compteur_ips.get(ip, 0) + 1
         entrantes = [float(e.fields.get("bytes_in") or 0.0) for e in requetes_edge]
-        sortantes = [float(e.fields.get("bytes_out") or 0.0) for e in requetes_edge]
+        #: Volume sortant du trafic *metier* seulement. Les reponses aux sondes
+        #: de la salle d'operations (chronologie a 200 jalons, etat complet de la
+        #: plateforme) pesent des dizaines de kilooctets et sont les plus grosses
+        #: du flux : les inclure faisait monter le ratio de volume sortant a
+        #: mesure que le journal d'incidents s'allongeait, jusqu'a franchir le
+        #: seuil de l'alerte d'exfiltration, qui se declenchait alors en boucle
+        #: sur la consultation de l'operateur. Le generateur d'entrainement ne
+        #: produit que du trafic metier : la variable doit decrire le meme flux.
+        requetes_metier = [
+            e for e in requetes_edge if not route_d_observation(str(e.fields.get("path") or ""))
+        ]
+        sortantes = [float(e.fields.get("bytes_out") or 0.0) for e in requetes_metier]
         compteur_chemins: dict[str, int] = {}
         for e in requetes_edge:
             chemin = str(e.fields.get("path") or "")
@@ -476,6 +487,7 @@ class Agregateur:
             float(e.fields.get("bytes_out") or 0.0)
             for e in self._evenements
             if e.source == "edge"
+            and not route_d_observation(str(e.fields.get("path") or ""))
         ]
         self.reference.observer(adresses, statistics.fmean(sortantes) if sortantes else 0.0)
 

@@ -206,8 +206,19 @@ export interface ReponseAssistant {
 //  Points d'entrée
 // =============================================================================
 
+export interface ServiceEtat {
+  /** Nom du service, tel qu'il figure dans le rail. */
+  nom: string;
+  /** Nom du conteneur inspecte. */
+  conteneur: string;
+  /** Santé rapportée par le démon : lecture directe, jamais écrite en dur. */
+  sante: "ok" | "degrade" | "indisponible" | "inconnu";
+  detail: string;
+}
+
 export const api = {
   etat: () => lire<EtatSupervision>("/api/supervision/state"),
+  services: () => lire<{ count: number; services: ServiceEtat[] }>("/api/supervision/services"),
   incidents: () => lire<{ incidents: Incident[] }>("/api/supervision/incidents?limit=20"),
   incident: (id: string) => lire<DetailIncident>(`/api/supervision/incidents/${id}`),
   chronologie: () => lire<{ events: EvenementChronologie[] }>("/api/supervision/timeline?limit=200"),

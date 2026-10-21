@@ -786,13 +786,15 @@ async def etat_courant() -> dict[str, Any]:
     incident = None
     if _etat["incident_courant"]:
         incident = await fetch_one(
-            "SELECT id, state, severity, title, opened_at, mttd_ms FROM ops.incidents "
+            "SELECT id, state, severity, title, opened_at, closed_at, mttd_ms, mttr_ms "
+            "FROM ops.incidents "
             "WHERE id = NULLIF(%s, '')::uuid",
             (_etat["incident_courant"],),
         )
     else:
         incident = await fetch_one(
-            "SELECT id, state, severity, title, opened_at, mttd_ms FROM ops.incidents "
+            "SELECT id, state, severity, title, opened_at, closed_at, mttd_ms, mttr_ms "
+            "FROM ops.incidents "
             "ORDER BY opened_at DESC LIMIT 1"
         )
     if incident is None:
@@ -948,6 +950,18 @@ async def lister_blocages() -> dict[str, Any]:
     """
     blocages = connecteurs.blocages_en_cours()
     return {"count": len(blocages), "blocked": blocages}
+
+
+@app.get("/api/supervision/services", tags=["supervision"])
+async def etat_des_services() -> dict[str, Any]:
+    """Relevé de santé des services de la pile, pour la salle d'opérations.
+
+    Chaque pastille du rail correspond à une inspection réelle du conteneur. Un
+    service arrêté se voit, et une inspection impossible se distingue d'une
+    panne : « inconnu » n'est pas « indisponible ».
+    """
+    services = await connecteurs.etat_services()
+    return {"count": len(services), "services": services}
 
 
 @app.post("/api/actions/run", tags=["administration"])

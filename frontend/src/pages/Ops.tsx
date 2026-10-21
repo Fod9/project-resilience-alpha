@@ -19,6 +19,8 @@ import StateHeader from "../components/StateHeader";
  */
 export default function Ops() {
   const etat = useSonde(api.etat, 3000);
+  // Releve de sante des conteneurs : c'est lui qui colore les pastilles du rail.
+  const services = useSonde(api.services, 5000);
   const fenetre = useSonde<FenetreVariables>(api.fenetre, 5000);
   const detection = useSonde<RapportDetection>(api.detection, 5000);
   const chronologie = useSonde(api.chronologie, 5000);
@@ -67,7 +69,7 @@ export default function Ops() {
     [points, detection.donnees],
   );
 
-  const composants = composantsAttendus(etat.donnees);
+  const composants = composantsAttendus(etat.donnees, services.donnees?.services ?? null);
 
   // Une indisponibilite passagere n'est pas une panne. Au premier demarrage, les
   // services s'initialisent pendant une a deux minutes : le tableau de bord doit
