@@ -284,6 +284,19 @@ confiné.
    liste des blocages restants (`restantes`). Le même geste existe sous
    forme de playbook (`PB-DEBLOCAGE`, action `edge.unblock_ip`).
 
+   Pour libérer d'un coup tout ce qui est confiné, sans recopier de jeton :
+
+   ```bash
+   bash tests/liberer_confinement.sh
+   ```
+
+   Ce script lit `ADMIN_API_TOKEN` dans `.env`, interroge
+   `GET /api/supervision/blocklist`, puis libère chaque adresse. Il sert surtout
+   sous Docker Desktop pour Mac, où le banc et le navigateur de l'opérateur
+   partagent l'adresse de la passerelle (voir ARCHITECTURE §9.4). Le blocage
+   expire de lui-même au bout de `ttl_seconds` (900 s par défaut), la purge
+   repassant toutes les 30 s (`EDGE_PURGE_SECONDS`).
+
 3. Vérifier que la bordure a bien appliqué la nouvelle liste :
 
    ```bash
