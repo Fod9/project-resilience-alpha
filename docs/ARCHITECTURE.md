@@ -366,6 +366,32 @@ Hôte, conformément au §4 du sujet.
   moderne eBPF et un `privileged: true` documenté (aucun accès hôte non borné
   au-delà du nécessaire).
 
+### 9.4 Limite mesurée : adresse source sous Docker Desktop pour Mac
+
+Sur la cible imposée (Windows 10/11 + Docker Desktop / WSL2, PA mobile), le PC
+attaquant conserve son adresse : le poste hôte est `192.168.137.1` et l'attaquant
+`192.168.137.20`, donc le confinement par adresse ne vise que l'attaquant.
+
+Sous **Docker Desktop pour Mac**, la redirection des ports publics réécrit la
+source de toute connexion entrante en `192.168.65.1`, la passerelle de la machine
+virtuelle. Mesure faite sur un tir A1 depuis un poste distinct : la fenêtre du
+détecteur porte **880 requêtes, toutes de `192.168.65.1`**, attaquant et
+navigateur de l'opérateur confondus. Le confinement par adresse, correct dans son
+principe, coupe donc les deux à la fois.
+
+Deux conséquences assumées :
+
+- la démonstration sur Mac perd la sélectivité du confinement ; elle la retrouve
+  sur la cible Windows, où les adresses diffèrent ;
+- l'opérateur confiné se libère par la route d'administration prévue pour ce cas,
+  `POST /api/ops/actions/unblock`, qui reste joignable depuis une adresse bloquée
+  (voir RUNBOOKS R4) ; les assertions de confinement restent vérifiables.
+
+L'identification par la signature du banc (`User-Agent: AlphaPay-RedTeam/1.0`,
+en-tête `X-Alphapay-Redteam`) existe déjà dans les journaux de bordure et
+permettrait un confinement sélectif même derrière une passerelle, au prix d'un
+critère de confinement qui ne serait plus l'adresse.
+
 ---
 
 ## 10. Traçabilité exigences → composants
