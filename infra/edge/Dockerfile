@@ -28,6 +28,16 @@ RUN rm -f /etc/nginx/templates/conf.d/default.conf.template \
           /etc/nginx/templates/conf.d/logging.conf.template \
           /etc/nginx/templates/conf.d/modsecurity.conf.template
 
+# Le `default.conf` livre par l'image de base reste present dans `conf.d` et son
+# `server_name localhost` prend la main des qu'un client vise `localhost` : la
+# bordure sert alors la page d'accueil nginx et repond 404 sur `/api/...`, alors
+# que `127.0.0.1` atteint normalement l'application. On le neutralise en le
+# rendant non selectionnable, plutot qu'en le supprimant : les scripts d'entree
+# de l'image le modifient par `sed` et echoueraient sur un fichier absent.
+RUN sed -i 's/server_name  localhost;/server_name  __desactive__;/' \
+          /etc/nginx/conf.d/default.conf \
+ && grep -q '__desactive__' /etc/nginx/conf.d/default.conf
+
 COPY templates/conf.d/alphaplat.conf.template \
      /etc/nginx/templates/conf.d/alphaplat.conf.template
 

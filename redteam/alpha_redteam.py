@@ -78,6 +78,10 @@ class BancOffensif:
         self.timeout = timeout
         self.contexte = ssl._create_unverified_context() if insecure else None  # noqa: S323
         self.resultats: dict[str, int] = {}
+        # Marqueur du tir, renseigne par l'appelant : il se retrouve dans le
+        # journal d'acces de la bordure et permet de reconnaitre une repetition
+        # d'attaque au milieu du trafic ordinaire.
+        self.marqueur: str = ""
 
     # -- primitives --------------------------------------------------------
 
@@ -95,7 +99,11 @@ class BancOffensif:
         bordure commence à bloquer."""
         url = f"{self.cible}{chemin}"
         donnees = json.dumps(corps).encode() if corps is not None else None
-        entetes_complets = {"User-Agent": "AlphaPay-RedTeam/1.0", "Accept": "*/*"}
+        entetes_complets = {
+            "User-Agent": "AlphaPay-RedTeam/1.0",
+            "Accept": "*/*",
+            "X-Alphapay-Redteam": self.marqueur or "1",
+        }
         if donnees is not None:
             entetes_complets["Content-Type"] = "application/json"
         if entetes:
@@ -298,6 +306,7 @@ def main() -> int:
     arguments = analyseur.parse_args()
 
     banc = BancOffensif(arguments.target, insecure=arguments.insecure)
+    banc.marqueur = arguments.scenario
 
     print(f"=== AlphaPay : banc offensif : scénario {arguments.scenario} ===")
     print(f"  cible : {banc.cible}")
@@ -321,6 +330,16 @@ def main() -> int:
     duree_attaque = time.time() - debut
 
     print(f"\n  attaque terminée en {duree_attaque:.0f} s")
+    # Le débit visé n'est pas le débit atteint : le plafond réel tient à la
+    # concurrence et à la latence de la cible. Sans cette mesure, le chiffre
+    # annoncé fait foi et fausse toute lecture de la détection, qui raisonne sur
+    # ce que la bordure a réellement vu.
+    total_rafale = sum(v for cle, v in banc.resultats.items() if cle.startswith("rafale:"))
+    if total_rafale:
+        print(
+            f"  débit atteint : {total_rafale / max(duree_attaque, 1e-6):.0f} req/s "
+            f"(visé {arguments.debit} req/s)"
+        )
     print("  répartition des réponses :")
     for cle, nombre in sorted(banc.resultats.items()):
         code = cle.split(":")[-1]
