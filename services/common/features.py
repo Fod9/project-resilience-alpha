@@ -72,6 +72,14 @@ PREFIXES_OBSERVATION: tuple[str, ...] = (
     "/pay",
     "/healthz",
     "/favicon",
+    # Le journal de bordure porte le chemin *apres* reecriture : les sondes du
+    # tableau de bord y apparaissent en `/score/current` et `/features/current`,
+    # sans le prefixe `/api/...`. Sans ces deux entrees, une fenetre composee des
+    # seules sondes de l'operateur n'est pas reconnue comme consultation, elle est
+    # notee, et l'anomalie reste active en permanence : le detecteur ne signale
+    # alors plus jamais la moindre attaque, tout en repondant normalement.
+    "/score",
+    "/features",
 )
 
 

@@ -337,6 +337,28 @@ async def _enregistrer(rapport: dict[str, Any]) -> None:
                     error=str(erreur))
 
 
+async def _abandonner_anomalie(motif: str, fenetre: dict[str, Any]) -> None:
+    """Clôt une anomalie en cours quand une fenêtre n'est pas notable.
+
+    Sans cela, une anomalie confirmée restait active tant que le score ne
+    redescendait pas, et le détecteur ne notifiait plus jamais rien : une attaque
+    survenue ensuite passait totalement inaperçue alors que le service répondait
+    normalement. Une fenêtre qu'on ne sait pas juger ne peut pas prolonger un
+    jugement.
+    """
+    _etat["consecutives"] = 0
+    active = bool(_etat["anomalie_active"])
+    _etat["anomalie_active"] = False
+    events.emit(
+        "detector.window_skipped",
+        message=motif,
+        window_end=fenetre.get("window_end"),
+        anomaly_cleared=active,
+        requests_per_second=(fenetre.get("features") or {}).get("requests_per_second"),
+        top_paths=(fenetre.get("diagnostics") or {}).get("top_paths"),
+    )
+
+
 async def _cycle() -> None:
     paquet = _etat["modele"]
     if paquet is None:
@@ -362,11 +384,8 @@ async def _cycle() -> None:
     # ce chemin qu'un poste au repos se fait declarer en rafale. On ne note donc
     # que ce qui a ete reellement observe.
     if int(fenetre.get("edge_events_in_window") or 0) <= 0:
-        _etat["consecutives"] = 0
-        events.emit(
-            "detector.without_traffic",
-            window_end=fenetre.get("window_end"),
-            message="fenetre sans trafic de bordure : non notee",
+        await _abandonner_anomalie(
+            "fenetre sans trafic de bordure : non notee", fenetre
         )
         return
 
@@ -385,13 +404,9 @@ async def _cycle() -> None:
         return
     debit = float(vecteur.get("requests_per_second") or 0.0)
     if diagnostics.get("observation_seule") and debit < PLAFOND_CONSULTATION_RPS:
-        _etat["consecutives"] = 0
-        events.emit(
-            "detector.observation_only",
-            window_end=fenetre.get("window_end"),
-            message="fenetre composee des seules routes de consultation : non notee",
-            requests_per_second=debit,
-            top_paths=diagnostics.get("top_paths"),
+        await _abandonner_anomalie(
+            "fenetre composee des seules routes de consultation : non notee",
+            fenetre,
         )
         return
 
