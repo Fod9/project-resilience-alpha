@@ -240,26 +240,38 @@ class SuiteDeVerification:
         )
 
     async def _confinement_effectif(self, contexte: dict[str, Any]) -> Controle:
+        """Le confinement est établi par l'adresse *ou* par la signature.
+
+        Derrière une passerelle (Docker Desktop), l'adresse de l'attaquant est
+        celle de l'opérateur : elle est épargnée et le confinement est porté par
+        la signature du banc. Exiger l'adresse déclarerait l'incident en échec
+        alors que l'attaque est bel et bien confinée.
+        """
         adresse = str(contexte.get("source_ip") or "").strip()
         etat = await self.connecteurs.executer("edge.status", {}, {})
         bloques = set(etat.evidence.get("blocked") or [])
+        signatures = set(etat.evidence.get("signatures") or [])
         temoin = etat.evidence.get("witness") or {}
-        if not adresse:
+        rechargement = temoin.get("result") == "applied"
+        presente = bool(adresse) and adresse in bloques
+        if not adresse and not signatures:
             return Controle(
                 name="containment_effective",
                 passed=False,
                 evidence={
-                    "reason": "aucune adresse source identifiée pour le confinement",
+                    "reason": "aucune adresse source ni signature identifiée pour le confinement",
                     "blocked": sorted(bloques),
+                    "signatures": sorted(signatures),
                 },
             )
-        presente = adresse in bloques
         return Controle(
             name="containment_effective",
-            passed=presente and temoin.get("result") == "applied",
+            passed=(presente or bool(signatures)) and rechargement,
             evidence={
                 "source_ip": adresse,
                 "blocked": presente,
+                "signatures": sorted(signatures),
+                "par": "adresse" if presente else "signature",
                 "protected_ip": adresse in self.connecteurs.never_block,
                 "edge_reload": temoin.get("result"),
                 "blocked_total": len(bloques),

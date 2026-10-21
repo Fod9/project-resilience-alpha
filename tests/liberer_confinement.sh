@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Libere toutes les adresses presentement confinees.
+# Libere les confinements en cours : adresses et signatures.
 #
-# Utile sous Docker Desktop pour Mac : la redirection des ports publics reecrit la
-# source de toute connexion entrante en l'adresse de la passerelle de la machine
-# virtuelle (192.168.65.1). Le banc et le navigateur de l'operateur partagent donc
-# la meme adresse, et le confinement par adresse coupe les deux. Sur la cible
-# Windows, les adresses different et ce script ne sert qu'en cas d'erreur.
+# Utile sous Docker Desktop : la redirection des ports publics reecrit la source
+# de toute connexion entrante en l'adresse de la passerelle du sous-reseau, si
+# bien que l'adresse de l'attaquant et celle de l'operateur sont confondues. Le
+# confinement epargne desormais l'adresse qui consulte la salle d'operations et
+# s'appuie sur la signature du banc offensif ; ce script leve les deux formes.
 #
 # Usage : bash tests/liberer_confinement.sh [base-de-la-bordure]
 set -uo pipefail
@@ -19,31 +19,54 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-adresses="$(curl -s "$CIBLE/api/supervision/blocklist" | python3 -c "
+libere() {
+  printf '%s -> ' "$1"
+  curl -s -X POST "$CIBLE/api/ops/actions/unblock" \
+    -H "Content-Type: application/json" \
+    -H "X-Admin-Token: $TOKEN" \
+    -d "$2" | python3 -c "
+import json, sys
+try:
+    reponse = json.load(sys.stdin)
+except json.JSONDecodeError:
+    print('reponse illisible')
+    raise SystemExit
+if reponse.get('ok'):
+    print('liberee' if not reponse.get('skipped') else 'deja libre')
+else:
+    print(reponse.get('detail') or reponse.get('title') or reponse)
+"
+}
+
+etat="$(curl -s "$CIBLE/api/supervision/blocklist")"
+adresses="$(printf '%s' "$etat" | python3 -c "
 import json, sys
 charge = json.load(sys.stdin)
-print(' '.join(entree.get('ip', '') for entree in charge.get('blocked', [])))
+print(' '.join(entree['ip'] for entree in charge.get('blocked', []) if entree.get('ip')))
+")"
+signatures="$(printf '%s' "$etat" | python3 -c "
+import json, sys
+charge = json.load(sys.stdin)
+print('|'.join(entree['signature'] for entree in charge.get('blocked', []) if entree.get('signature')))
 ")"
 
-if [ -z "$adresses" ]; then
-  echo "aucune adresse confinee"
+if [ -z "$adresses" ] && [ -z "$signatures" ]; then
+  echo "aucun confinement en cours"
   exit 0
 fi
 
 for adresse in $adresses; do
-  printf '%s -> ' "$adresse"
-  curl -s -X POST "$CIBLE/api/ops/actions/unblock" \
-    -H "Content-Type: application/json" \
-    -H "X-Admin-Token: $TOKEN" \
-    -d "{\"ip\": \"$adresse\"}" | python3 -c "
-import json, sys
-reponse = json.load(sys.stdin)
-if reponse.get('ok'):
-    print('liberee')
-else:
-    print(reponse.get('detail') or reponse.get('title') or reponse)
-"
+  libere "$adresse" "$(python3 -c "import json,sys; print(json.dumps({'ip': sys.argv[1]}))" "$adresse")"
 done
 
-curl -s "$CIBLE/api/supervision/blocklist"
+if [ -n "$signatures" ]; then
+  ancien_ifs="$IFS"
+  IFS='|'
+  for signature in $signatures; do
+    libere "signature $signature" "$(python3 -c "import json,sys; print(json.dumps({'signature': sys.argv[1]}))" "$signature")"
+  done
+  IFS="$ancien_ifs"
+fi
+
 echo
+echo "restant : $(curl -s "$CIBLE/api/supervision/blocklist")"

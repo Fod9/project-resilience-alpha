@@ -7,7 +7,10 @@
 # le conteneur de bordure pour en sortir. Il est désormais évalué par
 # emplacement ; la route de libération n'inclut que les en-têtes.
 
-if ($alphapay_blocked) {
+# Le contrôle porte sur l'adresse *et* sur la signature : une adresse peut
+# n'être confinée qu'à cause d'un voisin derrière la même passerelle, une
+# signature ne désigne que le banc offensif.
+if ($alphapay_denied) {
     return 403;
 }
 

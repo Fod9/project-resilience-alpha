@@ -437,6 +437,10 @@ services:
       AUTH_URL: http://api-auth:8000
       LEDGER_URL: http://api-ledger:8000
       DETECTOR_URL: http://detector:8000
+      # Le moteur interroge la telemetrie au moment de confiner : ses diagnostics
+      # portent les adresses qui consultent la salle d'operations et l'agent du
+      # banc offensif, dont depend la selectivite du confinement.
+      TELEMETRY_URL: http://telemetry:8000
       # Les sondes de vérification passent par la bordure : c'est le seul chemin
       # qui prouve que la chaîne complète est rétablie, et non un service isolé.
       EDGE_PUBLIC_URL: http://edge:8080

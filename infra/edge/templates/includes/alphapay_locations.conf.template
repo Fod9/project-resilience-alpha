@@ -7,9 +7,20 @@
 #  attribuent une nouvelle adresse, et la bordure doit suivre sans rechargement
 #  manuel.
 #
-#  Ordre impératif : `set` AVANT `rewrite ... break`. L'option `break`
-#  interrompt la phase de réécriture : toute instruction `set` placée après ne
-#  serait jamais exécutée et `proxy_pass` recevrait une variable vide.
+#  Ordre impératif, dans chaque emplacement :
+#    1. le contrôle de liste de blocage (`includes/alphapay_proxy.conf`) ;
+#    2. `set $alphapay_upstream` ;
+#    3. `rewrite ... break` ;
+#    4. `proxy_pass`.
+#
+#  Le contrôle de liste est un bloc `if`, donc une directive de la phase de
+#  réécriture : placé après un `rewrite ... break`, il n'est **jamais** évalué.
+#  Il était en dernière position, si bien que le confinement n'était appliqué
+#  qu'aux emplacements sans réécriture — la consultation et l'interface — et
+#  jamais aux routes métier réécrites, celles-là mêmes que l'attaquant
+#  sollicite. Le confinement coupait donc l'opérateur sans arrêter l'attaquant.
+#  `set` doit rester avant `rewrite` pour la même raison : `break` interrompt la
+#  phase, une affectation placée après ne serait jamais exécutée.
 # =============================================================================
 
 # --- Santé de la bordure elle-même (non journalisée, non inspectée par le WAF)
@@ -34,12 +45,12 @@ location = /metrics/nginx {
 
 # --- Authentification : jeton, rafraîchissement, JWKS
 location /api/auth/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_auth burst=30 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://api-auth:8000;
     rewrite ^/api/auth/(.*)$ /$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Paiements : création, consultation, historique
@@ -49,22 +60,22 @@ location /api/auth/ {
 #     sont traités. Sans cela, un appel sans suffixe retomberait sur l'interface
 #     web et renverrait une erreur 404 déroutante.
 location /api/payments {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_api burst=120 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://api-payment:8000;
     rewrite ^/api/payments(.*)$ /payments$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Grand livre : soldes, intégrité, instantanés
 location /api/ledger/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_api burst=60 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://api-ledger:8000;
     rewrite ^/api/ledger/(.*)$ /$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Supervision : incidents, chronologie, actions, vérifications
@@ -73,15 +84,15 @@ location /api/ledger/ {
 #     sous `/api/supervision/...`. Le contrat est donc identique en interne et
 #     en externe, ce qui évite toute divergence entre l'appelant et le service.
 location /api/supervision/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://remediation:8000;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
-# --- Libération d'une adresse confinée : la seule route joignable depuis une
-#     adresse inscrite sur la liste de blocage. Elle inclut uniquement les
+# --- Libération d'un confinement : la seule route joignable depuis une adresse
+#     ou une signature inscrite sur les listes. Elle inclut uniquement les
 #     en-têtes de mandatement, pas le contrôle de liste, et reste protégée par
 #     le jeton d'administration exigé par le moteur.
 location = /api/ops/actions/unblock {
@@ -98,50 +109,50 @@ location = /api/ops/actions/unblock {
 #     `/api/ops/ingest/falco` atteint ainsi la route `/api/ingest/falco` du
 #     service, dont le contrat est identique en interne et en externe.
 location /api/ops/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://remediation:8000;
     rewrite ^/api/ops/(.*)$ /api/$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Détecteur : fenêtre courante, score, historique
 location /api/detector/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://detector:8000;
     rewrite ^/api/detector/(.*)$ /$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Assistant documentaire (RAG) : un modèle local sur CPU peut mettre
 #     plusieurs dizaines de secondes à produire une réponse.
 location /api/assistant/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_auth burst=10 nodelay;
     proxy_read_timeout 180s;
     set $alphapay_upstream http://assistant:8000;
     rewrite ^/api/assistant/(.*)$ /$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Télémétrie : variables observées, en lecture seule
 location /api/telemetry/ {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_obs burst=600 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://telemetry:8000;
     rewrite ^/api/telemetry/(.*)$ /$1 break;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }
 
 # --- Interface web : paiement client et salle d'opérations
 location / {
+    include includes/alphapay_proxy.conf;
     limit_req zone=alphapay_api burst=200 nodelay;
     proxy_read_timeout 30s;
     set $alphapay_upstream http://web:8080;
     proxy_pass $alphapay_upstream;
-    include includes/alphapay_proxy.conf;
 }

@@ -20,12 +20,25 @@ set -u
 
 DIR="/etc/nginx/dynamic"
 MAP="$DIR/blocklist.map"
+#: Liste des signatures confinees (agent utilisateur du banc offensif). Elle est
+#: suivie comme la liste d'adresses : un changement dans l'une ou l'autre doit
+#: provoquer le rechargement, sans quoi un confinement par signature resterait
+#: lettre morte.
+SIGNATURES="$DIR/agents.map"
 WITNESS="$DIR/reload-witness.json"
 JOURNAL="/var/log/alphapay/edge-reload.log"
 
 fingerprint() {
-    if [ -f "$MAP" ]; then
-        md5sum "$MAP" 2>/dev/null | cut -d' ' -f1
+    total=""
+    for fichier in "$MAP" "$SIGNATURES"; do
+        if [ -f "$fichier" ]; then
+            total="$total$(md5sum "$fichier" 2>/dev/null | cut -d' ' -f1)"
+        else
+            total="$total""absent"
+        fi
+    done
+    if [ -n "$total" ]; then
+        printf '%s' "$total" | md5sum | cut -d' ' -f1
     else
         printf 'absent'
     fi

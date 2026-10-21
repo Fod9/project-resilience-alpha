@@ -309,7 +309,9 @@ def _construire_playbook(brut: dict[str, Any], origine: str) -> Playbook:
 ACTIONS_AUTORISEES: frozenset[str] = frozenset(
     {
         "edge.block_ip",
+        "edge.block_signature",
         "edge.unblock_ip",
+        "edge.unblock_signature",
         "edge.status",
         "auth.revoke_by_source",
         "auth.lock_account",

@@ -366,31 +366,37 @@ Hôte, conformément au §4 du sujet.
   moderne eBPF et un `privileged: true` documenté (aucun accès hôte non borné
   au-delà du nécessaire).
 
-### 9.4 Limite mesurée : adresse source sous Docker Desktop pour Mac
+### 9.4 Limite mesurée : adresse source derrière Docker Desktop
 
-Sur la cible imposée (Windows 10/11 + Docker Desktop / WSL2, PA mobile), le PC
-attaquant conserve son adresse : le poste hôte est `192.168.137.1` et l'attaquant
-`192.168.137.20`, donc le confinement par adresse ne vise que l'attaquant.
+Avec Docker Desktop, une connexion entrante vers un port publié n'arrive pas
+avec l'adresse du client : elle arrive avec **l'adresse de la passerelle du
+sous-réseau**. Mesure faite sous Docker Desktop pour Mac lors d'un tir A1 depuis
+un poste distinct : la fenêtre du détecteur porte **880 requêtes, toutes de
+`192.168.65.1`**, attaquant et navigateur de l'opérateur confondus.
 
-Sous **Docker Desktop pour Mac**, la redirection des ports publics réécrit la
-source de toute connexion entrante en `192.168.65.1`, la passerelle de la machine
-virtuelle. Mesure faite sur un tir A1 depuis un poste distinct : la fenêtre du
-détecteur porte **880 requêtes, toutes de `192.168.65.1`**, attaquant et
-navigateur de l'opérateur confondus. Le confinement par adresse, correct dans son
-principe, coupe donc les deux à la fois.
+La limite n'est pas propre à macOS. Sur Docker Desktop pour Windows (backend
+WSL2), les réseaux *bridge* reçoivent également toutes les connexions depuis
+l'adresse de passerelle du sous-réseau configuré, et la fonction « host
+networking » récente se comporte de même depuis `127.0.0.1`. Le mode miroir de
+WSL2 ne corrige pas le cas, **Docker Desktop ne s'en servant pas**. La seule
+configuration connue qui conserve l'adresse du client est un moteur `docker-ce`
+installé directement dans une distribution WSL2, avec `networkingMode=mirrored`
+et `hostAddressLoopback=true` : ce n'est plus le déploiement prescrit.
 
-Deux conséquences assumées :
+Conséquence pour la démonstration, sur les deux systèmes : un confinement par
+adresse seule vise la passerelle, donc l'attaquant **et** l'opérateur. Le
+confinement est par conséquent évalué sur deux critères :
 
-- la démonstration sur Mac perd la sélectivité du confinement ; elle la retrouve
-  sur la cible Windows, où les adresses diffèrent ;
-- l'opérateur confiné se libère par la route d'administration prévue pour ce cas,
-  `POST /api/ops/actions/unblock`, qui reste joignable depuis une adresse bloquée
-  (voir RUNBOOKS R4) ; les assertions de confinement restent vérifiables.
+- la **signature du banc offensif** (agent utilisateur `AlphaPay-RedTeam/1.0`,
+  en-tête `X-Alphapay-Redteam`), qui ne désigne que l'attaquant et reste juste
+  derrière une passerelle ;
+- l'**adresse**, sauf si celle-ci dessert aussi la consultation de la salle
+  d'opérations dans la fenêtre courante, auquel cas c'est le poste de
+  l'opérateur et elle est épargnée.
 
-L'identification par la signature du banc (`User-Agent: AlphaPay-RedTeam/1.0`,
-en-tête `X-Alphapay-Redteam`) existe déjà dans les journaux de bordure et
-permettrait un confinement sélectif même derrière une passerelle, au prix d'un
-critère de confinement qui ne serait plus l'adresse.
+L'opérateur confiné par erreur garde de toute façon une issue :
+`POST /api/ops/actions/unblock`, joignable depuis une adresse bloquée
+(voir RUNBOOKS R4).
 
 ---
 

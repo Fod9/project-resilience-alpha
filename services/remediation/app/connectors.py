@@ -82,6 +82,10 @@ class Connecteurs:
         self.payment_url = env_str("PAYMENT_URL", "http://api-payment:8000")
         self.ledger_url = env_str("LEDGER_URL", "http://api-ledger:8000")
         self.detector_url = env_str("DETECTOR_URL", "http://detector:8000")
+        # La télémétrie est interrogée au moment de confiner : ses diagnostics
+        # portent les adresses qui consultent la salle d'opérations et l'agent du
+        # banc offensif, dont dépend la sélectivité du confinement.
+        self.telemetry_url = env_str("TELEMETRY_URL", "http://telemetry:8000")
         self.edge_url = env_str("EDGE_PUBLIC_URL", "http://edge:8080")
         self.vault_addr = env_str("VAULT_ADDR", "")
         self.vault_token = env_str("VAULT_TOKEN", "")
@@ -121,6 +125,8 @@ class Connecteurs:
         self._registre = {
             "edge.block_ip": self._edge_block_ip,
             "edge.unblock_ip": self._edge_unblock_ip,
+            "edge.block_signature": self._edge_block_signature,
+            "edge.unblock_signature": self._edge_unblock_signature,
             "edge.status": self._edge_status,
             "auth.revoke_by_source": self._auth_revoke_by_source,
             "auth.lock_account": self._auth_lock_account,
@@ -197,21 +203,26 @@ class Connecteurs:
         return os.path.join(self.edge_state_dir, "blocklist-state.json")
 
     def _lire_etat(self) -> dict[str, dict[str, Any]]:
+        return self._lire_etat_fichier(self._chemin_etat())
+
+    def _lire_etat_fichier(self, chemin: str) -> dict[str, dict[str, Any]]:
         try:
-            with open(self._chemin_etat(), encoding="utf-8") as fichier:
+            with open(chemin, encoding="utf-8") as fichier:
                 contenu = json.load(fichier)
         except (OSError, json.JSONDecodeError):
             return {}
         if not isinstance(contenu, dict):
             return {}
         return {
-            str(adresse): dict(meta)
-            for adresse, meta in contenu.items()
+            str(cle): dict(meta)
+            for cle, meta in contenu.items()
             if isinstance(meta, dict)
         }
 
     def _ecrire_etat(self, etat: dict[str, dict[str, Any]]) -> None:
-        chemin = self._chemin_etat()
+        self._ecrire_etat_fichier(self._chemin_etat(), etat)
+
+    def _ecrire_etat_fichier(self, chemin: str, etat: dict[str, dict[str, Any]]) -> None:
         os.makedirs(os.path.dirname(chemin), exist_ok=True)
         provisoire = f"{chemin}.{uuid.uuid4().hex}.tmp"
         with open(provisoire, "w", encoding="utf-8") as fichier:
@@ -243,6 +254,26 @@ class Connecteurs:
                     "permanent": not echeance,
                 }
             )
+        # Les signatures confinées figurent dans la même liste : l'opérateur doit
+        # pouvoir lire d'un seul coup d'œil tout ce que la bordure refuse, qu'il
+        # s'agisse d'une adresse ou d'un banc offensif.
+        etat_signatures = self._lire_etat_fichier(self._chemin_etat_signatures())
+        for agent in sorted(self._lire_signatures()):
+            meta = etat_signatures.get(agent) or {}
+            echeance = float(meta.get("expire_at") or 0.0)
+            lignes.append(
+                {
+                    "signature": agent,
+                    "expire_at": echeance or None,
+                    "expire_le": meta.get("expire_le") or "",
+                    "secondes_restantes": (
+                        max(0, int(echeance - maintenant)) if echeance else None
+                    ),
+                    "raison": meta.get("raison") or "",
+                    "incident": meta.get("incident") or "",
+                    "permanent": not echeance,
+                }
+            )
         return lignes
 
     async def expirer_blocages(self) -> list[str]:
@@ -251,7 +282,8 @@ class Connecteurs:
         Sans cette purge, `ttl_seconds` n'est qu'une intention : la durée est
         écrite dans la `map` de nginx, qui ne connaît pas la notion de date, et
         tout blocage devient définitif. C'est acceptable contre une attaque, pas
-        pour un opérateur confiné par erreur.
+        pour un opérateur confiné par erreur. Les signatures suivent la même
+        échéance, sinon un banc resterait confiné au-delà de la durée annoncée.
         """
         maintenant = time.time()
         etat = self._lire_etat()
@@ -260,21 +292,39 @@ class Connecteurs:
             for adresse, meta in etat.items()
             if float(meta.get("expire_at") or 0.0) and float(meta["expire_at"]) <= maintenant
         ]
-        if not expirees:
+        chemin_signatures = self._chemin_etat_signatures()
+        etat_signatures = self._lire_etat_fichier(chemin_signatures)
+        signatures_expirees = [
+            agent
+            for agent, meta in etat_signatures.items()
+            if float(meta.get("expire_at") or 0.0) and float(meta["expire_at"]) <= maintenant
+        ]
+        if not expirees and not signatures_expirees:
             return []
 
-        entrees = self._lire_entrees()
-        for adresse in expirees:
-            entrees.pop(adresse, None)
-            etat.pop(adresse, None)
-        contenu = self._ecrire_entrees(entrees)
-        empreinte = hashlib.md5(contenu).hexdigest()
+        contenu: bytes | None = None
+        if expirees:
+            entrees = self._lire_entrees()
+            for adresse in expirees:
+                entrees.pop(adresse, None)
+                etat.pop(adresse, None)
+            contenu = self._ecrire_entrees(entrees)
+            self._ecrire_etat(etat)
+        contenu_signatures: bytes | None = None
+        if signatures_expirees:
+            signatures = self._lire_signatures()
+            for agent in signatures_expirees:
+                signatures.pop(agent, None)
+                etat_signatures.pop(agent, None)
+            contenu_signatures = self._ecrire_signatures(signatures)
+            self._ecrire_etat_fichier(chemin_signatures, etat_signatures)
+        empreinte = self._empreinte_bordure(liste=contenu, signatures=contenu_signatures)
         confirmation = await self._attendre_rechargement(empreinte)
-        self._ecrire_etat(etat)
         self.events.emit(
             "edge.block_expired",
             message="blocage arrivé à échéance, adresse libérée à la bordure",
             adresses=expirees,
+            signatures=signatures_expirees,
             edge_reload=confirmation,
         )
         return expirees
@@ -346,6 +396,207 @@ class Connecteurs:
                 return f"réseau protégé {reseau}"
         return None
 
+    def _chemin_signatures(self) -> str:
+        return os.path.join(self.edge_state_dir, "agents.map")
+
+    def _chemin_etat_signatures(self) -> str:
+        return os.path.join(self.edge_state_dir, "agents-state.json")
+
+    def _lire_signatures(self) -> dict[str, int]:
+        """Signatures confinees, lues dans la `map` d'agents de la bordure."""
+        chemin = self._chemin_signatures()
+        entrees: dict[str, int] = {}
+        if not os.path.isfile(chemin):
+            return entrees
+        with open(chemin, encoding="utf-8", errors="replace") as fichier:
+            for ligne in fichier:
+                ligne = ligne.strip()
+                if not ligne or ligne.startswith("#"):
+                    continue
+                # La cle est entre guillemets : un agent utilisateur contient des
+                # espaces et des parentheses, qu'une `map` nginx n'accepterait pas
+                # nue.
+                if not ligne.startswith('"'):
+                    continue
+                fin = ligne.find('"', 1)
+                if fin > 0 and ligne[fin + 1 :].strip().startswith("1;"):
+                    entrees[ligne[1:fin].replace('\\"', '"')] = int(time.time())
+        return entrees
+
+    def _ecrire_signatures(self, entrees: dict[str, Any]) -> bytes:
+        now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        lignes = [
+            "# Signatures de banc offensif confinees : ecrite par le moteur de remediation.",
+            f"# Derniere mise a jour : {now}",
+        ]
+        for agent in sorted(entrees):
+            cle = str(agent).replace("\\", "\\\\").replace('"', '\\"')
+            lignes.append(f'"{cle}" 1;')
+        contenu = ("\n".join(lignes) + "\n").encode()
+        chemin = self._chemin_signatures()
+        os.makedirs(os.path.dirname(chemin), exist_ok=True)
+        provisoire = f"{chemin}.{uuid.uuid4().hex}.tmp"
+        with open(provisoire, "wb") as fichier:
+            fichier.write(contenu)
+            fichier.flush()
+            os.fsync(fichier.fileno())
+        os.replace(provisoire, chemin)
+        return contenu
+
+    def _empreinte_bordure(
+        self, liste: bytes | None = None, signatures: bytes | None = None
+    ) -> str:
+        """Empreinte des deux listes, telle que la calcule le surveillant.
+
+        Le surveillant de la bordure observe les deux fichiers et publie une
+        empreinte combinee : la reproduire ici est ce qui permet d'attendre la
+        confirmation du rechargement apres une ecriture.
+        """
+        parties: list[str] = []
+        for chemin, contenu in (
+            (self._chemin_liste(), liste),
+            (self._chemin_signatures(), signatures),
+        ):
+            if contenu is None:
+                try:
+                    with open(chemin, "rb") as fichier:
+                        contenu = fichier.read()
+                except OSError:
+                    parties.append("absent")
+                    continue
+            parties.append(hashlib.md5(contenu).hexdigest())
+        return hashlib.md5("".join(parties).encode()).hexdigest()
+
+    async def _fenetre_courante(self) -> dict[str, Any]:
+        """Diagnostics de la derniere fenetre notee par la telemetrie."""
+        try:
+            reponse = await request_json(
+                "GET", f"{self.telemetry_url}/features/history?limit=3", timeout=4.0
+            )
+        except Exception as erreur:  # noqa: BLE001
+            # Sans diagnostics, le confinement par adresse reste applique : c'est
+            # le comportement d'avant, jamais un blocage silencieux de l'inconnu.
+            self.events.warn(
+                "edge.diagnostics_unavailable",
+                message="diagnostics indisponibles : confinement par adresse applique",
+                error=str(erreur)[:160],
+            )
+            return {}
+        fenetres = (reponse or {}).get("windows") or []
+        for fenetre in reversed(list(fenetres)):
+            diagnostics = fenetre.get("diagnostics") or {}
+            if diagnostics:
+                return diagnostics
+        return {}
+
+    async def _adresse_de_consultation(self, adresse: str) -> bool:
+        """Vrai si l'adresse dessert la consultation dans la fenetre courante.
+
+        Derriere Docker Desktop, l'attaquant et l'operateur partagent l'adresse
+        de la passerelle : confiner cette adresse couperait l'operateur, qui n'a
+        rien fait. Elle est donc epargnee, et le confinement est porte par la
+        signature du banc offensif.
+        """
+        if not adresse:
+            return False
+        diagnostics = await self._fenetre_courante()
+        adresses = {str(item) for item in (diagnostics.get("adresses_consultation") or [])}
+        return adresse in adresses
+
+    async def _edge_block_signature(
+        self, params: dict[str, Any], _: dict[str, Any]
+    ) -> Resultat:
+        """Confine une signature de banc offensif, pas une adresse.
+
+        La signature ne depend pas de la passerelle : elle reste juste quand
+        l'adresse ne distingue plus l'attaquant de l'operateur.
+        """
+        agent = str(params.get("agent") or params.get("signature") or "").strip()
+        if not agent:
+            diagnostics = await self._fenetre_courante()
+            agent = str(diagnostics.get("agent_offensif") or "").strip()
+        if not agent:
+            raise ActionRefusee(
+                "signature absente et aucune signature offensive identifiable dans la fenetre"
+            )
+        ttl = int(params.get("ttl_seconds") or 900)
+        entrees = self._lire_signatures()
+        if agent in entrees:
+            return Resultat(
+                ok=True,
+                action="edge.block_signature",
+                skipped=True,
+                detail=f"signature « {agent} » déjà confinée",
+                evidence={"agent": agent, "already_blocked": True},
+            )
+        echeance = time.time() + max(0, ttl)
+        entrees[agent] = int(echeance)
+        contenu = self._ecrire_signatures(entrees)
+        chemin_etat = self._chemin_etat_signatures()
+        etat = self._lire_etat_fichier(chemin_etat)
+        etat[agent] = {
+            "expire_at": round(echeance, 3),
+            "expire_le": dt.datetime.fromtimestamp(echeance, dt.timezone.utc).isoformat(),
+            "duree_secondes": ttl,
+            "raison": str(params.get("reason") or ""),
+            "incident": str(params.get("incident_id") or ""),
+        }
+        self._ecrire_etat_fichier(chemin_etat, etat)
+        empreinte = self._empreinte_bordure(signatures=contenu)
+        confirmation = await self._attendre_rechargement(empreinte)
+        applique = confirmation.get("result") == "applied"
+        return Resultat(
+            ok=applique,
+            action="edge.block_signature",
+            detail=(
+                f"signature « {agent} » confinée à la bordure"
+                if applique
+                else f"confinement non confirmé par la bordure ({confirmation.get('result')})"
+            ),
+            evidence={
+                "agent": agent,
+                "ttl_seconds": ttl,
+                "expire_le": etat[agent]["expire_le"],
+                "fingerprint": empreinte,
+                "edge_reload": confirmation,
+            },
+        )
+
+    async def _edge_unblock_signature(
+        self, params: dict[str, Any], _: dict[str, Any]
+    ) -> Resultat:
+        agent = str(params.get("agent") or params.get("signature") or "").strip()
+        if not agent:
+            raise ActionRefusee("signature absente")
+        entrees = self._lire_signatures()
+        chemin_etat = self._chemin_etat_signatures()
+        etat = self._lire_etat_fichier(chemin_etat)
+        if agent not in entrees and agent not in etat:
+            return Resultat(
+                ok=True,
+                action="edge.unblock_signature",
+                skipped=True,
+                detail=f"la signature « {agent} » n'était pas confinée",
+                evidence={"agent": agent, "was_blocked": False},
+            )
+        entrees.pop(agent, None)
+        etat.pop(agent, None)
+        contenu = self._ecrire_signatures(entrees)
+        self._ecrire_etat_fichier(chemin_etat, etat)
+        empreinte = self._empreinte_bordure(signatures=contenu)
+        confirmation = await self._attendre_rechargement(empreinte)
+        return Resultat(
+            ok=True,
+            action="edge.unblock_signature",
+            detail=f"signature « {agent} » libérée",
+            evidence={
+                "agent": agent,
+                "restantes": sorted(entrees),
+                "fingerprint": empreinte,
+                "edge_reload": confirmation,
+            },
+        )
+
     async def _edge_block_ip(self, params: dict[str, Any], _: dict[str, Any]) -> Resultat:
         adresse = str(params.get("ip") or "").strip()
         if not adresse:
@@ -366,6 +617,27 @@ class Connecteurs:
                 skipped=True,
                 detail=f"{adresse} figure parmi les adresses jamais bloquées ({protection})",
                 evidence={"ip": adresse, "protected": True, "raison": protection},
+            )
+        if await self._adresse_de_consultation(adresse):
+            # Derriere Docker Desktop, l'attaquant et l'operateur partagent
+            # l'adresse de la passerelle. Confiner cette adresse reviendrait a
+            # couper l'operateur : elle est epargnee, le confinement etant porte
+            # par la signature du banc (voir `edge.block_signature`).
+            self.events.warn(
+                "edge.block_refused",
+                message="blocage refusé : adresse de consultation de l'opérateur",
+                ip=adresse,
+                raison="consultation",
+            )
+            return Resultat(
+                ok=True,
+                action="edge.block_ip",
+                skipped=True,
+                detail=(
+                    f"{adresse} consulte la salle d'opérations : adresse épargnée, "
+                    "le confinement est porté par la signature du banc"
+                ),
+                evidence={"ip": adresse, "consultation": True, "protected": True},
             )
         ttl = int(params.get("ttl_seconds") or 900)
         entrees = self._lire_entrees()
@@ -393,7 +665,7 @@ class Connecteurs:
             "incident": str(params.get("incident_id") or ""),
         }
         self._ecrire_etat(etat)
-        empreinte = hashlib.md5(contenu).hexdigest()
+        empreinte = self._empreinte_bordure(liste=contenu)
         confirmation = await self._attendre_rechargement(empreinte)
         applique = confirmation.get("result") == "applied"
         return Resultat(
@@ -432,7 +704,7 @@ class Connecteurs:
         # ferait expirer plus tard une adresse déjà libérée, et l'opérateur
         # verrait un blocage fantôme dans la liste.
         self._ecrire_etat(etat)
-        empreinte = hashlib.md5(contenu).hexdigest()
+        empreinte = self._empreinte_bordure(liste=contenu)
         confirmation = await self._attendre_rechargement(empreinte)
         reste = sorted(self._lire_entrees())
         return Resultat(
@@ -448,6 +720,7 @@ class Connecteurs:
 
     async def _edge_status(self, _: dict[str, Any], __: dict[str, Any]) -> Resultat:
         entrees = self._lire_entrees()
+        signatures = self._lire_signatures()
         temoin: dict[str, Any] = {}
         try:
             with open(self._chemin_temoin(), encoding="utf-8") as fichier:
@@ -457,8 +730,15 @@ class Connecteurs:
         return Resultat(
             ok=True,
             action="edge.status",
-            detail=f"{len(entrees)} adresse(s) bloquée(s)",
-            evidence={"blocked": sorted(entrees), "witness": temoin},
+            detail=(
+                f"{len(entrees)} adresse(s) bloquée(s), "
+                f"{len(signatures)} signature(s) confinée(s)"
+            ),
+            evidence={
+                "blocked": sorted(entrees),
+                "signatures": sorted(signatures),
+                "witness": temoin,
+            },
         )
 
     # -- authentification --------------------------------------------------

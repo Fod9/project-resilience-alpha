@@ -34,6 +34,23 @@ map $remote_addr $alphapay_blocked {
     include /etc/nginx/dynamic/blocklist*.map;
 }
 
+# Confinement par signature de l'attaquant. Sous Docker Desktop pour Mac, la
+# redirection des ports publics reecrit la source de toute connexion entrante en
+# l'adresse de la passerelle de la machine virtuelle : l'attaquant et le poste de
+# l'operateur partagent alors une seule adresse, et un confinement par adresse
+# coupe aussi l'operateur. La signature, elle, reste propre au banc offensif.
+map $http_user_agent $alphapay_agent_bloque {
+    default 0;
+    include /etc/nginx/dynamic/agents*.map;
+}
+
+# Refus si l'adresse ou la signature est confinee. Les deux listes sont lues au
+# niveau de chaque emplacement, pour que la route de liberation reste joignable.
+map "$alphapay_blocked$alphapay_agent_bloque" $alphapay_denied {
+    "00" 0;
+    default 1;
+}
+
 # -----------------------------------------------------------------------------
 #  Classe de route, utilisée pour étiqueter chaque requête dans les métriques.
 #  `$request_uri` est utilisé et non `$uri` : l'étiquette doit refléter le
@@ -100,6 +117,7 @@ log_format alphapay_json escape=json
         '"status":$status,'
         '"upstream_status":"$alphapay_upstream_seen",'
         '"blocked_ip":$alphapay_blocked,'
+        '"blocked_agent":$alphapay_agent_bloque,'
         '"waf_blocked":$alphapay_waf_blocked,'
         '"duration_s":$request_time,'
         '"bytes_in":$request_length,'

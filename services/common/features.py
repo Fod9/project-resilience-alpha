@@ -374,6 +374,14 @@ class Agregateur:
         ip_compteur: dict[str, int] = {}
         chemin_compteur: dict[str, int] = {}
         identite_compteur: dict[str, int] = {}
+        #: Adresses qui consultent la plateforme : derriere une passerelle
+        #: (Docker Desktop), l'attaquant et l'operateur partagent une adresse,
+        #: mais seul l'operateur consulte la salle d'operations.
+        adresses_consultation: set[str] = set()
+        #: Agent utilisateur des requetes *metier* seulement : l'agent du banc
+        #: offensif est ainsi distinguable de celui du navigateur de l'operateur,
+        #: dont les requetes de consultation sont ecartees ici.
+        agent_compteur: dict[str, int] = {}
         for evenement in self._evenements:
             if evenement.source == "edge":
                 ip = str(evenement.fields.get("source_ip") or "")
@@ -382,12 +390,20 @@ class Agregateur:
                 chemin = str(evenement.fields.get("path") or "")
                 if chemin:
                     chemin_compteur[chemin] = chemin_compteur.get(chemin, 0) + 1
+                if route_d_observation(chemin):
+                    if ip:
+                        adresses_consultation.add(ip)
+                else:
+                    agent = str(evenement.fields.get("user_agent") or "")
+                    if agent:
+                        agent_compteur[agent] = agent_compteur.get(agent, 0) + 1
             elif evenement.kind == "auth.attempt":
                 identifiant = str(evenement.fields.get("identity") or "")
                 if identifiant:
                     identite_compteur[identifiant] = identite_compteur.get(identifiant, 0) + 1
 
         principaux = _principaux(ip_compteur)
+        agents = _principaux(agent_compteur, 3)
         # Une fenetre entierement composee des routes de consultation decrit un
         # operateur qui regarde la plateforme. La designer comme anormale
         # reviendrait a confiner l'operateur pour avoir consulte son tableau de
@@ -408,6 +424,9 @@ class Agregateur:
             "edge_events": sum(ip_compteur.values()),
             "part_observation": round(part_observation, 6),
             "observation_seule": bool(total_chemins) and chemins_observes >= total_chemins,
+            "adresses_consultation": sorted(adresses_consultation),
+            "top_agents": agents,
+            "agent_offensif": agents[0]["value"] if agents else "",
         }
 
     def enrichir_reference(self) -> None:

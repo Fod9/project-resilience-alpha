@@ -166,7 +166,9 @@ ACTIONS_TOUJOURS_PERMISES = frozenset(
         "notify.operator",
         "escalate.human",
         "edge.block_ip",
+        "edge.block_signature",
         "edge.unblock_ip",
+        "edge.unblock_signature",
         "auth.revoke_by_source",
         "auth.lock_account",
     }
@@ -996,13 +998,27 @@ async def debloquer_adresse(
     """
     _exiger_admin(x_admin_token)
     adresse = str((charge or {}).get("ip") or "").strip()
-    if not adresse:
+    signature = str((charge or {}).get("signature") or (charge or {}).get("agent") or "").strip()
+    if not adresse and not signature:
         raise AppError(
             422,
-            "adresse_absente",
-            "Adresse manquante",
-            "Le champ 'ip' est requis pour libérer une adresse.",
+            "cible_absente",
+            "Cible manquante",
+            "Le champ 'ip' ou le champ 'signature' est requis pour libérer un confinement.",
         )
+    if signature:
+        resultat = await connecteurs.executer(
+            "edge.unblock_signature",
+            {"agent": signature},
+            {"source": "operator", "kind": "manual"},
+        )
+        events.emit(
+            "edge.unblock_requested",
+            message="déconfinement de signature demandé par un opérateur",
+            signature=signature,
+            ok=resultat.ok,
+        )
+        return resultat.resume()
     resultat = await connecteurs.executer(
         "edge.unblock_ip",
         {"ip": adresse},

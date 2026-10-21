@@ -29,10 +29,30 @@ playbooks:
       inviter l'attaque à recommencer.
     verification_required: true
     steps:
+      - id: confiner-signature
+        phase: CONTAINING
+        action: edge.block_signature
+        description: >-
+          Confinement de la signature du banc offensif. Juste derrière une
+          passerelle (Docker Desktop), attaquant et opérateur partagent une
+          adresse : la signature, elle, ne désigne que le banc, et le
+          confinement reste sélectif même quand l'adresse ne distingue plus.
+        timeout_seconds: 15
+        on_failure: continue
+        critical: false
+        params:
+          ttl_seconds: 900
+          reason: "rafale volumétrique détectée par le modèle d'anomalie"
+
       - id: bloquer-source
         phase: CONTAINING
         action: edge.block_ip
-        description: "Blocage de l'adresse d'origine à la bordure (liste appliquée sans redémarrage)"
+        description: >-
+          Blocage de l'adresse d'origine à la bordure (liste appliquée sans
+          redémarrage). L'adresse est épargnée si elle dessert aussi la
+          consultation de la salle d'opérations dans la fenêtre courante : c'est
+          alors celle de l'opérateur, et le confinement est déjà porté par la
+          signature.
         timeout_seconds: 15
         on_failure: abort
         critical: true
