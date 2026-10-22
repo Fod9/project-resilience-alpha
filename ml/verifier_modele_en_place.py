@@ -37,6 +37,11 @@ import numpy as np
 
 MARQUES_OFFENSIVES = ("redteam",)
 
+#: Ecart minimal entre le maximum nominal et le minimum d'attaque pour parler
+#: de separation. En dessous, les deux bandes se touchent et l'ordre peut
+#: s'inverser a la fenetre suivante.
+RAPPORT_MINIMUM = 1.5
+
 
 def lire(url, timeout=20):
     contexte = ssl.create_default_context()
@@ -206,13 +211,19 @@ def main() -> int:
         bas = min(valeurs_att)
         if bas > haut > 0:
             rapport = bas / haut
+            # Un rapport de 1,06 « separe » les deux bandes au sens mathematique
+            # et ne veut rien dire au sens pratique : deux valeurs voisines
+            # suffisent a inverser l'ordre des bandes a la fenetre suivante. On
+            # ne retient que les ecarts qui laissent une marge.
+            if rapport < RAPPORT_MINIMUM:
+                continue
             print("  %-24s %10.4f %10.4f %10.2f  SEPARE" % (nom, haut, bas, rapport))
             separantes.append((rapport, nom, haut, bas))
         elif bas > 0 and haut <= 0:
             print("  %-24s %10.4f %10.4f %10s  SEPARE" % (nom, haut, bas, "infini"))
             separantes.append((float("inf"), nom, haut, bas))
     if not separantes:
-        print("  aucune variable ne separe les deux bandes mesurees.")
+        print("  aucune variable ne separe les deux bandes mesurees avec une marge utile.")
     else:
         separantes.sort(reverse=True)
         print("  variables separantes, de la plus nette a la moins nette :")
