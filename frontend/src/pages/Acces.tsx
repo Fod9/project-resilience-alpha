@@ -25,6 +25,7 @@ import {
   chargerModeles,
   expliquerRefusCamera,
   fermerCamera,
+  mesurerDescripteur,
   ouvrirCamera,
   suivreDefi,
   type EtatDefi,
@@ -86,8 +87,11 @@ function useCamera() {
     clignement: false,
     rotationMax: 0,
     rotation: 0,
+    ouverture: 0,
+    seuilFermeture: 0,
+    periodeMs: 0,
+    mesures: 0,
   });
-  const [descripteur, setDescripteur] = useState<number[] | null>(null);
 
   const demarrer = useCallback(async () => {
     const video = videoRef.current;
@@ -111,7 +115,7 @@ function useCamera() {
     try {
       fluxRef.current = await ouvrirCamera(video);
       setFluxPret(true);
-      arretRef.current = suivreDefi(video, setDefi, setDescripteur);
+      arretRef.current = suivreDefi(video, setDefi);
     } catch (probleme) {
       setSouci(expliquerRefusCamera(probleme));
     }
@@ -133,7 +137,22 @@ function useCamera() {
     [],
   );
 
-  return { videoRef, demarrer, arreter, fluxPret, souci, modeles, defi, descripteur };
+  /**
+   * Descripteur de l'image courante, calculé à la demande.
+   *
+   * Il n'est plus mesuré en continu : c'est précisément ce qui rendait la
+   * surveillance trop lente pour voir un clignement, et ce qui produisait une
+   * mesure inutile à chaque image.
+   */
+  const mesurer = useCallback(async (): Promise<number[] | null> => {
+    const video = videoRef.current;
+    if (video === null) {
+      return null;
+    }
+    return mesurerDescripteur(video);
+  }, []);
+
+  return { videoRef, demarrer, arreter, fluxPret, souci, modeles, defi, mesurer };
 }
 
 // =============================================================================
@@ -315,6 +334,7 @@ function Flux({
       <video
         ref={videoRef}
         muted
+        autoPlay
         playsInline
         className={["h-full w-full object-cover", pret ? "opacity-100" : "opacity-0"].join(" ")}
       />
@@ -357,7 +377,7 @@ export default function Acces() {
     } else {
       camera.arreter();
     }
-  }, [onglet, camera]);
+  }, [onglet, camera.demarrer, camera.arreter]);
 
   const retenir = (probleme: unknown) => {
     setHorodatage(new Date().toISOString());
@@ -389,13 +409,23 @@ export default function Acces() {
 
   const soumettreVisage = async (evenement: FormEvent) => {
     evenement.preventDefault();
-    if (camera.descripteur === null || politique === null) {
+    if (politique === null) {
       return;
     }
     setErreur(null);
     setEnCours(true);
     try {
-      await ouvrirParVisage(identifiant.trim(), camera.descripteur, {
+      // Le descripteur est mesuré maintenant, sur l'image vivante : c'est le
+      // geste que le défi vient d'autoriser, pas une mesure vieille de plusieurs
+      // secondes conservée en mémoire pendant la surveillance.
+      const descripteur = await camera.mesurer();
+      if (descripteur === null) {
+        retenir(
+          new ErreurApi("Aucun visage détecté dans le cadre : rien à comparer.", 0, "face_missing"),
+        );
+        return;
+      }
+      await ouvrirParVisage(identifiant.trim(), descripteur, {
         blink: camera.defi.clignement,
         turn_deg: camera.defi.rotationMax,
       });
@@ -512,13 +542,35 @@ export default function Acces() {
                       : camera.defi.rotationMax.toFixed(0) + " degrés sur " + seuilRotation.toFixed(0)}
                   </Etiquette>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
+                    Ouverture des yeux
+                  </span>
+                  <Etiquette ton="neutre">
+                    {camera.defi.visage
+                      ? camera.defi.ouverture.toFixed(2) +
+                        " sous " +
+                        camera.defi.seuilFermeture.toFixed(2)
+                      : "Aucune mesure"}
+                  </Etiquette>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
+                    Cadence de mesure
+                  </span>
+                  <Etiquette ton="neutre">
+                    {camera.defi.mesures > 0
+                      ? camera.defi.periodeMs.toFixed(0) + " ms par image"
+                      : "En attente"}
+                  </Etiquette>
+                </div>
               </div>
 
               <Bouton
                 desactive={
                   enCours ||
                   politique === null ||
-                  camera.descripteur === null ||
+                  !camera.fluxPret ||
                   !defiComplet ||
                   identifiant.trim().length === 0
                 }
@@ -604,20 +656,22 @@ export function Enrolement({ onFermer }: { onFermer: () => void }) {
 
   useEffect(() => {
     void camera.demarrer();
-  }, [camera]);
+  }, [camera.demarrer]);
 
   const attendu = politique?.min_samples ?? 0;
   const identite = etatSession().identite;
 
-  const capturer = () => {
-    if (camera.descripteur === null) {
+  const capturer = async () => {
+    const descripteur = await camera.mesurer();
+    if (descripteur === null) {
+      setErreur(
+        new ErreurApi("Aucun visage détecté dans le cadre : capture refusée.", 0, "face_missing"),
+      );
       return;
     }
     setErreur(null);
     setCaptures((precedentes) =>
-      precedentes.length >= attendu && attendu > 0
-        ? precedentes
-        : [...precedentes, camera.descripteur as number[]],
+      precedentes.length >= attendu && attendu > 0 ? precedentes : [...precedentes, descripteur],
     );
   };
 
@@ -756,9 +810,9 @@ export function Enrolement({ onFermer }: { onFermer: () => void }) {
 
           <Bouton
             type="button"
-            onClick={capturer}
+            onClick={() => void capturer()}
             ton="encre"
-            desactive={camera.descripteur === null || (attendu > 0 && captures.length >= attendu)}
+            desactive={!camera.fluxPret || (attendu > 0 && captures.length >= attendu)}
           >
             Capturer une vue
           </Bouton>

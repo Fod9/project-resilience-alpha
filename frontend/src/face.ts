@@ -2,18 +2,27 @@
  * Reconnaissance faciale dans le navigateur.
  *
  * Le descripteur est calculé ici, sur le poste. Aucune image ne quitte le
- * navigateur : seuls les 128 nombres du descripteur partent vers le service,
- * qui les compare au gabarit du compte. Le flux vidéo ne traverse jamais le
- * réseau, et c'est vérifiable dans l'onglet réseau du navigateur pendant la
- * démonstration.
+ * navigateur : seuls les 128 nombres du descripteur partent vers le service, qui
+ * les compare au gabarit du compte. Le flux vidéo ne traverse jamais le réseau,
+ * et c'est vérifiable dans l'onglet réseau du navigateur.
  *
- * Le défi actif est observé de la même façon, sur les 68 points de repère du
- * visage : un clignement (fermeture puis réouverture des paupières) et une
- * rotation de tête. Sans lui, une photographie tenue devant la caméra produit
- * exactement le même descripteur qu'un visage vivant.
+ * Deux boucles distinctes, et c'est délibéré :
+ *   * la surveillance du défi ne demande que les points de repère du visage :
+ *     elle tourne toutes les 60 ms, assez serré pour voir une paupière qui se
+ *     ferme cent millisecondes ;
+ *   * le calcul du descripteur mobilise le réseau de reconnaissance, dix fois
+ *     plus lourd, et n'a lieu qu'au moment utile : une capture d'enrôlement, ou
+ *     la vérification demandée par l'opérateur.
+ * Les confondre, c'était mesurer une fois toutes les cinq cents millisecondes et
+ * manquer tous les clignements.
  */
 import * as faceapi from "@vladmandic/face-api";
 
+export * from "./defi";
+
+import { SuiviClignement, lacetEstime, ouvertureDesYeux, type PointRepere } from "./defi";
+
+/** Paramètres publics du contrôle facial, lus depuis le service. */
 export interface PolitiqueFaciale {
   dimension: number;
   threshold: number;
@@ -24,31 +33,33 @@ export interface PolitiqueFaciale {
   images_transmitted: boolean;
 }
 
-export interface Observation {
+/** Mesure d'une image, sans descripteur : c'est le régime de la surveillance. */
+export interface ObservationRapide {
   visage: boolean;
-  descripteur: number[] | null;
-  yeuxOuverts: boolean;
+  ouverture: number;
   rotationDegres: number;
 }
 
+/** État du défi, publié à chaque mesure et affiché tel quel. */
 export interface EtatDefi {
   visage: boolean;
   clignement: boolean;
   rotationMax: number;
   rotation: number;
+  ouverture: number;
+  seuilFermeture: number;
+  periodeMs: number;
+  mesures: number;
 }
-
-/** Seuil de fermeture des paupières sur le rapport d'ouverture de l'œil. */
-const SEUIL_OEIL_FERME = 0.2;
-
-/** Durée minimale de fermeture retenue comme un clignement, en millisecondes :
- *  en dessous, c'est du bruit de détection, pas une paupière. */
-const DUREE_CLIGNEMENT_MS = 60;
 
 const OPTIONS_DETECTION = new faceapi.TinyFaceDetectorOptions({
   inputSize: 320,
   scoreThreshold: 0.35,
 });
+
+/** Cadence de la surveillance du défi. Un clignement dure une centaine de
+ *  millisecondes : à 60 ms, on dispose de deux mesures pour le voir. */
+export const PERIODE_DEFI_MS = 60;
 
 export async function chargerModeles(dossier = "/models"): Promise<void> {
   await faceapi.nets.tinyFaceDetector.loadFromUri(dossier);
@@ -61,8 +72,26 @@ export async function ouvrirCamera(video: HTMLVideoElement): Promise<MediaStream
     video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
     audio: false,
   });
-  video.srcObject = flux;
-  await video.play();
+  if (video.srcObject !== flux) {
+    video.srcObject = flux;
+  }
+  // `play()` est interrompu lorsque la source change pendant la lecture : c'est
+  // exactement ce qui se produit au passage de l'écran d'accès au tableau de
+  // bord, ou d'un onglet à l'autre. L'interruption n'est pas une panne : le flux
+  // reste attaché et l'attribut `autoplay` prend le relais. On ne laisse donc
+  // pas une promesse rejetée remonter dans la console, ce qui ferait passer un
+  // changement d'écran pour une erreur.
+  try {
+    await video.play();
+  } catch (erreur) {
+    if (!(erreur instanceof DOMException) || erreur.name !== "AbortError") {
+      throw erreur;
+    }
+  }
+  if (!video.isConnected) {
+    // L'élément a été démonté pendant l'ouverture : on rend la caméra au poste.
+    flux.getTracks().forEach((piste) => piste.stop());
+  }
   return flux;
 }
 
@@ -70,61 +99,44 @@ export function fermerCamera(flux: MediaStream | null): void {
   flux?.getTracks().forEach((piste) => piste.stop());
 }
 
-function ecart(a: faceapi.Point, b: faceapi.Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-/** Rapport d'ouverture de l'œil : petit quand la paupière est fermée. */
-function ouvertureOeil(points: faceapi.Point[], index: number[]): number {
-  const p = index.map((rang) => points[rang]);
-  const hauteur = (ecart(p[1], p[5]) + ecart(p[2], p[4])) / 2;
-  return hauteur / Math.max(1e-6, ecart(p[0], p[3]));
-}
-
 /**
- * Estimation du lacet à partir de la position du nez dans le cadre du visage.
- *
- * C'est une approximation, et elle est assumée : sans calibrage individuel, un
- * modèle de pose serait plus faux encore. Le seuil appliqué ne vient pas d'ici,
- * il vient du service : cette fonction fournit une mesure, pas une décision.
+ * Une image, sans descripteur : détecteur de visage et points de repère.
+ * C'est le régime léger, celui qui peut tourner toutes les 60 ms.
  */
-function rotationEstimee(
-  points: faceapi.Point[],
-  cadre: { x: number; y: number; width: number; height: number },
-): number {
-  const nez = points[30];
-  const centre = cadre.x + cadre.width / 2;
-  const demi = Math.max(1e-6, cadre.width / 2);
-  const rapport = (nez.x - centre) / demi;
-  return Math.max(-90, Math.min(90, rapport * 45));
-}
-
-export async function observer(video: HTMLVideoElement): Promise<Observation> {
+export async function observerRapide(video: HTMLVideoElement): Promise<ObservationRapide> {
   const resultat = await faceapi
     .detectSingleFace(video, OPTIONS_DETECTION)
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-
+    .withFaceLandmarks();
   if (!resultat) {
-    return { visage: false, descripteur: null, yeuxOuverts: true, rotationDegres: 0 };
+    return { visage: false, ouverture: 0, rotationDegres: 0 };
   }
-
-  const points = resultat.landmarks.positions;
-  const ouverture =
-    (ouvertureOeil(points, [36, 37, 38, 39, 40, 41]) +
-      ouvertureOeil(points, [42, 43, 44, 45, 46, 47])) /
-    2;
-
+  const points = resultat.landmarks.positions as unknown as PointRepere[];
   return {
     visage: true,
-    descripteur: Array.from(resultat.descriptor as Float32Array),
-    yeuxOuverts: ouverture > SEUIL_OEIL_FERME,
-    rotationDegres: rotationEstimee(points, resultat.detection.box),
+    ouverture: ouvertureDesYeux(points),
+    rotationDegres: lacetEstime(points, resultat.detection.box),
   };
 }
 
 /**
- * Suit le défi actif image par image et publie son état.
+ * Descripteur de l'image courante, à la demande.
+ *
+ * Mobilise le réseau de reconnaissance : quelques centaines de millisecondes.
+ * On l'appelle donc au moment utile, jamais en continu.
+ */
+export async function mesurerDescripteur(video: HTMLVideoElement): Promise<number[] | null> {
+  const resultat = await faceapi
+    .detectSingleFace(video, OPTIONS_DETECTION)
+    .withFaceLandmarks()
+    .withFaceDescriptor();
+  if (!resultat) {
+    return null;
+  }
+  return Array.from(resultat.descriptor as Float32Array);
+}
+
+/**
+ * Surveille le défi actif et publie chaque mesure.
  *
  * Retourne une fonction d'arrêt : la boucle doit être interrompue dès que
  * l'écran change, sinon elle continue de solliciter la caméra en arrière-plan.
@@ -132,44 +144,39 @@ export async function observer(video: HTMLVideoElement): Promise<Observation> {
 export function suivreDefi(
   video: HTMLVideoElement,
   surEtat: (etat: EtatDefi) => void,
-  surDescripteur: (descripteur: number[]) => void,
-  intervalleMs = 120,
+  intervalleMs = PERIODE_DEFI_MS,
 ): () => void {
+  const suivi = new SuiviClignement();
   let arrete = false;
-  let clignement = false;
   let rotationMax = 0;
-  let debutFermeture = 0;
+  let mesures = 0;
+  let derniere = performance.now();
 
   const tourner = async (): Promise<void> => {
     if (arrete) {
       return;
     }
+    const debut = performance.now();
     try {
-      const image = await observer(video);
-      if (image.visage && image.descripteur !== null) {
-        surDescripteur(image.descripteur);
-        if (!image.yeuxOuverts) {
-          if (debutFermeture === 0) {
-            debutFermeture = performance.now();
-          }
-        } else if (debutFermeture > 0) {
-          if (performance.now() - debutFermeture >= DUREE_CLIGNEMENT_MS) {
-            clignement = true;
-          }
-          debutFermeture = 0;
-        }
+      const image = await observerRapide(video);
+      if (image.visage) {
+        suivi.mesurer(image.ouverture, debut);
         rotationMax = Math.max(rotationMax, Math.abs(image.rotationDegres));
-        surEtat({
-          visage: true,
-          clignement,
-          rotationMax,
-          rotation: image.rotationDegres,
-        });
-      } else {
-        surEtat({ visage: false, clignement, rotationMax, rotation: 0 });
       }
+      mesures += 1;
+      surEtat({
+        visage: image.visage,
+        clignement: suivi.estAcquis,
+        rotationMax,
+        rotation: image.visage ? image.rotationDegres : 0,
+        ouverture: image.ouverture,
+        seuilFermeture: suivi.seuilFermeture,
+        periodeMs: mesures > 1 ? debut - derniere : 0,
+        mesures,
+      });
+      derniere = debut;
     } catch {
-      /* une image ratée ne doit pas interrompre la boucle */
+      /* une image ratée ne doit pas interrompre la surveillance */
     }
     if (!arrete) {
       window.setTimeout(() => void tourner(), intervalleMs);

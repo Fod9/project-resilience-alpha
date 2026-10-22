@@ -18,7 +18,7 @@ import sys
 import urllib.error
 import urllib.request
 
-BASE = (sys.argv[1] if len(sys.argv) > 1 else "https://127.0.0.1").rstrip("/")
+BASE = "https://dind:443"
 SEUIL = 0.45
 CTX = ssl.create_default_context()
 CTX.check_hostname = False

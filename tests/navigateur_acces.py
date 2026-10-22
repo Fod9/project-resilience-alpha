@@ -10,7 +10,7 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
-CIBLE = sys.argv[1] if len(sys.argv) > 1 else "https://127.0.0.1"
+CIBLE = sys.argv[1] if len(sys.argv) > 1 else "https://dind:443"
 OPERATEUR = ("operateur", "AlphaPay-Ops-2026!")
 
 echecs: list[str] = []

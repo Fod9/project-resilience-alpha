@@ -6,6 +6,7 @@
   "description": "AlphaPay : interface de paiement et salle d'opérations (PROJECT RESILIENCE-ALPHA)",
   "scripts": {
     "modeles": "node scripts/copier-modeles.mjs",
+    "verifier:defi": "node scripts/verifier-defi.mjs",
     "predev": "npm run modeles",
     "dev": "vite",
     "prebuild": "npm run modeles",
