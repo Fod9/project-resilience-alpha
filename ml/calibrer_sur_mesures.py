@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.join(RACINE, "services"))
 sys.path.insert(0, RACINE)
 
 from common.features import FEATURE_NAMES  # noqa: E402
+from ml import selection  # noqa: E402
 from ml.fenetrage import agressions_mesurees, resume_ecartees, trier  # noqa: E402
 from ml.profils_attaque import PROFILS, PROFILS_MODELE  # noqa: E402
 from ml.train import ALPHA_NOMINAL, VERSION_MODELE, quantile_haut_nominal  # noqa: E402
@@ -177,6 +178,21 @@ def principal() -> int:
     print(f"fenetres ecartees  : {resume_ecartees(ecartees)}")
     print(f"fenetres mesurees  : {len(matrice)} ({distincts} vecteurs distincts)")
     print(f"agressions mesurees: {len(matrice_agression)} fenetres portant la marque du banc")
+    # Le diagnostic des variables est publie meme quand la calibration refuse :
+    # c'est lui qui distingue un probleme de seuil d'un probleme de variables.
+    if len(matrice_agression):
+        retenues, tableau = selection.choisir(
+            matrice.tolist(), matrice_agression.tolist(), list(FEATURE_NAMES)
+        )
+        print(f"variables separantes: {selection.resume(tableau)}")
+        if retenues:
+            print(f"  retenues          : {', '.join(retenues)}")
+        else:
+            print(
+                "  aucune variable ne separe les deux bandes mesurees : le "
+                "probleme n'est pas le seuil, il est dans ce que la plateforme "
+                "donne a voir."
+            )
     if len(matrice) < MINIMUM_QUANTILE:
         print(
             f"avertissement      : moins de {MINIMUM_QUANTILE} fenetres nominales "

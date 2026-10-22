@@ -53,6 +53,20 @@ QUANTILE_SEUIL = 99.8
 #: designe plus un quantile mais la plus grande valeur observee.
 ALPHA_NOMINAL = 0.005
 
+#: Part de fenetres mesurees visee dans le corpus d'entrainement. Le generateur
+#: porte la forme d'une plateforme plausible, les mesures portent le regime
+#: reel ; a poids egal les secondes se perdent dans les premieres et le corpus
+#: reste decale. Mesure sur une pile reelle, sur les deux variables retenues :
+#: generateur seul marge +0,011, generateur plus mesures a poids egal marge
+#: -0,012, generateur plus mesures ponderees a six fois marge +0,035.
+PART_MESUREE_CIBLE = 0.6
+
+#: Poids maximal applique aux fenetres mesurees. Au dela, le modele recopie le
+#: corpus mesure au lieu d'apprendre une forme, et une fenetre nominale un peu
+#: differente ressort comme une anomalie.
+POIDS_MESURES_MAXIMUM = 50
+
+
 
 def quantile_haut_nominal(scores, alpha: float) -> tuple[float, int]:
     """Quantile haut du nominal, avec un plancher de fenetres tolerees au-dessus.
@@ -126,8 +140,17 @@ def entrainer(
     graine: int = 20261019,
     debit_moyen: float = 0.8,
     vecteurs_supplementaires: list[list[float]] | None = None,
+    poids_supplementaires: int | None = None,
+    variables: list[str] | None = None,
 ) -> dict[str, Any]:
     """Ajuste le détecteur et renvoie l'artefact complet (sérialisable).
+
+    `variables` : sous-ensemble des 18 variables sur lequel ajuster le modele.
+    Un Isolation Forest moyenne son score sur toutes les dimensions recues ;
+    lui donner seize axes qui ne portent que du bruit de regime revient a noyer
+    le signal des deux axes qui comptent. Le sous-ensemble est mesure, jamais
+    choisi a la main, et il est publie dans l'artefact pour que le detecteur
+    projette la fenetre de la meme facon.
 
     `vecteurs_supplementaires` : fenetres reellement observees sur la
     plateforme, ajoutees au corpus simule. Le generateur ne peut pas deviner
@@ -154,10 +177,33 @@ def entrainer(
 
     vecteurs, moyennes, ecarts = _vecteurs_nominaux(duree_secondes, debit_moyen=debit_moyen)
     n_simulees = len(vecteurs)
+    poids_mesures = 0
     if vecteurs_supplementaires:
-        vecteurs = [list(v) for v in vecteurs] + [
-            [float(x) for x in v] for v in vecteurs_supplementaires
-        ]
+        supplements = [[float(x) for x in v] for v in vecteurs_supplementaires]
+        # Les fenetres mesurees pesent : le generateur produit des milliers de
+        # fenetres a debit quasi nul, et a poids egal les fenetres reelles y
+        # disparaissent. Mesure faite sur une pile reelle, sur les variables
+        # retenues : a poids egal la marge de separation passe de +0,011 a
+        # -0,012, et elle remonte a +0,035 quand les mesures pèsent six fois
+        # plus. Le poids vise une part cible du corpus, il n'est pas choisi a la
+        # main.
+        if poids_supplementaires is None:
+            cible = PART_MESUREE_CIBLE * n_simulees
+            poids_mesures = max(
+                1, min(POIDS_MESURES_MAXIMUM, int(round(cible / max(1, len(supplements)))))
+            )
+        else:
+            poids_mesures = max(1, int(poids_supplementaires))
+        vecteurs = [list(v) for v in vecteurs] + supplements * poids_mesures
+    # Le modele ne voit que les variables retenues, dans leur ordre. La
+    # projection a lieu ici, une fois, pour que le corpus simule et les fenetres
+    # mesurees soient restreints de la meme facon.
+    noms_modele = list(variables) if variables else list(FEATURE_NAMES)
+    if variables:
+        rangs = [FEATURE_NAMES.index(nom) for nom in noms_modele]
+        vecteurs = [[float(ligne[rang]) for rang in rangs] for ligne in vecteurs]
+        moyennes = {nom: moyennes[nom] for nom in noms_modele if nom in moyennes}
+        ecarts = {nom: ecarts[nom] for nom in noms_modele if nom in ecarts}
     if len(vecteurs) < 50:
         raise RuntimeError(
             f"historique nominal insuffisant : {len(vecteurs)} fenêtres produites"
@@ -200,7 +246,7 @@ def entrainer(
         "source_calibrage": (
             "trafic-simule" if n_simulees == len(vecteurs) else "trafic-simule+mesures"
         ),
-        "feature_names": list(FEATURE_NAMES),
+        "feature_names": list(noms_modele),
         "moyennes": moyennes,
         "ecarts": ecarts,
         "scaler_mean": [float(x) for x in normaliseur.mean_],
@@ -209,6 +255,7 @@ def entrainer(
         "n_fenetres": len(vecteurs),
         "n_fenetres_simulees": n_simulees,
         "n_fenetres_mesurees": len(vecteurs) - n_simulees,
+        "poids_mesures": poids_mesures,
         "n_estimateurs": n_estimateurs,
         "quantile_seuil": QUANTILE_SEUIL,
         "score_moyen": float(np.mean(scores)),
@@ -236,7 +283,13 @@ def _importances_permutation(
     rng = np.random.default_rng(graine)
     reference = -modele.decision_function(normalise)
     importances: dict[str, float] = {}
-    for index, nom in enumerate(FEATURE_NAMES):
+    # Les colonnes de `normalise` sont celles du modele, qui peut ne porter que
+    # sur un sous-ensemble mesure des variables. Lire FEATURE_NAMES ici
+    # depasserait la largeur de la matrice.
+    colonnes = list(getattr(modele, "feature_names_in_", []) or [])
+    if len(colonnes) != normalise.shape[1]:
+        colonnes = list(FEATURE_NAMES)[: normalise.shape[1]]
+    for index, nom in enumerate(colonnes):
         melange = normalise.copy()
         rng.shuffle(melange[:, index])
         altere = -modele.decision_function(melange)

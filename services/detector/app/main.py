@@ -51,7 +51,7 @@ from common.metrics import (
     SERVICE_UP,
 )
 from common.security import compute_signature
-from common.features import FEATURE_NAMES, vecteur_vers_liste
+from common.features import FEATURE_NAMES
 
 VERSION = "1.0.0"
 CHEMIN_META = env_str("MODEL_FALLBACK_META_PATH", "/app/artifacts/model-meta.json")
@@ -139,8 +139,13 @@ def _seuil_separable(
     modele = paquet["modele"]
     normaliseur = paquet["scaler"]
     annonce = float(paquet["seuil"])
+    # Le modele peut ne porter que sur un sous-ensemble mesure des variables :
+    # les profils doivent etre projetes sur les memes, sinon le vecteur presente
+    # au normaliseur n'a pas la largeur attendue et le service refuse de
+    # demarrer.
+    noms = list(paquet.get("feature_names") or FEATURE_NAMES)
     vecteurs = [
-        [float(profil.get(nom, 0.0)) for nom in FEATURE_NAMES]
+        [float(profil.get(nom, 0.0)) for nom in noms]
         for profil in profils_du_modele().values()
     ]
     scores = -modele.decision_function(normaliseur.transform(vecteurs))
@@ -264,6 +269,19 @@ def _normaliser(paquet: dict[str, Any], valeurs: list[float]) -> Any:
 
     brut = np.asarray([valeurs], dtype=float)
     return paquet["scaler"].transform(brut)
+
+
+def _vecteur_modele(paquet: dict[str, Any], vecteur: dict[str, float]) -> list[float]:
+    """Projette une fenetre sur les variables du modele, dans son ordre.
+
+    Le modele publie peut porter sur un sous-ensemble des variables mesurees :
+    la calibration retient les axes qui separent reellement les bandes sur
+    cette plateforme, et ecarte ceux qui n'y portent que du bruit de regime. Le
+    detecteur doit projeter la fenetre de la meme facon, sinon le vecteur
+    presente au modele n'est plus celui de son entrainement.
+    """
+    noms = paquet.get("feature_names") or list(FEATURE_NAMES)
+    return [float(vecteur.get(nom, 0.0) or 0.0) for nom in noms]
 
 
 def _expliquer(meta: dict[str, Any], vecteur: dict[str, float]) -> list[dict[str, Any]]:
@@ -439,7 +457,7 @@ async def _cycle() -> None:
         )
         return
 
-    valeurs = vecteur_vers_liste(vecteur)
+    valeurs = _vecteur_modele(paquet, vecteur)
     normalise = _normaliser(paquet, valeurs)
     score = float(-paquet["modele"].decision_function(normalise)[0])
     seuil = float(paquet["seuil"])

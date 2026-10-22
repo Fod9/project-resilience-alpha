@@ -116,12 +116,37 @@ def principal() -> int:
 
     observees = fenetres_observees(base)
     silence = True
+    arme_mesure: bool | None = None
     if observees is not None:
         vecteurs = np.array([[float((f.get("features") or {}).get(n) or 0.0) for n in noms] for f in observees], dtype=float)
         scores_reels = np.array([score(v) for v in vecteurs])
         au_dessus = int((scores_reels >= seuil).sum())
         print(f"plateforme reelle : {len(scores_reels)} fenetres, median {np.median(scores_reels):.4f}, max {scores_reels.max():.4f}, au-dessus du seuil {au_dessus}")
         silence = au_dessus == 0
+
+        # Le seuil doit egalement etre franchi par les agressions *reellement
+        # mesurees* sur cette plateforme. Un profil theorique n'est qu'une
+        # hypothese sur ce qu'une attaque produirait ; une fenetre qui porte la
+        # marque du banc est un fait. C'est ce juge-la qui decide si le
+        # dispositif est arme, parce qu'il decrit une attaque sans ambiguite et
+        # qu'il est atteignable ici par construction.
+        fenetres_attaque = [
+            f for f in observees
+            if (f.get("diagnostics") or {}).get("agents_offensifs")
+        ]
+        if fenetres_attaque:
+            va = np.array(
+                [[float((f.get("features") or {}).get(n) or 0.0) for n in noms] for f in fenetres_attaque],
+                dtype=float,
+            )
+            scores_attaques_mesurees = np.array([score(v) for v in va])
+            franchies = int((scores_attaques_mesurees >= seuil).sum())
+            print(
+                f"agressions mesurees : {len(scores_attaques_mesurees)} fenetres, "
+                f"min {scores_attaques_mesurees.min():.4f}, max {scores_attaques_mesurees.max():.4f}, "
+                f"au-dessus du seuil {franchies}"
+            )
+            arme_mesure = franchies == len(scores_attaques_mesurees)
 
     arme = True
     print()
@@ -135,10 +160,21 @@ def principal() -> int:
 
     print()
     print(f"arme        : {'oui' if arme else 'NON'}")
+    if arme_mesure is None:
+        print("arme (mesure) : non juge, aucune agression mesuree dans l'historique")
+    else:
+        print(f"arme (mesure) : {'oui' if arme_mesure else 'NON'}")
     if observees is None:
         print("silencieux  : non mesure (telemetrie injoignable ou aucune fenetre)")
     else:
         print(f"silencieux  : {'oui' if silence else 'NON'}")
+    if arme_mesure is False:
+        print(
+            "Le seuil n'est pas franchi par les agressions mesurees sur cette "
+            "plateforme : le dispositif a l'air arme sur des profils theoriques "
+            "et ne detecte rien de reel."
+        )
+        return 1
     if not arme:
         print("Le seuil est au-dessus d'un profil d'attaque : le detecteur ne declenchera rien.")
         return 1

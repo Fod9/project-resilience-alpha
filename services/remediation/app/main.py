@@ -80,27 +80,71 @@ _etat: dict[str, Any] = {
 
 
 async def _demarrer() -> None:
-    global _tache_purge
+    global _tache_purge, _tache_restitution
     _etat["politiques"] = charger_politiques(POLICIES_DIR)
     _etat["playbooks"] = charger_playbooks(PLAYBOOKS_DIR)
     SERVICE_UP.labels(service="remediation", component="politiques").set(1)
     # Les blocages arrivés à échéance sont libérés en continu : un confinement
     # temporaire qui ne se lève jamais est un confinement définitif.
     _tache_purge = asyncio.create_task(_boucle_expiration())
+    # Meme logique pour l'etat publie a Grafana : un incident clos ne doit pas
+    # rester affiche comme etat courant indefiniment.
+    _tache_restitution = asyncio.create_task(_boucle_restitution())
     events.emit(
         "remediation.ready",
         policies=len(_etat["politiques"]),
         playbooks=len(_etat["playbooks"]),
         dry_run=connecteurs.dry_run,
         purge_seconds=EDGE_PURGE_SECONDS,
+        restitution_seconds=DELAI_RESTITUTION_SECONDS,
     )
 
 
 async def _arreter() -> None:
-    global _tache_purge
-    if _tache_purge is not None:
-        _tache_purge.cancel()
-        _tache_purge = None
+    global _tache_purge, _tache_restitution
+    for tache in (_tache_purge, _tache_restitution):
+        if tache is not None:
+            tache.cancel()
+    _tache_purge = None
+    _tache_restitution = None
+
+
+async def _boucle_restitution() -> None:
+    """Ramene la jauge d'etat a NOMINAL une fois le dernier incident clos.
+
+    `_cloturer` positionne la jauge sur RECOVERED ou FAILED et ne la replie
+    jamais. Le bandeau de la salle d'operations, lui, revient a NOMINAL apres le
+    delai de restitution : les deux surfaces doivent dire la meme chose, sinon
+    Grafana annonce un incident termine comme s'il etait en cours, et le jury
+    lit deux etats contradictoires dans la meme demonstration.
+    """
+    while True:
+        await asyncio.sleep(DELAI_RESTITUTION_SECONDS)
+        if _etat["incident_courant"]:
+            continue
+        try:
+            incident = await fetch_one(
+                "SELECT state, closed_at FROM ops.incidents "
+                "ORDER BY opened_at DESC LIMIT 1"
+            )
+        except Exception as erreur:  # noqa: BLE001
+            events.warn(
+                "remediation.state_failed",
+                message="jauge d'etat non repliee",
+                error=str(erreur),
+            )
+            continue
+        if incident is None:
+            continue
+        if str(incident["state"]) not in {"RECOVERED", "FAILED"}:
+            continue
+        if _age_secondes(incident.get("closed_at")) < DELAI_RESTITUTION_SECONDS:
+            continue
+        for connu in ("NOMINAL", "DETECTING", "CONTAINING", "ERADICATING", "RECOVERING",
+                      "VERIFYING", "RECOVERED", "FAILED"):
+            REMEDIATION_STATE.labels(service="remediation", state=connu).set(
+                1 if connu == "NOMINAL" else 0
+            )
 
 
 async def _boucle_expiration() -> None:
@@ -185,6 +229,7 @@ ACTIONS_TOUJOURS_PERMISES = frozenset(
 )
 
 _tache_purge: asyncio.Task[None] | None = None
+_tache_restitution: asyncio.Task[None] | None = None
 
 connecteurs = Connecteurs(events)
 suite = SuiteDeVerification(connecteurs, events)

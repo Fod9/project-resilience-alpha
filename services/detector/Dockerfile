@@ -27,6 +27,7 @@ COPY ml/__init__.py       /app/ml/__init__.py
 COPY ml/synthetic.py      /app/ml/synthetic.py
 COPY ml/train.py          /app/ml/train.py
 COPY ml/fenetrage.py      /app/ml/fenetrage.py
+COPY ml/selection.py      /app/ml/selection.py
 COPY ml/recalibrer.py     /app/ml/recalibrer.py
 COPY ml/profils_attaque.py /app/ml/profils_attaque.py
 # La calibration sur mesures et sa verification sont embarquees : elles doivent
@@ -34,6 +35,7 @@ COPY ml/profils_attaque.py /app/ml/profils_attaque.py
 # d'une installation Python sur le poste hôte.
 COPY ml/calibrer_sur_mesures.py /app/ml/calibrer_sur_mesures.py
 COPY ml/verifier_separation.py  /app/ml/verifier_separation.py
+COPY ml/verifier_modele_en_place.py /app/ml/verifier_modele_en_place.py
 COPY ml/artifacts         /app/artifacts
 
 RUN groupadd --gid 10001 app \

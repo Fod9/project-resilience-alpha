@@ -27,6 +27,7 @@ import urllib.request
 from typing import Any
 
 from common.features import FEATURE_NAMES
+from ml import selection
 from ml.fenetrage import agressions_mesurees, resume_ecartees, trier
 from ml.profils_attaque import profils_du_modele
 
@@ -82,73 +83,73 @@ def ajuster_sur_mesures(
         dtype=float,
     )
 
-    # 1. Le corpus est simule *complemente* par les fenetres mesurees.
+    # 1. Les variables du modele sont choisies sur les bandes MESUREES.
     #
-    # La duree simulee doit etre suffisante : demander zero seconde produit un
-    # corpus vide, et l'entrainement echoue sur une moyenne sans donnees. On
-    # prend de quoi couvrir un large eventail de charge, avec un plancher lie au
-    # nombre de fenetres reelles pour rester proportionne.
+    # Un Isolation Forest moyenne son score sur toutes les dimensions qu'on lui
+    # donne. Mesure faite sur une pile reelle : les fenetres d'attaque etaient
+    # notees 0,094 a 0,186 quand des fenetres nominales atteignaient 0,163,
+    # alors que deux variables d'entree separaient parfaitement les deux bandes
+    # (taux d'erreur de 0 a 0,90 ; debit de 0,28 a 117). Ces deux variables
+    # portaient deux dix-huitiemes de la decision.
+    #
+    # Le jeu de variables n'est donc ni fige ni choisi a la main : il est
+    # mesure, et il depend de la plateforme et de sa bordure. Aucune agression
+    # mesuree, aucune selection possible, donc aucune publication : un modele
+    # juge sur des profils theoriques n'a jamais alerte sur une attaque reelle.
+    brut_attaque = np.asarray(
+        [
+            [float(v.get(nom, 0.0)) for nom in FEATURE_NAMES]
+            for v in (vecteurs_agression or [])
+        ],
+        dtype=float,
+    )
+    if not len(brut_attaque):
+        raise RuntimeError(
+            "calibration refusee : aucune agression mesuree dans l'historique. "
+            "Le modele doit etre choisi sur des faits, pas sur des profils "
+            "theoriques. Rejouez une attaque, laissez la telemetrie "
+            "l'enregistrer, puis relancez la calibration."
+        )
+    variables, tableau = selection.choisir(
+        brut.tolist(), brut_attaque.tolist(), list(FEATURE_NAMES)
+    )
+    if not variables:
+        raise RuntimeError(
+            "calibration refusee : aucune variable ne separe les fenetres "
+            "d'attaque des fenetres nominales mesurees. La plateforme ne separe "
+            "pas ses propres attaques sur ces variables, publier un seuil "
+            "n'alerterait sur rien. Ecart mesure : " + selection.resume(tableau)
+        )
+
+    # 2. Le corpus : generateur pour la densite, mesures pour les regimes reels,
+    #    restreint aux variables retenues.
+    #
+    # Le generateur seul ne peut pas deviner la dispersion propre a un poste, et
+    # les mesures seules donnent une distribution de variance trop faible pour
+    # qu'un modele d'atypie ait un sens. Les deux ensemble : le generateur porte
+    # la forme, les mesures portent les regimes.
     duree_simulee = max(4500.0, 30.0 * len(vecteurs_mesures))
-    # Une version anterieure entrainait le generateur seul, au motif que des
-    # points reels isoles au milieu du flux simule obtenaient les scores les plus
-    # hauts. Le raisonnement valait pour les fenetres brutes d'alors ; il ne tient
-    # plus des lors que le vecteur ne decrit que le trafic metier et que le corpus
-    # est trie. En revanche, le generateur seul ne peut pas deviner la dispersion
-    # reelle de certains axes : mesure sur la plateforme, `requests_per_token`
-    # vaut 242 a 383 sur du trafic nominal la ou le generateur en simule 0.7, ce
-    # qui porte cet axe a z = 440 et fait saturer le score, au point que des
-    # fenetres nominales deviennent plus atypiques que l'attaque. Les fenetres
-    # mesurees rendent a ces axes leur etendue.
     artefact = soi.entrainer(
         duree_simulee,
         n_estimateurs=n_estimateurs,
         graine=graine,
-        vecteurs_supplementaires=[
-            [float(v.get(nom, 0.0)) for nom in FEATURE_NAMES] for v in vecteurs_mesures
-        ],
+        vecteurs_supplementaires=brut.tolist(),
+        variables=variables,
     )
 
-    # 2. Le seuil vient des fenetres reelles.
+    # 3. Le seuil est place entre les deux bandes MESUREES.
+    #
+    # Un seuil calibre « au-dessus du nominal » peut passer au-dessus du maximum
+    # atteignable par le modele, et la comparaison `score >= seuil` devient
+    # fausse en permanence : le dispositif n'alerte plus jamais tout en
+    # paraissant arme. On exige donc que le seuil tombe entre le nominal mesure
+    # et l'agression mesuree, sur le modele effectivement publie.
     modele = artefact["modele"]
     normaliseur = artefact["scaler"]
-    scores = -modele.decision_function(normaliseur.transform(brut))
-
-    # 2 bis. Verifier que ce seuil separe encore quelque chose.
-    #
-    # Un seuil calibre uniquement « au-dessus du nominal » peut passer au-dessus
-    # du maximum atteignable par le modele : le score d'atypie d'une Isolation
-    # Forest sature des que le vecteur sort de la plage apprise, si bien que le
-    # maximum observe sur le repos *est* le plafond. La comparaison
-    # `score >= seuil` devient alors fausse en permanence, et le dispositif
-    # n'alerte plus jamais tout en paraissant arme.
-    #
-    # On confronte donc le seuil aux profils d'attaque de reference : il doit
-    # passer au-dessus du nominal et rester en dessous de la plus faible des
-    # attaques. Sinon la calibration echoue, et c'est voulu.
-    profils_modele = profils_du_modele()
-    vecteurs_attaques = [
-        [float(profil.get(nom, 0.0)) for nom in FEATURE_NAMES]
-        for profil in profils_modele.values()
-    ]
-    provenance_attaque = "profils-de-reference"
-    # Une agression deja mesuree sur cette plateforme vaut mieux que n'importe
-    # quel profil theorique : c'est la seule reference dont on sache qu'elle est
-    # atteignable ici. Les profils de reference decrivent une rafale a pleine
-    # intensite ; sur un poste bride par la bordure, ils placent le seuil
-    # au-dessus de tout ce qu'une attaque reelle produit, et le dispositif reste
-    # muet tout en affichant un seuil. On les garde comme repli, pas comme
-    # unique juge.
-    if vecteurs_agression:
-        vecteurs_attaques.extend(
-            [float(v.get(nom, 0.0)) for nom in FEATURE_NAMES] for v in vecteurs_agression
-        )
-        provenance_attaque = (
-            "agressions-mesurees"
-            if not profils_modele
-            else "agressions-mesurees+profils-de-reference"
-        )
+    rangs = [list(FEATURE_NAMES).index(nom) for nom in variables]
+    scores = -modele.decision_function(normaliseur.transform(brut[:, rangs]))
     scores_attaque = -modele.decision_function(
-        normaliseur.transform(np.asarray(vecteurs_attaques, dtype=float))
+        normaliseur.transform(brut_attaque[:, rangs])
     )
 
     score_max_nominal, tolerees = soi.quantile_haut_nominal(scores, soi.ALPHA_NOMINAL)
@@ -157,15 +158,15 @@ def ajuster_sur_mesures(
     if marge <= ECART_MINIMAL:
         raise RuntimeError(
             "calibration refusee : le seuil ne separe plus le nominal de "
-            f"l'attaque (nominal haut {score_max_nominal:.5f}, attaque min "
-            f"{score_min_attaque:.5f}, marge {marge:.5f}). Un tel seuil "
-            "n'alerterait jamais. Reentrainer le modele sur un trafic nominal "
-            "qui couvre le regime de repos avant de recalibrer."
+            f"l'attaque mesuree (nominal haut {score_max_nominal:.5f}, attaque "
+            f"min {score_min_attaque:.5f}, marge {marge:.5f}). Un tel seuil "
+            "n'alerterait jamais. Ecart par variable parmi : "
+            + selection.resume(tableau)
         )
 
     # On place le seuil a un quart de la marge au-dessus du nominal : assez haut
     # pour ne pas confondre la pointe legitime avec une attaque, assez bas pour
-    # que la plus faible des attaques connues le franchisse.
+    # que la plus faible des attaques mesurees le franchisse.
     seuil = score_max_nominal + max(ECART_MINIMAL, 0.25 * marge)
     artefact["seuil"] = seuil
     artefact["score_moyen"] = float(np.mean(scores))
@@ -178,11 +179,33 @@ def ajuster_sur_mesures(
     artefact["fenetres_tolerees_au_dessus"] = tolerees
     artefact["score_min_attaque"] = score_min_attaque
     artefact["marge_separabilite"] = marge
-    artefact["profils_attaque"] = sorted(profils_modele)
-    artefact["reference_attaque"] = provenance_attaque
+    artefact["variables"] = list(variables)
+    artefact["separations_mesurees"] = {
+        nom: mesures for nom, mesures in tableau.items()
+    }
+    artefact["profils_attaque"] = sorted(profils_du_modele())
+    artefact["reference_attaque"] = "agressions-mesurees"
     artefact["n_fenetres_agression_mesurees"] = len(vecteurs_agression or [])
     artefact["taux_detection_nominal_pct"] = float(np.mean(scores > seuil)) * 100.0
     artefact["n_fenetres_reelles"] = len(vecteurs_mesures)
+    # Les profils theoriques ne jugent plus le seuil : ils sont notes pour
+    # memoire, afin qu'un ecart entre la theorie et la mesure reste visible.
+    artefact["scores_profils_reference"] = {
+        nom: float(
+            -modele.decision_function(
+                normaliseur.transform(
+                    np.asarray(
+                        [
+                            [float(profil.get(v, 0.0)) for v in variables]
+                            for profil in [profils_du_modele()[nom]]
+                        ],
+                        dtype=float,
+                    )
+                )
+            )[0]
+        )
+        for nom in sorted(profils_du_modele())
+    }
 
     artefact["version"] = f"isolation-forest-{source_libelle}"
     artefact["source_calibrage"] = source_libelle
