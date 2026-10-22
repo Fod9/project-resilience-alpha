@@ -181,11 +181,45 @@ def main() -> int:
                 float(features.get("requests_per_second") or 0.0),
                 float(features.get("error_ratio") or 0.0)))
 
-    print("=== verdict")
     if not attaques:
+        print("=== verdict")
         print("  aucune agression mesuree dans l'historique : le modele ne peut pas")
         print("  etre juge sur des faits. Rejouez une attaque, puis relancez ce script.")
         return 0
+
+    # Le score d'atypie est une synthese sur 18 variables : quand il ne separe
+    # pas, il faut savoir si une variable, elle, separe. C'est ce qui distingue
+    # un probleme de seuil d'un probleme de variables.
+    print("=== separation variable par variable (mesuree)")
+    print("  %-24s %10s %10s %10s" % ("variable", "nom max", "ATT min", "rapport"))
+    separantes = []
+    for nom in noms:
+        valeurs_nom = [
+            float((f.get("features") or {}).get(nom) or 0.0) for f in nominales
+        ]
+        valeurs_att = [
+            float((f.get("features") or {}).get(nom) or 0.0) for f in attaques
+        ]
+        if not valeurs_nom or not valeurs_att:
+            continue
+        haut = max(valeurs_nom)
+        bas = min(valeurs_att)
+        if bas > haut > 0:
+            rapport = bas / haut
+            print("  %-24s %10.4f %10.4f %10.2f  SEPARE" % (nom, haut, bas, rapport))
+            separantes.append((rapport, nom, haut, bas))
+        elif bas > 0 and haut <= 0:
+            print("  %-24s %10.4f %10.4f %10s  SEPARE" % (nom, haut, bas, "infini"))
+            separantes.append((float("inf"), nom, haut, bas))
+    if not separantes:
+        print("  aucune variable ne separe les deux bandes mesurees.")
+    else:
+        separantes.sort(reverse=True)
+        print("  variables separantes, de la plus nette a la moins nette :")
+        for rapport, nom, haut, bas in separantes[:6]:
+            print("    %-24s nominal <= %.4f  <  attaque >= %.4f" % (nom, haut, bas))
+
+    print("=== verdict")
     haut_nominal = float(scores_nominales.max()) if scores_nominales.size else float("-inf")
     bas_attaque = float(scores_attaques.min())
     if bas_attaque <= seuil:
