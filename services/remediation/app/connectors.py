@@ -782,6 +782,32 @@ class Connecteurs:
         adresse = str(params.get("source_ip") or "").strip()
         if not adresse:
             raise ActionRefusee("adresse source absente")
+        # Cette action ne se contente pas de revoquer des jetons : elle verrouille
+        # aussi les comptes qui ont ouvert une session depuis l'adresse
+        # (`api-auth`, /admin/revoke-by-source, UPDATE auth.users SET
+        # locked_until). Derriere Docker Desktop, l'attaquant et l'operateur
+        # partagent l'adresse de la passerelle : la garde appliquee au blocage
+        # d'adresse doit l'etre ici aussi. Sans elle, le blocage est refuse mais
+        # le verrouillage passe quand meme, et le compte de l'operateur est coupe
+        # pendant l'attaque qu'il est en train de surveiller.
+        if await self._adresse_de_consultation(adresse):
+            self.events.warn(
+                "auth.revoke_refused",
+                message="revocation refusée : adresse de consultation de l'opérateur",
+                ip=adresse,
+                raison="consultation",
+            )
+            return Resultat(
+                ok=True,
+                action="auth.revoke_by_source",
+                skipped=True,
+                detail=(
+                    f"{adresse} consulte la salle d'opérations : aucun jeton révoqué "
+                    "et aucun compte verrouillé depuis cette adresse, le confinement "
+                    "est porté par la signature du banc"
+                ),
+                evidence={"ip": adresse, "consultation": True, "protected": True},
+            )
         reponse = await request_json(
             "POST",
             f"{self.auth_url}/admin/revoke-by-source",

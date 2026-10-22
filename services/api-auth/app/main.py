@@ -83,6 +83,12 @@ ACCESS_TTL = env_int("JWT_ACCESS_TTL_SECONDS", 900)
 REFRESH_TTL = env_int("JWT_REFRESH_TTL_SECONDS", 604800)
 MAX_FAILED = env_int("AUTH_MAX_FAILED_ATTEMPTS", 5)
 LOCKOUT_SECONDS = env_int("AUTH_LOCKOUT_SECONDS", 300)
+
+#: Roles d'exploitation, jamais verrouilles par une revocation pilotee par
+#: l'adresse source. Leur session est ce que la plateforme doit preserver
+#: pendant un incident, et l'adresse source ne designe personne derriere une
+#: passerelle de publication de ports.
+ROLES_EXPLOITATION = ("operator", "auditor", "admin")
 ADMIN_TOKEN = env_str("ADMIN_API_TOKEN", required=True)
 
 # Authentification faciale. Le seuil porte sur une distance cosinus : il est
@@ -1068,12 +1074,14 @@ async def revoquer_par_source(
     _exiger_admin(x_admin_token)
 
     lignes = await fetch_all(
-        "SELECT id, user_id FROM auth.refresh_tokens "
-        "WHERE source_ip = NULLIF(%s, '')::inet AND revoked_at IS NULL",
+        "SELECT t.id, t.user_id, u.role FROM auth.refresh_tokens t "
+        "JOIN auth.users u ON u.id = t.user_id "
+        "WHERE t.source_ip = NULLIF(%s, '')::inet AND t.revoked_at IS NULL",
         (charge.source_ip,),
     )
     jetons_revoques = 0
     comptes_verrouilles = 0
+    comptes_epargnes: list[str] = []
     async with _transaction() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -1083,12 +1091,33 @@ async def revoquer_par_source(
                 (charge.reason, charge.source_ip),
             )
             jetons_revoques = cur.rowcount or 0
-            identifiants = sorted({str(ligne["user_id"]) for ligne in lignes})
-            if identifiants:
+            # Les comptes d'exploitation sont epargnes par le verrouillage.
+            #
+            # Cette action est pilotee par une *adresse*, et derriere Docker
+            # Desktop tous les clients d'un meme poste partagent celle de la
+            # passerelle : l'adresse n'identifie plus personne. Verrouiller un
+            # compte operator, auditor ou admin sur ce critere revient a couper
+            # l'operateur qui surveille l'incident, sans rien retirer a
+            # l'attaquant. La revocation des jetons reste appliquee, elle.
+            verrouillables = sorted(
+                {
+                    str(ligne["user_id"])
+                    for ligne in lignes
+                    if str(ligne["role"]) not in ROLES_EXPLOITATION
+                }
+            )
+            comptes_epargnes = sorted(
+                {
+                    str(ligne["user_id"])
+                    for ligne in lignes
+                    if str(ligne["role"]) in ROLES_EXPLOITATION
+                }
+            )
+            if verrouillables:
                 await cur.execute(
                     "UPDATE auth.users SET locked_until = now() + make_interval(secs => %s), "
                     "updated_at = now() WHERE id = ANY(%s::uuid[])",
-                    (LOCKOUT_SECONDS, identifiants),
+                    (LOCKOUT_SECONDS, verrouillables),
                 )
                 comptes_verrouilles = cur.rowcount or 0
 
@@ -1101,6 +1130,7 @@ async def revoquer_par_source(
             "source_ip": charge.source_ip,
             "tokens_revoked": jetons_revoques,
             "accounts_locked": comptes_verrouilles,
+            "accounts_spared": len(comptes_epargnes),
         },
     )
     events.warn(
@@ -1109,11 +1139,13 @@ async def revoquer_par_source(
         source_ip=charge.source_ip,
         tokens_revoked=jetons_revoques,
         accounts_locked=comptes_verrouilles,
+        accounts_spared=len(comptes_epargnes),
     )
     return {
         "source_ip": charge.source_ip,
         "refresh_tokens_revoked": jetons_revoques,
         "accounts_locked": comptes_verrouilles,
+        "accounts_spared": len(comptes_epargnes),
         "access_token_ttl_seconds": ACCESS_TTL,
     }
 
