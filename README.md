@@ -403,7 +403,7 @@ resilience-alpha/
 ## Vérifier l'ensemble
 
 ```bash
-bash tests/preflight.sh          # cohérence de l'environnement
+bash scripts/preflight.sh         # cohérence de l'environnement
 bash tests/e2e.sh                # pile démarrée : parcours complet et reprise autonome
 bash tests/edge_smoke.sh         # bordure seule
 ```

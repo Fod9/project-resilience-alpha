@@ -13,7 +13,8 @@
       <tr><td>Prévention</td><td>En-têtes de sécurité (HSTS, CSP strict, X-Frame-Options), certificat TLS et redirection HTTP vers HTTPS.</td></tr>
       <tr><td>Réaction</td><td>Liste de blocage dynamique relue par la bordure, avec témoin de rechargement horodaté vérifié par le moteur.</td></tr>
 
-      <tr><td rowspan="5">Applicatif</td><td>Prévention</td><td>Jetons RS256 de 15 minutes, jetons de rafraîchissement révocables et journalisés, verrouillage temporaire des comptes.</td></tr>
+      <tr><td rowspan="6">Applicatif</td><td>Prévention</td><td>Reconnaissance faciale en second moyen d'accès : le descripteur du visage est calculé dans le navigateur, l'image ne quitte pas le poste et n'est jamais conservée. Seuil de comparaison de 0,07, mesuré sur 400 visages réels, et défi de vivacité par rotation de tête exigé au-delà de 20 degrés.</td></tr>
+      <tr><td>Prévention</td><td>Jetons RS256 de 15 minutes, jetons de rafraîchissement révocables et journalisés, verrouillage temporaire des comptes.</td></tr>
       <tr><td>Prévention</td><td>Cinq rôles distincts (client, service, opérateur, auditeur, administrateur) ; chaque API n'accepte que les rôles nécessaires.</td></tr>
       <tr><td>Prévention</td><td>Idempotence obligatoire à la création d'un paiement : une même demande produit au plus un effet.</td></tr>
       <tr><td>Prévention</td><td>Moindre privilège côté données : un rôle PostgreSQL par service ; la table d'audit de l'authentification est en ajout seul, sans droit de mise à jour ni de suppression.</td></tr>
