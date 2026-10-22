@@ -98,6 +98,42 @@ CREATE TABLE auth.signing_keys (
 );
 ```
 
+**Accès au tableau de bord** : deux moyens d'ouverture, le mot de passe et la
+reconnaissance faciale. Le second ne remplace pas le premier : il délivre le même
+jeton, par le même service, avec le même verrouillage et la même journalisation.
+
+```sql
+CREATE TABLE auth.face_templates (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  descriptor    vector(128) NOT NULL,     -- moyenne normalisée des captures
+  capture_count INT NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_face_templates_descriptor
+  ON auth.face_templates USING hnsw (descriptor vector_cosine_ops);
+
+CREATE TABLE auth.face_attempts (
+  id           BIGSERIAL PRIMARY KEY,
+  occurred_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  user_id      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  username     TEXT NOT NULL,
+  outcome      TEXT NOT NULL CHECK (outcome IN ('success','failure','denied')),
+  reason       TEXT,
+  distance     DOUBLE PRECISION,
+  threshold    DOUBLE PRECISION,
+  challenge_ok BOOLEAN,
+  source_ip    INET
+);
+```
+
+Aucune image n'est stockée, ni ici ni ailleurs dans la plateforme : le descripteur
+est calculé dans le navigateur, sur le poste, et seuls 128 nombres circulent. Un
+vecteur ne permet pas de reconstruire un visage, ce qui rend la donnée conservée
+exploitable seulement pour vérifier une ressemblance.
+
 ### 1.3 Schéma `ledger` (partie double)
 
 ```sql
@@ -596,6 +632,13 @@ GET  /healthz /readyz /metrics
   conforme), `X-Forwarded-For` maîtrisé.
 - `audit_log` ModSecurity en JSON vers stdout → Loki (base de la feature
   `waf_block_ratio` et des preuves d'attaque).
+- Exception de comptage d'arguments sur la seule route d'enrôlement facial
+  (`POST /api/auth/face/enroll`) : un enrôlement porte huit descripteurs de 128
+  nombres, au-delà du millier d'arguments que la règle 200007 refuse. Sans cette
+  exception, la bordure répond `400` sur un corps légitime, avec un corps HTML
+  produit par nginx, sans qu'aucun message applicatif n'explique le refus. Les
+  garde-fous de taille (`SecRequestBodyNoFilesLimit`), de jeton et de validation
+  applicative restent en place.
 
 ### 5.3 TLS
 
@@ -617,7 +660,9 @@ frontend/
 │   ├── lib/        api.ts (client typé), sse.ts (temps réel), format.ts
 │   ├── design/     tokens.css, primitives (Button, Card, Badge, Sparkline…)
 │   ├── features/
-│   │   ├── auth/       LoginPage, useSession
+│   │   ├── auth/       AccesPage (mot de passe et reconnaissance faciale),
+│   │   │               session.ts (jeton d'accès en mémoire, renouvellement),
+│   │   │               face.ts (descripteur calculé dans le navigateur, défi actif)
 │   │   ├── pay/        PayPage (montant, bénéficiaire, confirmation, historique)
 │   │   └── ops/        OpsPage
 │   │        ├── GlobalStateBanner.tsx
@@ -631,6 +676,7 @@ frontend/
 │   │        └── AssistantPanel.tsx       (chat RAG + citations)
 │   └── types/  api.d.ts
 ├── tailwind.config.ts  vite.config.ts  index.html
+├── scripts/copier-modeles.mjs   (poids du modèle facial servis en statique)
 └── Dockerfile  (build Vite → nginx alpine)
 ```
 
@@ -705,6 +751,20 @@ un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
 ### 8.3 Contrôle d'accès
 
 - JWT RS256, durée 15 min, refresh en base révocable, `jti` journalisé.
+- Deux moyens d'ouverture pour la salle d'opérations : mot de passe (Argon2id) et
+  reconnaissance faciale. Le gabarit facial est la moyenne normalisée de huit
+  captures au moins, et la comparaison est une distance cosinus rapportée au seuil
+  `FACE_MATCH_THRESHOLD` (0,45 par défaut, comparaison inclusive).
+- Le visage seul ne suffit pas : un défi actif (clignement puis rotation de tête
+  d'au moins `FACE_CHALLENGE_MIN_TURN_DEG` degrés) est exigé. Une photographie
+  tenue devant la caméra produit un descripteur valide et un défi manqué, et c'est
+  précisément ce qui l'écarte.
+- Les échecs faciaux partagent le verrouillage du mot de passe (cinq échecs,
+  `AUTH_LOCKOUT_SECONDS`) et sont journalisés deux fois : dans `auth.face_attempts`
+  pour l'exploitation, dans `auth.audit_log` pour la preuve, avec la méthode, la
+  distance et le seuil, jamais le descripteur.
+- Le seuil et les paramètres du défi sont publics (`GET /api/auth/face/policy`) :
+  l'interface ne fixe aucun seuil, elle lit celui du service.
 - RBAC : `customer` (paiement), `service` (grand livre), `operator` (supervision et
   remédiation), `auditor` (lecture), `admin` (configuration).
 - Rate-limiting à trois niveaux : nginx (`limit_req`), applicatif (par identité),

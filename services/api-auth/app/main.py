@@ -30,7 +30,7 @@ import datetime as dt
 import json
 import secrets
 import uuid
-from typing import Any
+from typing import Any, Sequence
 
 import jwt
 import jwt.algorithms
@@ -43,12 +43,22 @@ from fastapi import Header, Request
 from pydantic import BaseModel, Field
 
 from common.app import build_app
-from common.config import env_int, env_str
+from common.config import env_float, env_int, env_str
 from common.db import execute, fetch_all, fetch_one
 from common.errors import AppError, bad_request, forbidden, not_found, unauthorized
 from common.metrics import AUTH_ATTEMPTS_TOTAL, TOKENS_REVOKED_TOTAL
 from common.security import constant_time_equals, hash_token
 from common.tracing import current_client_ip, set_identity, set_route_label
+
+from .face import (
+    DIMENSION_DESCRIPTEUR,
+    DescripteurInvalide,
+    distance_acceptee,
+    distance_cosinus,
+    evaluer_defi,
+    gabarit_moyen,
+    valider_descripteur,
+)
 
 VERSION = "1.0.0"
 ISSUER = "alphapay-auth"
@@ -72,6 +82,12 @@ REFRESH_TTL = env_int("JWT_REFRESH_TTL_SECONDS", 604800)
 MAX_FAILED = env_int("AUTH_MAX_FAILED_ATTEMPTS", 5)
 LOCKOUT_SECONDS = env_int("AUTH_LOCKOUT_SECONDS", 300)
 ADMIN_TOKEN = env_str("ADMIN_API_TOKEN", required=True)
+
+# Authentification faciale. Le seuil porte sur une distance cosinus : il est
+# inclusif, et le durcir augmente mécaniquement les refus de visages légitimes.
+FACE_MATCH_THRESHOLD = env_float("FACE_MATCH_THRESHOLD", 0.45)
+FACE_ENROLL_MIN_SAMPLES = env_int("FACE_ENROLL_MIN_SAMPLES", 8)
+FACE_CHALLENGE_MIN_TURN_DEG = env_float("FACE_CHALLENGE_MIN_TURN_DEG", 20.0)
 
 _HASHER = PasswordHasher(
     time_cost=env_int("ARGON2_TIME_COST", 3),
@@ -119,6 +135,29 @@ class LockAccountRequest(BaseModel):
     username: str = Field(min_length=3, max_length=120)
     seconds: int = Field(default=LOCKOUT_SECONDS, ge=1, le=86400)
     reason: str = Field(default="confinement automatique", max_length=200)
+
+
+class FaceEnrollRequest(BaseModel):
+    """Enrôlement : les captures brutes, moyennées et normalisées par le service.
+
+    Le client n'annonce pas un nombre de captures, il en fournit : le minimum
+    exigé est vérifié sur la longueur réelle de la liste, pas sur une valeur
+    déclarée.
+    """
+
+    username: str = Field(min_length=3, max_length=120)
+    descriptors: list[list[float]] = Field(min_length=1, max_length=64)
+
+
+class FaceChallenge(BaseModel):
+    blink: bool = False
+    turn_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
+
+
+class FaceVerifyRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=120)
+    descriptor: list[float] = Field(min_length=1, max_length=512)
+    challenge: FaceChallenge = Field(default_factory=FaceChallenge)
 
 
 # =============================================================================
@@ -230,6 +269,24 @@ async def _auditer(
             json.dumps(details) if details is not None else None,
         ),
     )
+
+
+async def _revendications(authorization: str | None) -> dict[str, Any]:
+    """Revendications du jeton d'accès présenté dans l'en-tête `Authorization`."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized("En-tête Authorization absent ou mal formé.")
+    cle = await cle_active()
+    try:
+        revendications = jwt.decode(
+            authorization[7:],
+            cle["public_pem"],
+            algorithms=[ALGORITHM],
+            issuer=ISSUER,
+            options={"require": ["exp", "sub"]},
+        )
+    except jwt.InvalidTokenError as exc:
+        raise unauthorized("Jeton invalide.") from exc
+    return revendications
 
 
 def _emettre_jetons(utilisateur: dict[str, Any], kid: str, privee: str) -> tuple[str, str, int]:
@@ -473,19 +530,7 @@ async def jwks_alias() -> dict[str, Any]:
 @app.get("/users/me", tags=["utilisateurs"])
 async def profil(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     set_route_label("/users/me")
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise unauthorized("En-tête Authorization absent ou mal formé.")
-    cle = await cle_active()
-    try:
-        revendications = jwt.decode(
-            authorization[7:],
-            cle["public_pem"],
-            algorithms=[ALGORITHM],
-            issuer=ISSUER,
-            options={"require": ["exp", "sub"]},
-        )
-    except jwt.InvalidTokenError as exc:
-        raise unauthorized("Jeton invalide.") from exc
+    revendications = await _revendications(authorization)
     set_identity(revendications.get("username") or revendications.get("sub", ""))
     ligne = await fetch_one(
         "SELECT id, username, email, role, created_at FROM auth.users WHERE id = %s",
@@ -494,6 +539,453 @@ async def profil(authorization: str | None = Header(default=None)) -> dict[str, 
     if ligne is None:
         raise not_found("Utilisateur inconnu.")
     return dict(ligne)
+
+
+# =============================================================================
+#  Authentification faciale
+# =============================================================================
+#
+# Le descripteur est calculé dans le navigateur : le service ne reçoit jamais
+# d'image, seulement 128 nombres. Il n'en conserve que le gabarit moyen du
+# compte, et aucune valeur de descripteur n'apparaît dans une réponse, un
+# message d'erreur, un journal ou un audit.
+
+
+def _litteral_vecteur(gabarit: Sequence[float]) -> str:
+    """Forme textuelle acceptée par le type `vector` de PostgreSQL."""
+    return json.dumps([round(float(valeur), 8) for valeur in gabarit])
+
+
+def _descripteur_depuis_base(valeur: Any) -> tuple[float, ...]:
+    """Relit un gabarit quel que soit le type rendu par le pilote."""
+    if isinstance(valeur, str):
+        contenu = valeur.strip()
+        contenu = contenu[1:-1] if contenu.startswith("[") else contenu
+        return tuple(float(item) for item in contenu.split(",") if item)
+    if isinstance(valeur, (list, tuple)):
+        return tuple(float(item) for item in valeur)
+    raise DescripteurInvalide("Gabarit illisible en base.")
+
+
+async def _journaliser_tentative_faciale(
+    *,
+    user_id: Any,
+    username: str,
+    outcome: str,
+    reason: str,
+    distance: float | None = None,
+    challenge_ok: bool | None = None,
+) -> None:
+    await execute(
+        "INSERT INTO auth.face_attempts "
+        "(user_id, username, outcome, reason, distance, threshold, challenge_ok, source_ip) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::inet)",
+        (
+            user_id,
+            username,
+            outcome,
+            reason,
+            distance,
+            FACE_MATCH_THRESHOLD,
+            challenge_ok,
+            current_client_ip(),
+        ),
+    )
+
+
+async def _compter_echec(ligne: dict[str, Any]) -> dict[str, Any]:
+    """Incrémente le compteur d'échecs du compte, comme le ferait un mot de passe.
+
+    Le verrouillage est partagé entre les deux moyens d'authentification : cinq
+    échecs par visage comptent autant que cinq échecs par mot de passe, ce qui
+    interdit de transformer le visage en canal moins surveillé.
+    """
+    await execute(
+        "UPDATE auth.users SET failed_attempts = failed_attempts + 1, "
+        "locked_until = CASE WHEN failed_attempts + 1 >= %s "
+        "THEN now() + make_interval(secs => %s) ELSE locked_until END, "
+        "updated_at = now() WHERE id = %s",
+        (MAX_FAILED, LOCKOUT_SECONDS, ligne["id"]),
+    )
+    compteur = await fetch_one(
+        "SELECT failed_attempts, locked_until FROM auth.users WHERE id = %s",
+        (ligne["id"],),
+    )
+    return dict(compteur) if compteur is not None else {"failed_attempts": 0, "locked_until": None}
+
+
+def _refus_facial(
+    *,
+    code: str,
+    titre: str,
+    detail: str,
+    username: str,
+    motif: str,
+    method: str = "face",
+    **extra: Any,
+) -> AppError:
+    AUTH_ATTEMPTS_TOTAL.labels(service="api-auth", outcome="failure").inc()
+    events.warn(
+        "auth.attempt",
+        message="authentification faciale refusée",
+        identity=username,
+        outcome="failure",
+        reason=motif,
+        method=method,
+        source_ip=current_client_ip(),
+    )
+    return AppError(401 if code != "face_not_enrolled" else 404, code, titre, detail, **extra)
+
+
+@app.get("/face/policy", tags=["authentification"])
+async def politique_faciale() -> dict[str, Any]:
+    """Paramètres publics du contrôle facial, lus par l'interface.
+
+    L'interface n'écrit aucun seuil en dur : elle lit ici la dimension du
+    descripteur, le seuil de distance et l'amplitude attendue par le défi.
+    """
+    set_route_label("/face/policy")
+    return {
+        "dimension": DIMENSION_DESCRIPTEUR,
+        "threshold": FACE_MATCH_THRESHOLD,
+        "min_samples": FACE_ENROLL_MIN_SAMPLES,
+        "challenge_min_turn_deg": FACE_CHALLENGE_MIN_TURN_DEG,
+        "max_failed_attempts": MAX_FAILED,
+        "lockout_seconds": LOCKOUT_SECONDS,
+        "images_transmitted": False,
+    }
+
+
+@app.post("/face/enroll", tags=["authentification"])
+async def enrolement_visage(
+    charge: FaceEnrollRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Enregistre le gabarit d'un compte à partir de ses captures d'enrôlement."""
+    set_route_label("/face/enroll")
+    revendications = await _revendications(authorization)
+    est_admin = revendications.get("role") == "admin"
+    if charge.username != revendications.get("username") and not est_admin:
+        raise forbidden("Un gabarit ne peut être enregistré que pour son propre compte.")
+
+    ligne = await fetch_one(
+        "SELECT id, username, role FROM auth.users WHERE username = %s",
+        (charge.username,),
+    )
+    if ligne is None:
+        raise not_found("Utilisateur inconnu.")
+
+    captures: list[tuple[float, ...]] = []
+    for rang, brut in enumerate(charge.descriptors, start=1):
+        try:
+            captures.append(valider_descripteur(brut))
+        except DescripteurInvalide as exc:
+            raise bad_request(
+                "face_descriptor_invalid",
+                "Descripteur facial invalide",
+                f"Capture {rang} refusée : {exc}",
+            ) from exc
+
+    if len(captures) < FACE_ENROLL_MIN_SAMPLES:
+        raise bad_request(
+            "face_enrollment_incomplete",
+            "Enrôlement incomplet",
+            f"{len(captures)} capture(s) fournie(s), "
+            f"{FACE_ENROLL_MIN_SAMPLES} attendues au minimum.",
+        )
+
+    try:
+        gabarit = gabarit_moyen(captures)
+    except DescripteurInvalide as exc:
+        raise bad_request(
+            "face_descriptor_invalid",
+            "Descripteur facial invalide",
+            str(exc),
+        ) from exc
+
+    await execute(
+        "INSERT INTO auth.face_templates (user_id, descriptor, capture_count) "
+        "VALUES (%s, %s::vector, %s) "
+        "ON CONFLICT (user_id) DO UPDATE SET descriptor = EXCLUDED.descriptor, "
+        "capture_count = EXCLUDED.capture_count, updated_at = now()",
+        (ligne["id"], _litteral_vecteur(gabarit), len(captures)),
+    )
+    await _auditer(
+        action="auth.face.enroll",
+        outcome="success",
+        actor_id=str(ligne["id"]),
+        actor_role=ligne["role"],
+        details={"username": ligne["username"], "captures": len(captures)},
+    )
+    events.emit(
+        "auth.face.enrolled",
+        identity=ligne["username"],
+        captures=len(captures),
+        sequential=len(captures) != len(charge.descriptors),
+    )
+    return {
+        "username": ligne["username"],
+        "enrolled": True,
+        "captures": len(captures),
+        "dimension": DIMENSION_DESCRIPTEUR,
+        "threshold": FACE_MATCH_THRESHOLD,
+    }
+
+
+@app.post("/face/verify", response_model=TokenPair, tags=["authentification"])
+async def verifier_visage(charge: FaceVerifyRequest) -> TokenPair:
+    """Compare un descripteur au gabarit du compte et ouvre la session.
+
+    Les refus sont volontairement indiscernables d'un compte à l'autre : ni la
+    distance mesurée, ni la présence d'un gabarit ne sont renvoyées en clair, ce
+    qui empêche de s'en servir comme oracle de réglage.
+    """
+    set_route_label("/face/verify")
+    ligne = await fetch_one(
+        "SELECT id, username, role, locked_until FROM auth.users WHERE username = %s",
+        (charge.username,),
+    )
+    if ligne is None:
+        raise _refus_facial(
+            code="face_rejected",
+            titre="Authentification faciale refusée",
+            detail="Visage non reconnu.",
+            username=charge.username,
+            motif="compte inconnu",
+        )
+
+    verrou = ligne.get("locked_until")
+    if verrou is not None and verrou > _maintenant():
+        AUTH_ATTEMPTS_TOTAL.labels(service="api-auth", outcome="locked").inc()
+        events.warn(
+            "auth.attempt",
+            message="compte verrouillé",
+            identity=charge.username,
+            outcome="locked",
+            method="face",
+            source_ip=current_client_ip(),
+        )
+        raise AppError(
+            423,
+            "account_locked",
+            "Compte temporairement verrouillé.",
+            f"Nouvelle tentative possible après {verrou.isoformat()}.",
+        )
+
+    try:
+        presente = valider_descripteur(charge.descriptor)
+    except DescripteurInvalide as exc:
+        raise bad_request(
+            "face_descriptor_invalid",
+            "Descripteur facial invalide",
+            str(exc),
+        ) from exc
+
+    defi_valide, motif_defi = evaluer_defi(
+        clignement=charge.challenge.blink,
+        rotation_degres=charge.challenge.turn_deg,
+        seuil_rotation_degres=FACE_CHALLENGE_MIN_TURN_DEG,
+    )
+
+    gabarit = await fetch_one(
+        "SELECT descriptor::text AS descriptor FROM auth.face_templates WHERE user_id = %s",
+        (ligne["id"],),
+    )
+    if gabarit is None:
+        await _journaliser_tentative_faciale(
+            user_id=ligne["id"],
+            username=ligne["username"],
+            outcome="denied",
+            reason="aucun gabarit enregistré",
+            challenge_ok=defi_valide,
+        )
+        await _auditer(
+            action="auth.face.verify",
+            outcome="denied",
+            actor_id=str(ligne["id"]),
+            actor_role=ligne["role"],
+            details={"reason": "aucun gabarit", "method": "face"},
+        )
+        raise AppError(
+            404,
+            "face_not_enrolled",
+            "Aucun gabarit facial",
+            "Aucun gabarit n'est enregistré pour ce compte.",
+        )
+
+    reference = _descripteur_depuis_base(gabarit["descriptor"])
+    if len(reference) != DIMENSION_DESCRIPTEUR:
+        raise AppError(
+            500,
+            "face_template_corrupt",
+            "Gabarit inexploitable",
+            "Le gabarit enregistré n'a pas la dimension attendue.",
+        )
+
+    distance = distance_cosinus(reference, presente)
+
+    # Le défi est évalué avant la comparaison : une photo tenue devant la caméra
+    # produit un descripteur valide, et c'est le défi qui la distingue d'un
+    # visage vivant.
+    accepte = defi_valide and distance_acceptee(distance, FACE_MATCH_THRESHOLD)
+    if not accepte:
+        motif = motif_defi if not defi_valide else "distance au-dessus du seuil"
+        compteur = await _compter_echec(ligne)
+        await _journaliser_tentative_faciale(
+            user_id=ligne["id"],
+            username=ligne["username"],
+            outcome="failure",
+            reason=motif,
+            distance=distance,
+            challenge_ok=defi_valide,
+        )
+        await _auditer(
+            action="auth.face.verify",
+            outcome="failure",
+            actor_id=str(ligne["id"]),
+            actor_role=ligne["role"],
+            details={
+                "method": "face",
+                "reason": motif,
+                "distance": round(distance, 6),
+                "threshold": FACE_MATCH_THRESHOLD,
+                "challenge_ok": defi_valide,
+            },
+        )
+        tentatives = int(compteur.get("failed_attempts") or 0)
+        verrou_pose = compteur.get("locked_until")
+        if verrou_pose is not None and verrou_pose > _maintenant():
+            detail = f"Compte verrouillé après {tentatives} échec(s)."
+        elif not defi_valide:
+            # Le seuil du défi est public (voir /face/policy) : le nommer aide
+            # l'opérateur à se placer, et n'apprend rien à un attaquant. En
+            # revanche la distance au gabarit, elle, n'est jamais renvoyée.
+            detail = f"Défi actif non validé : {motif_defi}."
+        else:
+            detail = "Visage non reconnu."
+        return_code = "face_challenge_failed" if not defi_valide else "face_rejected"
+        titre = "Défi actif non validé" if not defi_valide else "Authentification faciale refusée"
+        raise _refus_facial(
+            code=return_code,
+            titre=titre,
+            detail=detail,
+            username=charge.username,
+            motif=motif,
+            attempts=tentatives,
+            max_attempts=MAX_FAILED,
+        )
+
+    cle = await cle_active()
+    acces, refresh, expiration = _emettre_jetons(ligne, cle["kid"], cle["private_pem"])
+    await execute(
+        "INSERT INTO auth.refresh_tokens (user_id, token_hash, source_ip, expires_at) "
+        "VALUES (%s, %s, NULLIF(%s, '')::inet, to_timestamp(%s))",
+        (ligne["id"], hash_token(refresh), current_client_ip(), expiration),
+    )
+    await execute(
+        "UPDATE auth.users SET failed_attempts = 0, locked_until = NULL, "
+        "updated_at = now() WHERE id = %s",
+        (ligne["id"],),
+    )
+    await _journaliser_tentative_faciale(
+        user_id=ligne["id"],
+        username=ligne["username"],
+        outcome="success",
+        reason="visage reconnu",
+        distance=distance,
+        challenge_ok=True,
+    )
+    await _auditer(
+        action="auth.face.verify",
+        outcome="success",
+        actor_id=str(ligne["id"]),
+        actor_role=ligne["role"],
+        details={
+            "method": "face",
+            "distance": round(distance, 6),
+            "threshold": FACE_MATCH_THRESHOLD,
+            "kid": cle["kid"],
+        },
+    )
+    AUTH_ATTEMPTS_TOTAL.labels(service="api-auth", outcome="success").inc()
+    events.emit(
+        "auth.attempt",
+        identity=ligne["username"],
+        outcome="success",
+        role=ligne["role"],
+        method="face",
+        distance=round(distance, 6),
+        source_ip=current_client_ip(),
+    )
+    return TokenPair(
+        access_token=acces,
+        refresh_token=refresh,
+        expires_in=ACCESS_TTL,
+        kid=cle["kid"],
+    )
+
+
+@app.get("/face/status/{username}", tags=["authentification"])
+async def statut_gabarit(
+    username: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Indique si un gabarit existe, sans jamais exposer le descripteur."""
+    set_route_label("/face/status")
+    revendications = await _revendications(authorization)
+    if revendications.get("username") != username and revendications.get("role") != "admin":
+        raise forbidden("Le statut d'un gabarit se consulte pour son propre compte.")
+
+    ligne = await fetch_one(
+        "SELECT t.capture_count, t.created_at, t.updated_at "
+        "FROM auth.face_templates t JOIN auth.users u ON u.id = t.user_id "
+        "WHERE u.username = %s",
+        (username,),
+    )
+    commun: dict[str, Any] = {
+        "username": username,
+        "dimension": DIMENSION_DESCRIPTEUR,
+        "threshold": FACE_MATCH_THRESHOLD,
+        "min_samples": FACE_ENROLL_MIN_SAMPLES,
+        "challenge_min_turn_deg": FACE_CHALLENGE_MIN_TURN_DEG,
+    }
+    if ligne is None:
+        return {**commun, "enrolled": False, "captures": 0, "updated_at": None}
+    return {
+        **commun,
+        "enrolled": True,
+        "captures": ligne["capture_count"],
+        "updated_at": ligne["updated_at"].isoformat(),
+    }
+
+
+@app.delete("/face/template/{username}", tags=["administration"])
+async def supprimer_gabarit(
+    username: str,
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Retire un gabarit : l'accès au tableau de bord redevient mot de passe seul."""
+    set_route_label("/face/template")
+    _exiger_admin(x_admin_token)
+    resultat = await execute(
+        "DELETE FROM auth.face_templates t USING auth.users u "
+        "WHERE u.id = t.user_id AND u.username = %s",
+        (username,),
+    )
+    if resultat == 0:
+        raise not_found("Aucun gabarit enregistré pour ce compte.")
+    await _auditer(
+        action="auth.face.template_deleted",
+        outcome="success",
+        actor_role="remediation",
+        details={"username": username, "templates_deleted": resultat},
+    )
+    events.warn(
+        "auth.face.template_deleted",
+        message="gabarit facial supprimé",
+        identity=username,
+    )
+    return {"username": username, "deleted": resultat}
 
 
 # =============================================================================
@@ -635,6 +1127,24 @@ def _verifier_coherence() -> None:
             "config_invalide",
             "Configuration invalide",
             "Les durées de vie de jeton doivent être strictement positives.",
+        )
+    if not 0.0 < FACE_MATCH_THRESHOLD < 2.0:
+        raise bad_request(
+            "config_invalide",
+            "Configuration invalide",
+            "Le seuil facial doit être strictement compris entre 0 et 2.",
+        )
+    if FACE_ENROLL_MIN_SAMPLES < 1:
+        raise bad_request(
+            "config_invalide",
+            "Configuration invalide",
+            "Le nombre minimal de captures d'enrôlement doit être au moins 1.",
+        )
+    if FACE_CHALLENGE_MIN_TURN_DEG <= 0:
+        raise bad_request(
+            "config_invalide",
+            "Configuration invalide",
+            "La rotation minimale du défi actif doit être strictement positive.",
         )
 
 

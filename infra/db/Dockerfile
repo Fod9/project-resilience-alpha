@@ -10,6 +10,7 @@ LABEL org.opencontainers.image.description="Base de données de la plateforme de
 COPY 01-schema.sql   /docker-entrypoint-initdb.d/01-schema.sql
 COPY 02-roles.sh     /docker-entrypoint-initdb.d/02-roles.sh
 COPY 03-seed.sql     /docker-entrypoint-initdb.d/03-seed.sql
+COPY 04-face.sql     /docker-entrypoint-initdb.d/04-face.sql
 
 # 02-roles.sh doit être exécutable pour que l'entrée officielle l'invoque avec
 # bash plutôt que de le sourcer (le script utilise `set -e`). Ses fins de ligne
@@ -18,7 +19,8 @@ COPY 03-seed.sql     /docker-entrypoint-initdb.d/03-seed.sql
 RUN sed -i 's/\r$//' /docker-entrypoint-initdb.d/02-roles.sh \
  && chmod 0644 /docker-entrypoint-initdb.d/01-schema.sql \
  && chmod 0755 /docker-entrypoint-initdb.d/02-roles.sh \
- && chmod 0644 /docker-entrypoint-initdb.d/03-seed.sql
+ && chmod 0644 /docker-entrypoint-initdb.d/03-seed.sql \
+ && chmod 0644 /docker-entrypoint-initdb.d/04-face.sql
 
 # Les rôles applicatifs n'existent qu'après l'exécution des scripts ci-dessus ;
 # l'authentification reste `scram-sha-256` pour les connexions TCP.

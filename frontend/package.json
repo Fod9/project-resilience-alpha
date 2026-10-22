@@ -5,11 +5,15 @@
   "type": "module",
   "description": "AlphaPay : interface de paiement et salle d'opérations (PROJECT RESILIENCE-ALPHA)",
   "scripts": {
+    "modeles": "node scripts/copier-modeles.mjs",
+    "predev": "npm run modeles",
     "dev": "vite",
+    "prebuild": "npm run modeles",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8080"
   },
   "dependencies": {
+    "@vladmandic/face-api": "^1.7.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

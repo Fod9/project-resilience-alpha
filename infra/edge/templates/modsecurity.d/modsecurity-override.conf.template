@@ -28,3 +28,28 @@ SecRule REQUEST_HEADERS:X-AlphaPay-Probe "@streq 1" \
 SecRule REQUEST_HEADERS:X-AlphaPay-RedTeam "@rx ^[A-Za-z0-9._-]{1,64}$" \
     "id:9001002,phase:1,pass,nolog,msg:'AlphaPay: marqueur Red Team',\
      setvar:'tx.alphapay_redteam=%{tx.0}'"
+
+# --- Enrôlement facial : un corps légitime au-delà du millier d'arguments.
+#     Un enrôlement porte huit descripteurs de 128 nombres, soit 1024 arguments.
+#     Deux réglages s'y opposent :
+#       * SecArgumentsLimit, plafonné à 1000 par défaut, qui tronquerait la
+#         lecture du corps ; il est relevé ici ;
+#       * la règle 200007 de la configuration de base de l'image, qui refuse
+#         toute requête à plus de 1000 arguments (voir plus bas, où la garde est
+#         écartée pour ce seul chemin).
+#     Sans ces deux ajustements, la bordure répond 400 sans jamais atteindre le
+#     service, avec un corps HTML produit par nginx : le client n'a aucun
+#     message applicatif pour comprendre ce qui a échoué.
+#     L'inspection du corps reste active et bornée : SecRequestBodyNoFilesLimit
+#     plafonne toujours la taille acceptée, et les règles d'anomalie du CRS
+#     continuent de s'appliquer.
+SecArgumentsLimit 20000
+
+#     La garde de comptage est écartée pour la seule route d'enrôlement. Le
+#     risque est borné par trois limites qui restent en place : la taille du
+#     corps (SecRequestBodyNoFilesLimit, 128 Ko), le jeton d'accès exigé par le
+#     service, et la validation stricte du service lui-même (64 descripteurs au
+#     plus, 128 valeurs bornées chacun).
+SecRule REQUEST_URI "@streq /api/auth/face/enroll" \
+    "id:9001003,phase:1,pass,nolog,msg:'AlphaPay: enrolement facial hors garde de comptage 200007',\
+     ctl:ruleRemoveById=200007"

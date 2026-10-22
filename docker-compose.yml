@@ -295,6 +295,11 @@ services:
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN doit etre defini dans .env}
       ARGON2_TIME_COST: "2"
       ARGON2_MEMORY_COST: "65536"
+      # Authentification faciale : le gabarit est comparé par distance cosinus,
+      # et le défi actif exige un clignement puis une rotation de tête.
+      FACE_MATCH_THRESHOLD: ${FACE_MATCH_THRESHOLD:-0.45}
+      FACE_ENROLL_MIN_SAMPLES: ${FACE_ENROLL_MIN_SAMPLES:-8}
+      FACE_CHALLENGE_MIN_TURN_DEG: ${FACE_CHALLENGE_MIN_TURN_DEG:-20}
     volumes:
       - alphaplat-logs:/var/log/alphapay
     healthcheck:

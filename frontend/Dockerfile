@@ -23,6 +23,7 @@ COPY frontend/vite.config.ts /app/vite.config.ts
 COPY frontend/tailwind.config.js /app/tailwind.config.js
 COPY frontend/postcss.config.js /app/postcss.config.js
 COPY frontend/index.html /app/index.html
+COPY frontend/scripts /app/scripts
 COPY frontend/src /app/src
 
 # `npm run build` exécute d'abord la vérification de types : une erreur de

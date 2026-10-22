@@ -10,18 +10,13 @@
  * pendant un incident.
  */
 
-const BASE = "";
+import { ErreurApi, analyserErreur } from "./erreurs";
+import type { PolitiqueFaciale } from "./face";
+import { requeteAutorisee } from "./session";
 
-export class ErreurApi extends Error {
-  constructor(
-    message: string,
-    readonly statut: number,
-    readonly code: string = "erreur",
-  ) {
-    super(message);
-    this.name = "ErreurApi";
-  }
-}
+export { ErreurApi };
+
+const BASE = "";
 
 async function requete<T>(chemin: string, init?: RequestInit): Promise<T> {
   const reponse = await fetch(`${BASE}${chemin}`, {
@@ -35,16 +30,7 @@ async function requete<T>(chemin: string, init?: RequestInit): Promise<T> {
   });
 
   if (!reponse.ok) {
-    let detail = `HTTP ${reponse.status}`;
-    let code = "erreur";
-    try {
-      const corps = await reponse.json();
-      detail = corps.detail || corps.title || detail;
-      code = corps.code || code;
-    } catch {
-      /* corps non JSON : on conserve le message d'état */
-    }
-    throw new ErreurApi(detail, reponse.status, code);
+    throw await analyserErreur(reponse);
   }
 
   if (reponse.status === 204) {
@@ -58,6 +44,35 @@ export const lire = <T>(chemin: string, entetes?: Record<string, string>): Promi
 
 export const ecrire = <T>(chemin: string, corps: unknown, entetes?: Record<string, string>) =>
   requete<T>(chemin, { method: "POST", body: JSON.stringify(corps), headers: entetes });
+
+async function requeteAutoriseeJson<T>(chemin: string, init?: RequestInit): Promise<T> {
+  const reponse = await requeteAutorisee(chemin, init);
+  if (!reponse.ok) {
+    throw await analyserErreur(reponse);
+  }
+  if (reponse.status === 204) {
+    return undefined as T;
+  }
+  return (await reponse.json()) as T;
+}
+
+/**
+ * Appels authentifiés par la session de l'opérateur connecté.
+ *
+ * Le jeton n'est jamais posé à la main ici : il vient de `session.ts`, qui le
+ * renouvelle et le remplace lorsqu'il a été révoqué. C'est la seule façon
+ * d'éviter qu'un écran continue de fonctionner avec un jeton que le moteur de
+ * remédiation vient pourtant d'invalider.
+ */
+export const autorise = {
+  lire: <T,>(chemin: string) => requeteAutoriseeJson<T>(chemin),
+  ecrire: <T,>(chemin: string, corps: unknown, entetes?: Record<string, string>) =>
+    requeteAutoriseeJson<T>(chemin, {
+      method: "POST",
+      body: JSON.stringify(corps),
+      headers: entetes,
+    }),
+};
 
 // =============================================================================
 //  Types : miroir des contrats exposés par les services
@@ -217,34 +232,42 @@ export interface ServiceEtat {
 }
 
 export const api = {
-  etat: () => lire<EtatSupervision>("/api/supervision/state"),
-  services: () => lire<{ count: number; services: ServiceEtat[] }>("/api/supervision/services"),
-  incidents: () => lire<{ incidents: Incident[] }>("/api/supervision/incidents?limit=20"),
-  incident: (id: string) => lire<DetailIncident>(`/api/supervision/incidents/${id}`),
-  chronologie: () => lire<{ events: EvenementChronologie[] }>("/api/supervision/timeline?limit=200"),
-  politiques: () => lire<{ policies: Politique[] }>("/api/supervision/policies"),
-  fenetre: () => lire<FenetreVariables>("/api/telemetry/features/current"),
-  detection: () => lire<RapportDetection>("/api/detector/score/current"),
-  modele: () => lire<DescriptionModele>("/api/detector/model"),
+  etat: () => autorise.lire<EtatSupervision>("/api/supervision/state"),
+  services: () => autorise.lire<{ count: number; services: ServiceEtat[] }>("/api/supervision/services"),
+  incidents: () => autorise.lire<{ incidents: Incident[] }>("/api/supervision/incidents?limit=20"),
+  incident: (id: string) => autorise.lire<DetailIncident>(`/api/supervision/incidents/${id}`),
+  chronologie: () =>
+    autorise.lire<{ events: EvenementChronologie[] }>("/api/supervision/timeline?limit=200"),
+  politiques: () => autorise.lire<{ policies: Politique[] }>("/api/supervision/policies"),
+  fenetre: () => autorise.lire<FenetreVariables>("/api/telemetry/features/current"),
+  detection: () => autorise.lire<RapportDetection>("/api/detector/score/current"),
+  modele: () => autorise.lire<DescriptionModele>("/api/detector/model"),
   assistant: (question: string) =>
-    ecrire<ReponseAssistant>("/api/assistant/ask", { question }, { "X-Client-Id": identifiantClient() }),
+    autorise.ecrire<ReponseAssistant>(
+      "/api/assistant/ask",
+      { question },
+      { "X-Client-Id": identifiantClient() },
+    ),
   plafonds: () =>
     lire<{ min_cents: number; max_cents: number; daily_max_cents: number }>("/api/payments/limits"),
-  connexion: (username: string, password: string) =>
-    ecrire<{ access_token: string; expires_in: number }>("/api/auth/token", { username, password }),
-  payer: (corps: Record<string, unknown>) =>
-    jetonDeSonde().then((valeur) =>
-      ecrire<Paiement>("/api/payments", corps, { Authorization: `Bearer ${valeur}` }),
-    ),
+  payer: (corps: Record<string, unknown>) => autorise.ecrire<Paiement>("/api/payments", corps),
   historique: () =>
-    jetonDeSonde().then((valeur) =>
-      lire<{ transactions: Array<Record<string, unknown>> }>("/api/payments?limit=25", {
-        Authorization: `Bearer ${valeur}`,
-      }),
-    ),
-  comptes: () => lire<{ accounts: Array<Record<string, unknown>> }>("/api/ledger/accounts"),
+    autorise.lire<{ transactions: Array<Record<string, unknown>> }>("/api/payments?limit=25"),
+  face: {
+    /** Paramètres publics du contrôle facial : le seuil et le défi ne sont pas
+     *  écrits dans l'interface, ils sont lus ici. */
+    politique: () => lire<PolitiqueFaciale>("/api/auth/face/policy"),
+    statut: (username: string) =>
+      autorise.lire<StatutGabarit>(`/api/auth/face/status/${encodeURIComponent(username)}`),
+    enroler: (username: string, descriptors: number[][]) =>
+      autorise.ecrire<{ username: string; captures: number; updated_at: string }>(
+        "/api/auth/face/enroll",
+        { username, descriptors },
+      ),
+  },
+  comptes: () => autorise.lire<{ accounts: Array<Record<string, unknown>> }>("/api/ledger/accounts"),
   integrite: () =>
-    lire<{ balanced: boolean; imbalance_cents: number; accounts_checked: number }>(
+    autorise.lire<{ balanced: boolean; imbalance_cents: number; accounts_checked: number }>(
       "/api/ledger/integrity",
     ),
 };
@@ -261,32 +284,14 @@ function identifiantClient(): string {
   return valeur;
 }
 
-/**
- * Récupération d'un jeton de service pour la salle d'opérations.
- *
- * Le tableau de bord a besoin d'un jeton pour interroger les points d'entrée
- * authentifiés. En démonstration, il l'obtient avec le compte opérateur ; en
- * situation réelle, il utiliserait un jeton de service à durée de vie longue
- * délivré par le coffre.
- */
-let jeton: string | null = null;
-let expirationJeton = 0;
-
-export async function jetonDeSonde(forcer = false): Promise<string> {
-  if (!forcer && jeton !== null && Date.now() < expirationJeton) {
-    return jeton;
-  }
-  const identifiants = identifiantsOperateur();
-  const reponse = await api.connexion(identifiants.username, identifiants.password);
-  jeton = reponse.access_token;
-  expirationJeton = Date.now() + Math.max(30, reponse.expires_in - 60) * 1000;
-  return jeton;
-}
-
-function identifiantsOperateur(): { username: string; password: string } {
-  const parametres = new URLSearchParams(window.location.search);
-  return {
-    username: parametres.get("operateur") ?? "operateur",
-    password: parametres.get("motdepasse") ?? "AlphaPay-Ops-2026!",
-  };
+/** Statut du gabarit facial d'un compte, tel que le renvoie le service. */
+export interface StatutGabarit {
+  username: string;
+  enrolled: boolean;
+  captures: number;
+  updated_at: string | null;
+  dimension: number;
+  threshold: number;
+  min_samples: number;
+  challenge_min_turn_deg: number;
 }
