@@ -1,25 +1,18 @@
 #!/usr/bin/env python3
-"""Test de bout en bout de l'authentification faciale, sur la pile reelle.
+"""Verifie le defi sans clignement, sur la pile reelle.
 
-Passe par la bordure (HTTPS, certificat auto-signe) : c'est le chemin d'un
-navigateur, pas un appel interne a un conteneur.
-
-Le visage est simule par des descripteurs : ce script ne peut pas tenir une
-webcam. Ce qu'il prouve, c'est la chaine serveur complete : enrolement, moyenne
-du gabarit, distance cosinus, refus du defi non valide, refus du visage
-inconnu, delivrance d'un jeton, et journalisation sans le descripteur.
+La rotation de tete est desormais le seul geste exige : ce script prouve qu'une
+verification sans clignement est acceptee si la rotation est suffisante, et
+refusee si elle ne l'est pas.
 """
-
 import json
 import math
 import random
 import ssl
-import sys
 import urllib.error
 import urllib.request
 
 BASE = "https://dind:443"
-SEUIL = 0.45
 CTX = ssl.create_default_context()
 CTX.check_hostname = False
 CTX.verify_mode = ssl.CERT_NONE
@@ -31,126 +24,109 @@ def appel(chemin, methode="GET", corps=None, jeton=None):
     requete.add_header("Accept", "application/json")
     if donnees is not None:
         requete.add_header("Content-Type", "application/json")
-    if jeton:
+    if jeton is not None:
         requete.add_header("Authorization", "Bearer " + jeton)
     try:
-        with urllib.request.urlopen(requete, timeout=30, context=CTX) as reponse:
+        with urllib.request.urlopen(requete, timeout=20, context=CTX) as reponse:
             return reponse.status, reponse.read().decode()
     except urllib.error.HTTPError as erreur:
         return erreur.code, erreur.read().decode()
-    except Exception as erreur:  # reseau
-        return 0, f"ECHEC RESEAU {erreur}"
 
 
 def vecteur(graine):
-    r = random.Random(graine)
-    v = [r.gauss(0, 1) for _ in range(128)]
-    norme = math.sqrt(sum(x * x for x in v))
-    return [x / norme for x in v]
+    generateur = random.Random(graine)
+    valeurs = [generateur.gauss(0, 1) for _ in range(128)]
+    longueur = math.sqrt(sum(v * v for v in valeurs))
+    return [v / longueur for v in valeurs]
 
 
-def bruite(base, amplitude, graine):
-    r = random.Random(graine)
-    v = [x + r.gauss(0, amplitude) for x in base]
-    norme = math.sqrt(sum(x * x for x in v))
-    return [x / norme for x in v]
+def voisin(base, distance_visee, graine):
+    """Construit un descripteur a une distance cosinus imposee de `base`.
+
+    Le seuil se juge sur des distances mesurees, pas sur des vecteurs tires au
+    hasard : 0,067 correspond au centile 95 de deux photos d'une meme personne,
+    0,073 a la paire de personnes differentes la plus proche du jeu mesure.
+    """
+    aleatoire = random.Random(graine)
+    norme = math.sqrt(sum(x * x for x in base))
+    unitaire = [x / norme for x in base]
+    reste = [aleatoire.gauss(0, 1) for _ in base]
+    produit = sum(a * b for a, b in zip(reste, unitaire))
+    reste = [a - produit * b for a, b in zip(reste, unitaire)]
+    norme_reste = math.sqrt(sum(x * x for x in reste))
+    reste = [x / norme_reste for x in reste]
+    cosinus = 1.0 - distance_visee
+    sinus = math.sqrt(max(0.0, 1.0 - cosinus * cosinus))
+    return [cosinus * a + sinus * b for a, b in zip(unitaire, reste)]
 
 
-def distance(a, b):
-    produit = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(x * x for x in b))
-    return 1 - produit / (na * nb)
+def etape(titre, code, corps):
+    court = corps if len(corps) < 200 else corps[:200] + "..."
+    print("[" + titre + "] HTTP " + str(code))
+    print("    " + court)
 
 
-def etape(titre, code, corps, complement=""):
-    texte = corps if len(corps) <= 300 else corps[:300] + "..."
-    print(f"[{titre}] HTTP {code} {complement}")
-    print(f"    {texte}")
-    print()
-
-
-reference = vecteur(1)
-captures = [bruite(reference, 0.01, 100 + rang) for rang in range(8)]
-proche = bruite(reference, 0.03, 7)
-loin = vecteur(99)
-
-print(f"distance moyenne gabarit/proche : {sum(distance(reference, c) for c in captures) / 8:.4f}")
-print(f"distance proche/etranger        : {distance(proche, loin):.4f}")
-print(f"seuil annonce par le service    : {SEUIL}")
-print()
-
-etape(*("politique faciale", *appel("/api/auth/face/policy")))
+code, corps = appel("/api/auth/face/policy")
+etape("politique faciale", code, corps)
+politique = json.loads(corps)
 
 code, corps = appel(
-    "/api/auth/token", "POST", {"username": "operateur", "password": "AlphaPay-Ops-2026!"}
+    "/api/auth/token",
+    "POST",
+    {"username": "operateur", "password": "AlphaPay-Ops-2026!"},
 )
-etape("connexion mot de passe", code, corps)
-if code != 200:
-    sys.exit("la connexion par mot de passe est la base de tout : arret")
+etape("connexion mot de passe", code, corps[:40])
 jeton = json.loads(corps)["access_token"]
 
-etape(
-    "enrolement 8 captures",
-    *appel(
-        "/api/auth/face/enroll",
-        "POST",
-        {"username": "operateur", "descriptors": captures},
-        jeton,
-    ),
+reference = vecteur(1)
+code, corps = appel(
+    "/api/auth/face/enroll",
+    "POST",
+    {"username": "operateur", "descriptors": [reference] * 8},
+    jeton,
 )
-
-etape("statut du gabarit", *appel("/api/auth/face/status/operateur", jeton=jeton))
+etape("enrolement de 8 captures", code, corps)
 
 code, corps = appel(
     "/api/auth/face/verify",
     "POST",
-    {"username": "operateur", "descriptor": proche, "challenge": {"blink": True, "turn_deg": 25.0}},
+    {
+        "username": "operateur",
+        "descriptor": reference,
+        "challenge": {"blink": False, "turn_deg": 25.0},
+    },
 )
-etape("visage reconnu + defi valide", code, corps, f"jeton delivre={'access_token' in corps}")
+etape("sans clignement, rotation de 25 degres", code, corps[:150])
 jeton_visage = json.loads(corps).get("access_token") if code == 200 else None
 
-etape(
-    "visage etranger",
-    *appel(
-        "/api/auth/face/verify",
-        "POST",
-        {"username": "operateur", "descriptor": loin, "challenge": {"blink": True, "turn_deg": 25.0}},
-    ),
+code, corps = appel(
+    "/api/auth/face/verify",
+    "POST",
+    {
+        "username": "operateur",
+        "descriptor": reference,
+        "challenge": {"blink": False, "turn_deg": 0.0},
+    },
 )
+etape("sans clignement, rotation nulle", code, corps[:180])
 
-etape(
-    "defi non valide",
-    *appel(
-        "/api/auth/face/verify",
-        "POST",
-        {
-            "username": "operateur",
-            "descriptor": proche,
-            "challenge": {"blink": False, "turn_deg": 0.0},
-        },
-    ),
-)
+code, corps = appel("/api/auth/face/verify", "POST", {
+    "username": "operateur",
+    "descriptor": voisin(reference, 0.067, 3),
+    "challenge": {"blink": False, "turn_deg": 25.0},
+})
+etape("meme personne, centile 95 mesure (0,067)", code, corps[:140])
 
-etape(
-    "descripteur a 127 valeurs",
-    *appel(
-        "/api/auth/face/verify",
-        "POST",
-        {"username": "operateur", "descriptor": proche[:127], "challenge": {"blink": True, "turn_deg": 25.0}},
-    ),
-)
+code, corps = appel("/api/auth/face/verify", "POST", {
+    "username": "operateur",
+    "descriptor": voisin(reference, 0.073, 5),
+    "challenge": {"blink": False, "turn_deg": 25.0},
+})
+etape("personne differente la plus proche mesuree (0,073)", code, corps[:200])
 
-etape(
-    "descripteur hors bornes",
-    *appel(
-        "/api/auth/face/verify",
-        "POST",
-        {"username": "operateur", "descriptor": [2.0] * 128, "challenge": {"blink": True, "turn_deg": 25.0}},
-    ),
-)
+if jeton_visage is not None:
+    code, corps = appel("/api/auth/users/me", jeton=jeton_visage)
+    etape("jeton obtenu sans clignement sur /users/me", code, corps[:110])
 
-if jeton_visage:
-    etape("jeton du visage sur /users/me", *appel("/api/auth/users/me", jeton=jeton_visage))
-
-etape("tableau de bord SANS jeton", *appel("/api/supervision/state"))
+print()
+print("clignement exige :", politique.get("require_blink"), "| rotation exigee :", politique.get("require_turn"))

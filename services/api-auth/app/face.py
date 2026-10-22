@@ -29,6 +29,44 @@ BORNE_DESCRIPTEUR = 1.0
 DISTANCE_MAXIMALE = 2.0
 """Distance cosinus maximale (deux vecteurs opposés)."""
 
+SEUIL_CALIBRE = 0.07
+"""Seuil de comparaison par défaut, mesuré et non choisi.
+
+Mesure faite avec ce modèle, sur 400 visages réels (jeu Olivetti, 40 personnes),
+descripteurs calculés par le réseau de reconnaissance embarqué, sans alignement
+préalable, donc dans le cas le plus défavorable :
+
+* deux photos d'une même personne : médiane 0,029, centile 95 à 0,067, maximum
+  0,096 ;
+* deux personnes différentes : minimum 0,042, centile 1 à 0,073, médiane 0,132,
+  maximum 0,281.
+
+Les deux populations se recouvrent : aucun seuil ne les sépare parfaitement. Le
+taux d'égalité vaut 0,077 (1,7 % de refus légitimes pour 1,7 % d'acceptations
+indués). Le seuil retenu est plus strict que ce point d'équilibre, parce que la
+reconnaissance faciale ouvre ici une session d'administration : à 0,07, la
+mesure donne 0,7 % d'acceptations indues pour 4,2 % de refus légitimes, et le
+mot de passe reste disponible. Un refus légitime se rattrape, une session
+ouverte par un inconnu ne se rattrape pas.
+
+Ce seuil remplace 0,45, valeur initiale non mesurée : à 0,45 la mesure donne
+100 % d'acceptations indues, c'est-à-dire que le contrôle ne distinguait plus
+personne. L'erreur venait d'un raisonnement sur des vecteurs aléatoires, qui
+sont toujours très éloignés, alors que deux visages différents occupent une
+région voisine du même espace.
+"""
+
+
+def euclidien_equivalent(distance_cosinus_valeur: float) -> float:
+    """Distance euclidienne correspondante, pour se repérer entre les deux usages.
+
+    Les descripteurs du réseau sortent normalisés ; pour de tels vecteurs,
+    `euclidien = racine(2 x cosinus)`. La littérature du modèle raisonne en
+    distance euclidienne, cet utilitaire n'existe que pour rendre la
+    correspondance vérifiable.
+    """
+    return math.sqrt(2.0 * max(0.0, distance_cosinus_valeur))
+
 
 class DescripteurInvalide(ValueError):
     """Descripteur refusé avant toute comparaison, ou gabarit inexploitable."""

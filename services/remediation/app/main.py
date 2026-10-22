@@ -298,13 +298,24 @@ def _fenetre_actions_ouverte(action: str) -> bool:
     le refuser au motif que la fenêtre est saturée revient à laisser une attaque
     détectée sans réponse, ce qui est exactement ce qu'on veut éviter.
     """
+    _purger_fenetre()
+    if action in ACTIONS_TOUJOURS_PERMISES:
+        return True
+    return len(_etat["actions_recentes"]) < MAX_ACTIONS_PAR_FENETRE
+
+
+def _purger_fenetre() -> None:
+    """Retire de la fenêtre les actions sorties de la période glissante.
+
+    Appelée avant toute décision d'action, et aussi à la lecture de l'état.
+    Sans la lecture, l'interface affiche un compteur figé depuis la dernière
+    action tentée : un opérateur croit la fenêtre saturée alors que les entrées
+    sont périmées depuis longtemps.
+    """
     maintenant = time.time()
     _etat["actions_recentes"] = [
         t for t in _etat["actions_recentes"] if maintenant - t < FENETRE_ACTIONS
     ]
-    if action in ACTIONS_TOUJOURS_PERMISES:
-        return True
-    return len(_etat["actions_recentes"]) < MAX_ACTIONS_PAR_FENETRE
 
 
 def _enregistrer_action(action: str) -> None:
@@ -841,6 +852,7 @@ async def etat_courant() -> dict[str, Any]:
         etat = "FAILED"
     else:
         etat = "INCIDENT"
+    _purger_fenetre()
     return {
         "state": etat,
         "suspended": _etat["suspendu"],

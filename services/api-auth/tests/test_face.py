@@ -276,3 +276,62 @@ def test_defi_vide_refuse_meme_si_la_configuration_l_a_permis():
     )
     assert valide is False
     assert "aucun geste" in motif
+
+
+# --- Calibration du seuil, sur les distances mesurees ------------------------
+#
+# Ces valeurs viennent de la mesure faite avec ce modele, sur 400 visages reels
+# (jeu Olivetti, 40 personnes), descripteurs calcules par le reseau embarque sans
+# alignement prealable, donc dans le cas le plus defavorable. Elles ne sont pas
+# choisies pour faire passer le test : elles decrivent les deux populations que
+# le seuil doit separer, et c'est le seuil qui doit tomber entre les deux.
+INTRA_MEDIANE = 0.029      # deux photos de la meme personne
+INTRA_CENTILE_95 = 0.067
+INTER_MINIMUM = 0.042      # deux personnes differentes
+INTER_CENTILE_1 = 0.073
+INTER_MEDIANE = 0.132
+INTER_MAXIMUM = 0.281
+TAUX_EGALITE = 0.077
+
+
+def test_seuil_par_defaut_plus_strict_que_le_taux_egalite():
+    # Le point d'equilibre mesuré est 0,077 : le seuil livré doit etre plus
+    # severe, parce qu'ouvrir une session d'administration n'est pas symetrique
+    # d'un refus legitime.
+    assert face.SEUIL_CALIBRE < TAUX_EGALITE
+
+
+def test_visage_identique_accepte_aux_distances_mesurees():
+    assert face.distance_acceptee(INTRA_MEDIANE, face.SEUIL_CALIBRE) is True
+    assert face.distance_acceptee(INTRA_CENTILE_95, face.SEUIL_CALIBRE) is True
+
+
+def test_visage_etranger_refuse_aux_distances_mesurees():
+    assert face.distance_acceptee(INTER_CENTILE_1, face.SEUIL_CALIBRE) is False
+    assert face.distance_acceptee(INTER_MEDIANE, face.SEUIL_CALIBRE) is False
+    assert face.distance_acceptee(INTER_MAXIMUM, face.SEUIL_CALIBRE) is False
+
+
+def test_paire_de_personnes_differentes_la_plus_proche_reste_acceptee():
+    # Le recouvrement des deux populations est reel et mesure : la paire la plus
+    # proche du jeu (0,042) se situe sous le seuil et serait acceptee. C'est le
+    # prix d'un taux de refus legitimes tenable, et il est documente plutot que
+    # masque. Exiger 0,042 pour tout refuser rejetterait plus d'un quart des
+    # visages legitimes.
+    assert face.distance_acceptee(INTER_MINIMUM, face.SEUIL_CALIBRE) is True
+
+
+def test_ancien_seuil_acceptait_tous_les_visages_du_jeu():
+    # 0,45 etait la valeur initiale, non mesuree. Elle depasse la distance
+    # maximale observee entre deux personnes differentes : aucun visage du jeu
+    # n'etait refuse, ce qui est exactement le defaut constate.
+    assert 0.45 > INTER_MAXIMUM
+    assert face.distance_acceptee(INTER_MAXIMUM, 0.45) is True
+
+
+def test_equivalence_euclidienne_du_seuil():
+    # Les descripteurs sortent normalises : euclidien = racine(2 x cosinus).
+    assert face.euclidien_equivalent(face.SEUIL_CALIBRE) == pytest.approx(0.3742, abs=0.001)
+    # A 0,45, la distance euclidienne equivalente depasse 0,9 : bien au-dela de
+    # toute distance ou deux visages differents se distinguent encore.
+    assert face.euclidien_equivalent(0.45) > 0.9

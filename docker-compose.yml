@@ -297,7 +297,7 @@ services:
       ARGON2_MEMORY_COST: "65536"
       # Authentification faciale : le gabarit est comparé par distance cosinus,
       # et le défi actif exige un clignement puis une rotation de tête.
-      FACE_MATCH_THRESHOLD: ${FACE_MATCH_THRESHOLD:-0.45}
+      FACE_MATCH_THRESHOLD: ${FACE_MATCH_THRESHOLD:-0.07}
       FACE_ENROLL_MIN_SAMPLES: ${FACE_ENROLL_MIN_SAMPLES:-8}
       FACE_CHALLENGE_MIN_TURN_DEG: ${FACE_CHALLENGE_MIN_TURN_DEG:-20}
       FACE_REQUIRE_BLINK: ${FACE_REQUIRE_BLINK:-false}
@@ -496,8 +496,12 @@ services:
       # Cadence de purge des blocages arrivés à échéance : un confinement
       # temporaire qui ne se lève jamais est un confinement définitif.
       EDGE_PURGE_SECONDS: "30"
-      MAX_ACTIONS_PER_WINDOW: "6"
-      ACTION_WINDOW_SECONDS: "300"
+      # Fenetre d'actions du moteur : au plus six actions par cinq minutes. Un
+      # moteur qui s'emballe est un deni de service. Parametrable pour les
+      # repetitions, qui doivent provoquer la saturation sans attendre cinq
+      # minutes pour la voir se purger.
+      MAX_ACTIONS_PER_WINDOW: "${MAX_ACTIONS_PER_WINDOW:-6}"
+      ACTION_WINDOW_SECONDS: "${ACTION_WINDOW_SECONDS:-300}"
       MTTR_TARGET_SECONDS: ${MTTR_TARGET_SECONDS:-180}
       MTTD_TARGET_SECONDS: ${MTTD_TARGET_SECONDS:-60}
       CIRCUIT_BREAKER_FAILURES: "3"

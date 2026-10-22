@@ -53,6 +53,7 @@ from common.tracing import current_client_ip, set_identity, set_route_label
 
 from .face import (
     DIMENSION_DESCRIPTEUR,
+    SEUIL_CALIBRE,
     DescripteurInvalide,
     distance_acceptee,
     distance_cosinus,
@@ -86,7 +87,10 @@ ADMIN_TOKEN = env_str("ADMIN_API_TOKEN", required=True)
 
 # Authentification faciale. Le seuil porte sur une distance cosinus : il est
 # inclusif, et le durcir augmente mécaniquement les refus de visages légitimes.
-FACE_MATCH_THRESHOLD = env_float("FACE_MATCH_THRESHOLD", 0.45)
+# La valeur par défaut n'est pas choisie : elle est mesurée sur 400 visages
+# réels, voir SEUIL_CALIBRE dans face.py, qui documente la distribution des
+# distances entre deux photos d'une même personne et entre deux personnes.
+FACE_MATCH_THRESHOLD = env_float("FACE_MATCH_THRESHOLD", SEUIL_CALIBRE)
 FACE_ENROLL_MIN_SAMPLES = env_int("FACE_ENROLL_MIN_SAMPLES", 8)
 FACE_CHALLENGE_MIN_TURN_DEG = env_float("FACE_CHALLENGE_MIN_TURN_DEG", 20.0)
 # Gestes exigés par le défi actif. Le geste retenu est la rotation de tête : une

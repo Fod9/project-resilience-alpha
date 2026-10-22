@@ -103,7 +103,10 @@ if printf '%s' "$reponse" | grep -q 'access_token'; then
         -H 'Content-Type: application/json' \
         -H "Authorization: Bearer $jeton" \
         -d '{"source_account":"CUST-000001","destination_account":"MERCHANT-0001","amount_cents":100,"reference":"checkup"}' 2>/dev/null)
-    if printf '%s' "$paiement" | grep -q '"status"'; then
+    # Un corps d'erreur au format problem+json contient lui aussi un champ
+    # "status" : le controle comptait donc un paiement refuse comme un succes.
+    # C'est l'identifiant du paiement qui distingue un reglement abouti.
+    if printf '%s' "$paiement" | grep -q '"payment_id"'; then
         printf '  [ OK ]   %-52s %s\n' "paiement de bout en bout" "$(printf '%s' "$paiement" | head -c 70)..."
         OK=$((OK + 1))
     else

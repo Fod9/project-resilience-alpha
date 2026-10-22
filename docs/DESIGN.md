@@ -754,7 +754,18 @@ un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
 - Deux moyens d'ouverture pour la salle d'opérations : mot de passe (Argon2id) et
   reconnaissance faciale. Le gabarit facial est la moyenne normalisée de huit
   captures au moins, et la comparaison est une distance cosinus rapportée au seuil
-  `FACE_MATCH_THRESHOLD` (0,45 par défaut, comparaison inclusive).
+  `FACE_MATCH_THRESHOLD`, comparaison inclusive.
+- Le seuil n'est pas choisi, il est mesuré (`tests/mesure_seuil_visage.py`, 400
+  visages réels, descripteurs calculés par le modèle du projet, sans alignement
+  préalable) : deux photos d'une même personne se situent à 0,029 en médiane et
+  0,096 au pire ; deux personnes différentes descendent à 0,042 au plus proche et
+  se situent à 0,132 en médiane. Les deux populations se recouvrent, le taux
+  d'égalité vaut 0,077 ; le seuil livré est **0,07**, plus strict que ce point
+  d'équilibre, soit 0,7 % d'acceptations indues pour 4,2 % de refus légitimes. Une
+  valeur de 0,45, plausible à l'œil, acceptait 100 % des visages du jeu :
+  l'erreur consistait à raisonner sur des vecteurs aléatoires, qui sont toujours
+  très éloignés, alors que deux visages différents occupent une région voisine du
+  même espace.
 - Le visage seul ne suffit pas : un défi actif est exigé, une rotation de tête
   d'au moins `FACE_CHALLENGE_MIN_TURN_DEG` degrés. Une photographie tenue devant
   la caméra produit un descripteur valide mais pas la rotation : la mesure porte
