@@ -216,3 +216,63 @@ def test_distance_dun_meme_visage_bruite_reste_sous_le_seuil() -> None:
     reference = face.gabarit_moyen([face.valider_descripteur(_descripteur(1.0))])
     bruite = [valeur + 0.05 * math.sin(position) for position, valeur in enumerate(reference)]
     assert face.distance_acceptee(face.distance_cosinus(reference, bruite), 0.45) is True
+
+
+# --- Gestes exigés par la configuration -------------------------------------
+
+
+def test_clignement_seul_suffit_quand_la_rotation_n_est_pas_exigee():
+    valide, motif = face.evaluer_defi(
+        clignement=True,
+        rotation_degres=0.0,
+        seuil_rotation_degres=20.0,
+        exiger_clignement=True,
+        exiger_rotation=False,
+    )
+    assert valide is True, motif
+
+
+def test_rotation_seule_suffit_quand_le_clignement_n_est_pas_exige():
+    valide, motif = face.evaluer_defi(
+        clignement=False,
+        rotation_degres=25.0,
+        seuil_rotation_degres=20.0,
+        exiger_clignement=False,
+        exiger_rotation=True,
+    )
+    assert valide is True, motif
+
+
+def test_rotation_insuffisante_refusee_meme_sans_clignement_exige():
+    valide, motif = face.evaluer_defi(
+        clignement=False,
+        rotation_degres=12.0,
+        seuil_rotation_degres=20.0,
+        exiger_clignement=False,
+        exiger_rotation=True,
+    )
+    assert valide is False
+    assert "rotation insuffisante" in motif
+
+
+def test_rotation_negative_compte_en_valeur_absolue():
+    valide, _ = face.evaluer_defi(
+        clignement=False,
+        rotation_degres=-24.0,
+        seuil_rotation_degres=20.0,
+        exiger_clignement=False,
+        exiger_rotation=True,
+    )
+    assert valide is True
+
+
+def test_defi_vide_refuse_meme_si_la_configuration_l_a_permis():
+    valide, motif = face.evaluer_defi(
+        clignement=True,
+        rotation_degres=90.0,
+        seuil_rotation_degres=20.0,
+        exiger_clignement=False,
+        exiger_rotation=False,
+    )
+    assert valide is False
+    assert "aucun geste" in motif

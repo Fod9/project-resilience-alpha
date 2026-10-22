@@ -43,7 +43,7 @@ from fastapi import Header, Request
 from pydantic import BaseModel, Field
 
 from common.app import build_app
-from common.config import env_float, env_int, env_str
+from common.config import env_bool, env_float, env_int, env_str
 from common.db import execute, fetch_all, fetch_one
 from common.errors import AppError, bad_request, forbidden, not_found, unauthorized
 from common.metrics import AUTH_ATTEMPTS_TOTAL, TOKENS_REVOKED_TOTAL
@@ -88,6 +88,15 @@ ADMIN_TOKEN = env_str("ADMIN_API_TOKEN", required=True)
 FACE_MATCH_THRESHOLD = env_float("FACE_MATCH_THRESHOLD", 0.45)
 FACE_ENROLL_MIN_SAMPLES = env_int("FACE_ENROLL_MIN_SAMPLES", 8)
 FACE_CHALLENGE_MIN_TURN_DEG = env_float("FACE_CHALLENGE_MIN_TURN_DEG", 20.0)
+# Gestes exigés par le défi actif. Le geste retenu est la rotation de tête : une
+# photo immobile tenue devant la caméra ne la produit pas, puisque la mesure
+# regarde la position du nez dans le cadre du visage, pas la position du cadre.
+# Le clignement reste disponible (FACE_REQUIRE_BLINK=true) pour qui veut le
+# cumuler, mais il est fragile en pratique : une paupière se mesure sur des
+# durées plus courtes que la cadence de détection. Au moins un geste doit rester
+# exigé : sans geste, le défi ne distingue plus un visage vivant d'une photo.
+FACE_REQUIRE_BLINK = env_bool("FACE_REQUIRE_BLINK", False)
+FACE_REQUIRE_TURN = env_bool("FACE_REQUIRE_TURN", True)
 
 _HASHER = PasswordHasher(
     time_cost=env_int("ARGON2_TIME_COST", 3),
@@ -551,6 +560,16 @@ async def profil(authorization: str | None = Header(default=None)) -> dict[str, 
 # message d'erreur, un journal ou un audit.
 
 
+def _gestes_exiges() -> list[str]:
+    """Gestes réclamés par la configuration, tels qu'ils sont journalisés."""
+    gestes: list[str] = []
+    if FACE_REQUIRE_BLINK:
+        gestes.append("clignement")
+    if FACE_REQUIRE_TURN:
+        gestes.append("rotation")
+    return gestes
+
+
 def _litteral_vecteur(gabarit: Sequence[float]) -> str:
     """Forme textuelle acceptée par le type `vector` de PostgreSQL."""
     return json.dumps([round(float(valeur), 8) for valeur in gabarit])
@@ -650,6 +669,8 @@ async def politique_faciale() -> dict[str, Any]:
         "threshold": FACE_MATCH_THRESHOLD,
         "min_samples": FACE_ENROLL_MIN_SAMPLES,
         "challenge_min_turn_deg": FACE_CHALLENGE_MIN_TURN_DEG,
+        "require_blink": FACE_REQUIRE_BLINK,
+        "require_turn": FACE_REQUIRE_TURN,
         "max_failed_attempts": MAX_FAILED,
         "lockout_seconds": LOCKOUT_SECONDS,
         "images_transmitted": False,
@@ -785,6 +806,8 @@ async def verifier_visage(charge: FaceVerifyRequest) -> TokenPair:
         clignement=charge.challenge.blink,
         rotation_degres=charge.challenge.turn_deg,
         seuil_rotation_degres=FACE_CHALLENGE_MIN_TURN_DEG,
+        exiger_clignement=FACE_REQUIRE_BLINK,
+        exiger_rotation=FACE_REQUIRE_TURN,
     )
 
     gabarit = await fetch_one(
@@ -850,6 +873,7 @@ async def verifier_visage(charge: FaceVerifyRequest) -> TokenPair:
                 "distance": round(distance, 6),
                 "threshold": FACE_MATCH_THRESHOLD,
                 "challenge_ok": defi_valide,
+                "gestes_exiges": _gestes_exiges(),
             },
         )
         tentatives = int(compteur.get("failed_attempts") or 0)
@@ -1145,6 +1169,13 @@ def _verifier_coherence() -> None:
             "config_invalide",
             "Configuration invalide",
             "La rotation minimale du défi actif doit être strictement positive.",
+        )
+    if not FACE_REQUIRE_BLINK and not FACE_REQUIRE_TURN:
+        raise bad_request(
+            "config_invalide",
+            "Configuration invalide",
+            "Le défi actif doit exiger au moins un geste, clignement ou rotation : "
+            "sans geste, il ne distingue plus un visage vivant d'une photographie.",
         )
 
 

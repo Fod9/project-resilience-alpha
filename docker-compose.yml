@@ -300,6 +300,8 @@ services:
       FACE_MATCH_THRESHOLD: ${FACE_MATCH_THRESHOLD:-0.45}
       FACE_ENROLL_MIN_SAMPLES: ${FACE_ENROLL_MIN_SAMPLES:-8}
       FACE_CHALLENGE_MIN_TURN_DEG: ${FACE_CHALLENGE_MIN_TURN_DEG:-20}
+      FACE_REQUIRE_BLINK: ${FACE_REQUIRE_BLINK:-false}
+      FACE_REQUIRE_TURN: ${FACE_REQUIRE_TURN:-true}
     volumes:
       - alphaplat-logs:/var/log/alphapay
     healthcheck:

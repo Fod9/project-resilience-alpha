@@ -402,10 +402,12 @@ export default function Acces() {
   };
 
   const seuilRotation = politique?.challenge_min_turn_deg ?? null;
+  const clignementRequis = politique?.require_blink ?? true;
+  const rotationRequise = politique?.require_turn ?? true;
+  const rotationAcquise =
+    seuilRotation !== null && camera.defi.rotationMax >= seuilRotation;
   const defiComplet =
-    camera.defi.clignement &&
-    seuilRotation !== null &&
-    camera.defi.rotationMax >= seuilRotation;
+    (!clignementRequis || camera.defi.clignement) && (!rotationRequise || rotationAcquise);
 
   const soumettreVisage = async (evenement: FormEvent) => {
     evenement.preventDefault();
@@ -509,61 +511,43 @@ export default function Acces() {
                         : "Caméra en attente"
                 }
                 suit={
-                  seuilRotation === null
-                    ? "Paramètres indisponibles"
-                    : camera.defi.clignement
-                      ? camera.defi.rotationMax.toFixed(0) + " degrés sur " + seuilRotation.toFixed(0)
-                      : "Défi : clignez des yeux, puis tournez la tête"
+                  seuilRotation === null || !rotationRequise
+                    ? clignementRequis
+                      ? "Clignez des yeux"
+                      : "Aucun geste exigé"
+                    : "Rotation " +
+                      camera.defi.rotationMax.toFixed(0) +
+                      " sur " +
+                      seuilRotation.toFixed(0) +
+                      " degrés"
                 }
               />
 
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
-                    Clignement
-                  </span>
-                  <Etiquette ton={camera.defi.clignement ? "neutre" : "incident"}>
-                    {camera.defi.clignement ? "Acquis" : "Attendu"}
-                  </Etiquette>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
-                    Rotation de tête
-                  </span>
-                  <Etiquette
-                    ton={
-                      seuilRotation !== null && camera.defi.rotationMax >= seuilRotation
-                        ? "neutre"
-                        : "incident"
-                    }
-                  >
-                    {seuilRotation === null
-                      ? "Indisponible"
-                      : camera.defi.rotationMax.toFixed(0) + " degrés sur " + seuilRotation.toFixed(0)}
-                  </Etiquette>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
-                    Ouverture des yeux
-                  </span>
-                  <Etiquette ton="neutre">
-                    {camera.defi.visage
-                      ? camera.defi.ouverture.toFixed(2) +
-                        " sous " +
-                        camera.defi.seuilFermeture.toFixed(2)
-                      : "Aucune mesure"}
-                  </Etiquette>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
-                    Cadence de mesure
-                  </span>
-                  <Etiquette ton="neutre">
-                    {camera.defi.mesures > 0
-                      ? camera.defi.periodeMs.toFixed(0) + " ms par image"
-                      : "En attente"}
-                  </Etiquette>
-                </div>
+                {clignementRequis ? (
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
+                      Clignement
+                    </span>
+                    <Etiquette ton={camera.defi.clignement ? "neutre" : "incident"}>
+                      {camera.defi.clignement ? "Acquis" : "Attendu"}
+                    </Etiquette>
+                  </div>
+                ) : null}
+                {rotationRequise ? (
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
+                      Rotation de tête
+                    </span>
+                    <Etiquette ton={rotationAcquise ? "neutre" : "incident"}>
+                      {seuilRotation === null
+                        ? "Indisponible"
+                        : camera.defi.rotationMax.toFixed(0) +
+                          " degrés sur " +
+                          seuilRotation.toFixed(0)}
+                    </Etiquette>
+                  </div>
+                ) : null}
               </div>
 
               <Bouton

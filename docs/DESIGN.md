@@ -755,10 +755,16 @@ un jury doit lire l'état à trois mètres. Maquettes Figma avant intégration.
   reconnaissance faciale. Le gabarit facial est la moyenne normalisée de huit
   captures au moins, et la comparaison est une distance cosinus rapportée au seuil
   `FACE_MATCH_THRESHOLD` (0,45 par défaut, comparaison inclusive).
-- Le visage seul ne suffit pas : un défi actif (clignement puis rotation de tête
-  d'au moins `FACE_CHALLENGE_MIN_TURN_DEG` degrés) est exigé. Une photographie
-  tenue devant la caméra produit un descripteur valide et un défi manqué, et c'est
-  précisément ce qui l'écarte.
+- Le visage seul ne suffit pas : un défi actif est exigé, une rotation de tête
+  d'au moins `FACE_CHALLENGE_MIN_TURN_DEG` degrés. Une photographie tenue devant
+  la caméra produit un descripteur valide mais pas la rotation : la mesure porte
+  sur la position du nez dans le cadre du visage, que le déplacement de la
+  feuille ne change pas.
+- Les gestes exigés sont un réglage (`FACE_REQUIRE_BLINK`, `FACE_REQUIRE_TURN`),
+  publié par le service et lu par l'interface. Le clignement est disponible et
+  désactivé par défaut : il se mesure sur des durées plus courtes que la cadence
+  de détection, ce qui le rend peu fiable en pratique. Au moins un geste doit
+  rester exigé, sinon le défi ne distingue plus un visage vivant d'une photo.
 - Les échecs faciaux partagent le verrouillage du mot de passe (cinq échecs,
   `AUTH_LOCKOUT_SECONDS`) et sont journalisés deux fois : dans `auth.face_attempts`
   pour l'exploitation, dans `auth.audit_log` pour la preuve, avec la méthode, la

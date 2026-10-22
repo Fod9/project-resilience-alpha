@@ -117,21 +117,33 @@ def evaluer_defi(
     clignement: bool,
     rotation_degres: float,
     seuil_rotation_degres: float,
+    exiger_clignement: bool = True,
+    exiger_rotation: bool = True,
 ) -> tuple[bool, str]:
-    """Défi actif : un clignement, puis une rotation de tête suffisante.
+    """Défi actif, évalué selon les gestes que le service exige.
 
     Sans ce contrôle, une photo tenue devant la caméra produit exactement le
-    même descripteur qu'un visage vivant et ouvrirait la session. Le défi est
-    observé par le navigateur (repères du visage), puis transmis ; le serveur
-    refuse toute vérification qui ne s'accompagne pas d'un défi validé.
+    même descripteur qu'un visage vivant et ouvrirait la session.
+
+    Les gestes exigés sont un réglage du service, publié par `GET /face/policy` :
+    l'interface affiche ce que le service réclame, et le service refuse ce qui
+    manque. Un défi à géométrie variable reste un contrôle, à condition qu'il
+    reste au moins un geste : l'absence totale est refusée au démarrage, voir la
+    vérification de cohérence dans `main.py`.
     """
-    if not clignement:
+    if not exiger_clignement and not exiger_rotation:
+        # Second verrou, volontairement redondant avec la vérification de
+        # cohérence du service : une fonction de décision ne doit jamais pouvoir
+        # valider un défi vide, même appelée directement.
+        return False, "aucun geste exigé"
+    if exiger_clignement and not clignement:
         return False, "clignement non observé"
-    if isinstance(rotation_degres, bool) or not isinstance(rotation_degres, (int, float)):
-        return False, "rotation illisible"
-    rotation = float(rotation_degres)
-    if not math.isfinite(rotation):
-        return False, "rotation illisible"
-    if abs(rotation) < seuil_rotation_degres:
-        return False, f"rotation insuffisante ({abs(rotation):.1f} degrés)"
+    if exiger_rotation:
+        if isinstance(rotation_degres, bool) or not isinstance(rotation_degres, (int, float)):
+            return False, "rotation illisible"
+        rotation = float(rotation_degres)
+        if not math.isfinite(rotation):
+            return False, "rotation illisible"
+        if abs(rotation) < seuil_rotation_degres:
+            return False, f"rotation insuffisante ({abs(rotation):.1f} degrés)"
     return True, "défi validé"

@@ -28,6 +28,9 @@ export interface PolitiqueFaciale {
   threshold: number;
   min_samples: number;
   challenge_min_turn_deg: number;
+  /** Gestes réclamés par le service : l'interface ne les suppose jamais. */
+  require_blink: boolean;
+  require_turn: boolean;
   max_failed_attempts: number;
   lockout_seconds: number;
   images_transmitted: boolean;

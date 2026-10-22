@@ -73,7 +73,11 @@ def principal() -> int:
         print("   flux camera                :", video)
         print("   modeles telecharges        :", len(modeles))
         t = texte(page)
-        print("   etapes du defi affichees   :", "Clignement" in t, "|", "Rotation" in t)
+        print("   clignement affiche         :", "Clignement" in t)
+        print("   rotation affichee          :", "Rotation de t" in t)
+        print("   ouverture des yeux         :", "Ouverture des yeux" in t)
+        print("   cadence affichee           :", "Cadence de mesure" in t)
+        print("   ce que porte la capture    :", page.locator("video ~ span").all_inner_texts())
 
         print("3. connexion par mot de passe")
         page.get_by_role("button", name="Mot de passe", exact=True).click()
