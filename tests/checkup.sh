@@ -60,7 +60,11 @@ roles=$(docker exec alphaplat-postgres psql -U postgres -d alphapay -tAc \
 controle "roles svc_* crees" "${roles:-0}" "7"
 tables=$(docker exec alphaplat-postgres psql -U postgres -d alphapay -tAc \
     "select count(*) from information_schema.tables where table_schema in ('auth','ledger','ops','ml','rag')" 2>/dev/null | tr -d ' ')
-controle "tables applicatives" "${tables:-0}" "16"
+# 18 = 16 tables du schema d'origine, plus les deux tables de l'authentification
+# faciale (auth.face_templates et auth.face_attempts) ajoutees par 04-face.sql.
+# Si la migration n'a pas ete appliquee a une base existante, ce controle tombe a
+# 16 : voir la procedure R8 de docs/RUNBOOKS.md.
+controle "tables applicatives"          "${tables:-0}" "18"
 invariant=$(docker exec alphaplat-postgres psql -U postgres -d alphapay -tAc \
     "select count(*) from ledger.accounts a where a.balance_cents <> (select coalesce(sum(case when e.direction='D' then e.amount_cents else -e.amount_cents end),0) from ledger.entries e join ledger.transactions t on t.id=e.transaction_id where e.account_id=a.id and t.status='settled')" 2>/dev/null | tr -d ' ')
 controle "invariant comptable (0 = coherent)" "${invariant:-?}" "0"
