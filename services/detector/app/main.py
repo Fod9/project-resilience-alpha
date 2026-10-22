@@ -54,8 +54,8 @@ from common.security import compute_signature
 from common.features import FEATURE_NAMES, vecteur_vers_liste
 
 VERSION = "1.0.0"
-CHEMIN_META = "/app/artifacts/model-meta.json"
-CHEMIN_MODELE = "/app/artifacts/model.joblib"
+CHEMIN_META = env_str("MODEL_FALLBACK_META_PATH", "/app/artifacts/model-meta.json")
+CHEMIN_MODELE = env_str("MODEL_FALLBACK_PATH", "/app/artifacts/model.joblib")
 
 _tache: asyncio.Task[None] | None = None
 _etat: dict[str, Any] = {
@@ -231,7 +231,19 @@ def _charger_modele() -> None:
         from ml.train import ecrire_artefacts, entrainer
 
         artefact = entrainer()
+        # Un modèle appris à la volée sur trafic simulé porte un seuil plus
+        # strict que le même modèle recalibré sur du trafic réel, et rien ne le
+        # distinguait : l'exploitant voyait un détecteur qui signale la
+        # plateforme au repos sans pouvoir savoir d'où venait le seuil. La
+        # provenance est désormais écrite dans les métadonnées, donc exposée par
+        # /api/detector/model et par l'écran de supervision.
+        artefact["source_calibrage"] = "entrainement-a-la-volee"
         ecrire_artefacts(artefact, os.path.dirname(MODEL_PATH) or "/models")
+        events.warn(
+            "detector.model.trained_on_the_fly",
+            message="modèle entraîné au démarrage sur trafic simulé, seuil plus strict qu'une calibration réelle",
+            threshold=float(artefact.get("seuil") or 0.0),
+        )
         _charger_modele()
     except Exception as erreur:  # noqa: BLE001
         events.warn(

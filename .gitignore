@@ -13,8 +13,13 @@ deliverables/*.pptx
 deliverables/*.pdf
 !deliverables/.gitkeep
 
-# Modèles entraînés (régénérables par `python -m ml.train`)
-ml/artifacts/*.joblib
+# Modèles entraînés. Le fichier `.joblib` est versionné, malgré sa taille : sans
+# lui, un clone neuf construit une image de détecteur sans aucun modèle, et le
+# service s'entraîne alors au démarrage sur du trafic simulé, ce qui produit un
+# seuil bien plus strict que la calibration sur trafic réel. Le résultat était un
+# détecteur qui signale la plateforme au repos, sans que rien ne dise d'où venait
+# le seuil. La régénération reste possible : `python -m ml.train` pour un modèle
+# sur trafic simulé, `python -m ml.recalibrer` pour recalibrer le seuil.
 
 # Python
 __pycache__/

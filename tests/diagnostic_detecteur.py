@@ -54,7 +54,8 @@ def principal() -> int:
     meta = json.load(open(chemin_meta)) if os.path.exists(chemin_meta) else {}
     seuil = float(meta.get("seuil") or paquet.get("seuil") or 0.0)
     print(f"modele charge      : {chemin} ({provenance})")
-    print(f"version            : {paquet.get('version')} / {meta.get('version')}")
+    print(f"version du modele  : {paquet.get('version')}")
+    print(f"version du calibrage: {meta.get('version')}")
     print(f"source de calibrage: {meta.get('source_calibrage')}")
     print(f"seuil              : {seuil:.4f}")
     if provenance == "volume persistant":
