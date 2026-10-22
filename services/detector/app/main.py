@@ -394,18 +394,31 @@ async def _cycle() -> None:
         )
         return
 
+    diagnostics = fenetre.get("diagnostics") or {}
     # Une fenetre sans aucun evenement de bordure ne decrit aucun comportement :
     # toutes les variables valent zero, le vecteur sort du domaine
     # d'entrainement et le modele le note comme une anomalie franche. C'est par
     # ce chemin qu'un poste au repos se fait declarer en rafale. On ne note donc
     # que ce qui a ete reellement observe.
-    if int(fenetre.get("edge_events_in_window") or 0) <= 0:
+    #
+    # Le compteur retenu est celui du trafic *metier*. Les routes que la
+    # plateforme appelle sur elle-meme (salle d'operations, sondes de telemetrie,
+    # /healthz) ne participent plus au vecteur : une fenetre qui n'en contient
+    # pas d'autres n'a donc rien a decrire, meme si elle a vu passer des dizaines
+    # de requetes de consultation. La garde suit la meme definition que le
+    # vecteur, sinon elle laisserait noter des fenetres vides des qu'un
+    # navigateur est ouvert sur la salle d'operations.
+    metier = diagnostics.get("edge_events_metier")
+    if metier is None:
+        # Telemetrie anterieure au compteur metier : on retombe sur le compteur
+        # global plutot que de ne plus rien noter du tout.
+        metier = fenetre.get("edge_events_in_window")
+    if int(metier or 0) <= 0:
         await _abandonner_anomalie(
-            "fenetre sans trafic de bordure : non notee", fenetre
+            "fenetre sans trafic metier : non notee", fenetre
         )
         return
 
-    diagnostics = fenetre.get("diagnostics") or {}
     # Meme raisonnement pour une fenetre composee des seules routes de
     # consultation : elle decrit un operateur qui regarde son tableau de bord,
     # pas un adversaire. La noter revient a confiner l'operateur, puis a nourrir

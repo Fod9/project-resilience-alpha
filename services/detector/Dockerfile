@@ -26,6 +26,7 @@ COPY services/detector/app  /app/app
 COPY ml/__init__.py       /app/ml/__init__.py
 COPY ml/synthetic.py      /app/ml/synthetic.py
 COPY ml/train.py          /app/ml/train.py
+COPY ml/fenetrage.py      /app/ml/fenetrage.py
 COPY ml/recalibrer.py     /app/ml/recalibrer.py
 COPY ml/profils_attaque.py /app/ml/profils_attaque.py
 # La calibration sur mesures et sa verification sont embarquees : elles doivent

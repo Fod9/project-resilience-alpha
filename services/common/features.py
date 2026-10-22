@@ -298,20 +298,40 @@ class Agregateur:
         transactions_waf = [e for e in self._evenements if e.source == "modsec"]
 
         # --- trafic vu par la bordure
-        nb_edge = len(requetes_edge)
+        #
+        # Le vecteur ne decrit que le trafic *metier*. Les routes que la
+        # plateforme appelle sur elle-meme (salle d'operations, sondes de
+        # telemetrie, tableau de bord du detecteur, /healthz) sont ecartees du
+        # calcul, comme elles le sont deja pour le volume sortant.
+        #
+        # Ce n'est pas une precaution de confort, c'est la condition pour que le
+        # seuil veuille dire quelque chose. Ces routes sont les plus regulieres
+        # de la plateforme : un navigateur qui affiche la salle d'operations
+        # interroge son etat toutes les trois secondes, la telemetrie toutes les
+        # cinq, et les sondes de sante a chaque rafraichissement. Comptees dans
+        # `requests_per_second`, `endpoint_entropy`, `unique_source_ips` et les
+        # latences, elles font du regime nominal mesure un regime *plus actif*
+        # que celui qu'a appris le generateur, qui ne produit que du metier. La
+        # bande apprise s'elargit d'autant, le seuil monte avec elle, et une
+        # rafale reelle finit sous un seuil calibre sur la consultation de
+        # l'operateur.
+        requetes_metier = [
+            e for e in requetes_edge if not route_d_observation(str(e.fields.get("path") or ""))
+        ]
+        nb_edge = len(requetes_metier)
         # Seules les erreurs produites par un amont comptent : les refus de la
         # bordure (limitation de debit, liste de blocage, WAF) ne renseignent pas
         # sur la sante de la plateforme et rendraient la defense auto-entretenue.
-        erreurs = sum(1 for e in requetes_edge if erreur_applicative(e))
-        latences = [float(e.fields.get("duration_s") or 0.0) * 1000.0 for e in requetes_edge]
-        adresses = {str(e.fields.get("source_ip") or "") for e in requetes_edge}
+        erreurs = sum(1 for e in requetes_metier if erreur_applicative(e))
+        latences = [float(e.fields.get("duration_s") or 0.0) * 1000.0 for e in requetes_metier]
+        adresses = {str(e.fields.get("source_ip") or "") for e in requetes_metier}
         adresses.discard("")
         compteur_ips: dict[str, int] = {}
-        for e in requetes_edge:
+        for e in requetes_metier:
             ip = str(e.fields.get("source_ip") or "")
             if ip:
                 compteur_ips[ip] = compteur_ips.get(ip, 0) + 1
-        entrantes = [float(e.fields.get("bytes_in") or 0.0) for e in requetes_edge]
+        entrantes = [float(e.fields.get("bytes_in") or 0.0) for e in requetes_metier]
         #: Volume sortant du trafic *metier* seulement. Les reponses aux sondes
         #: de la salle d'operations (chronologie a 200 jalons, etat complet de la
         #: plateforme) pesent des dizaines de kilooctets et sont les plus grosses
@@ -320,12 +340,9 @@ class Agregateur:
         #: seuil de l'alerte d'exfiltration, qui se declenchait alors en boucle
         #: sur la consultation de l'operateur. Le generateur d'entrainement ne
         #: produit que du trafic metier : la variable doit decrire le meme flux.
-        requetes_metier = [
-            e for e in requetes_edge if not route_d_observation(str(e.fields.get("path") or ""))
-        ]
         sortantes = [float(e.fields.get("bytes_out") or 0.0) for e in requetes_metier]
         compteur_chemins: dict[str, int] = {}
-        for e in requetes_edge:
+        for e in requetes_metier:
             chemin = str(e.fields.get("path") or "")
             if chemin:
                 compteur_chemins[chemin] = compteur_chemins.get(chemin, 0) + 1
@@ -336,7 +353,7 @@ class Agregateur:
         # propres blocages.
         blocages = sum(
             1
-            for e in requetes_edge
+            for e in requetes_metier
             if int(e.fields.get("waf_blocked") or 0) == 1
             and int(e.fields.get("blocked_ip") or 0) == 0
         )
@@ -462,6 +479,16 @@ class Agregateur:
             "top_paths": _principaux(chemin_compteur),
             "top_identities": _principaux(identite_compteur),
             "edge_events": sum(ip_compteur.values()),
+            #: Requetes de bordure *hors* consultation. C'est ce compteur, et non
+            #: le precedent, qui dit si une fenetre contient un comportement a
+            #: noter : une fenetre faite des seules sondes du tableau de bord a
+            #: des evenements, mais aucun trafic metier a decrire.
+            "edge_events_metier": sum(
+                1
+                for evenement in self._evenements
+                if evenement.source == "edge"
+                and not route_d_observation(str(evenement.fields.get("path") or ""))
+            ),
             "part_observation": round(part_observation, 6),
             "observation_seule": bool(total_chemins) and chemins_observes >= total_chemins,
             "adresses_consultation": sorted(adresses_consultation),

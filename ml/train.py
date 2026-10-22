@@ -48,6 +48,34 @@ FENETRE_SECONDES = 60.0
 PAS_SECONDES = 10.0
 QUANTILE_SEUIL = 99.8
 
+#: Part de fenetres nominales toleree au-dessus du seuil, partagee par les deux
+#: chemins de calibration. Un alpha plus fin que 1 / nombre de fenetres ne
+#: designe plus un quantile mais la plus grande valeur observee.
+ALPHA_NOMINAL = 0.005
+
+
+def quantile_haut_nominal(scores, alpha: float) -> tuple[float, int]:
+    """Quantile haut du nominal, avec un plancher de fenetres tolerees au-dessus.
+
+    Le quantile fin est un piege des que l'historique est court. Sur 123 fenetres
+    mesurees, un alpha de 0,005 ne designe plus un quantile mais la deuxieme plus
+    grande valeur ; sur un peu moins de fenetres encore, la plus grande. La
+    moindre fenetre polluee fixe alors le seuil a elle seule. C'est de cette
+    facon qu'un « nominal haut » se retrouve au niveau des profils d'attaque, et
+    qu'une calibration refuse un seuil en realite discriminant.
+
+    On tolere donc explicitement au moins une fenetre au-dessus du seuil, et on
+    renvoie la statistique d'ordre correspondante : le resultat reste une valeur
+    reellement observee, et son sens est enonce. Renvoie `(seuil_haut, tolerees)`.
+    """
+    ordonne = sorted(float(score) for score in scores)
+    total = len(ordonne)
+    if total == 0:
+        raise ValueError("aucune fenetre nominale exploitable")
+    tolerees = max(1, math.ceil(alpha * total))
+    rang = max(0, total - tolerees - 1)
+    return ordonne[rang], tolerees
+
 
 def _vecteurs_nominaux(
     duree_secondes: float = 5400.0,
@@ -97,8 +125,24 @@ def entrainer(
     n_estimateurs: int = 256,
     graine: int = 20261019,
     debit_moyen: float = 0.8,
+    vecteurs_supplementaires: list[list[float]] | None = None,
 ) -> dict[str, Any]:
-    """Ajuste le détecteur et renvoie l'artefact complet (sérialisable)."""
+    """Ajuste le détecteur et renvoie l'artefact complet (sérialisable).
+
+    `vecteurs_supplementaires` : fenetres reellement observees sur la
+    plateforme, ajoutees au corpus simule. Le generateur ne peut pas deviner
+    les regimes propres a un poste donne : sur un poste reel, une session
+    authentifiee qui enchaine des appels produit des centaines de requetes par
+    jeton, la ou le generateur en simule moins d'une. L'ecart-type appris sur
+    cet axe devient alors minuscule, toute valeur reelle parait
+    astronomiquement atypique, et la bande apprise finit par contenir des
+    fenetres nominales plus atypiques que l'attaque elle-meme. Mesure faite sur
+    la plateforme : z = 440 sur `requests_per_token` pour du trafic nominal,
+    contre 472 pour l'attaque sur `requests_per_second` : les deux saturent, et
+    le classement entre les deux n'a plus de sens. Completer le corpus par les
+    fenetres mesurees rend au contraire leur dispersion reelle aux axes
+    concernes.
+    """
     try:
         import numpy as np
         from sklearn.ensemble import IsolationForest
@@ -109,6 +153,11 @@ def entrainer(
         ) from erreur
 
     vecteurs, moyennes, ecarts = _vecteurs_nominaux(duree_secondes, debit_moyen=debit_moyen)
+    n_simulees = len(vecteurs)
+    if vecteurs_supplementaires:
+        vecteurs = [list(v) for v in vecteurs] + [
+            [float(x) for x in v] for v in vecteurs_supplementaires
+        ]
     if len(vecteurs) < 50:
         raise RuntimeError(
             f"historique nominal insuffisant : {len(vecteurs)} fenêtres produites"
@@ -148,7 +197,9 @@ def entrainer(
 
     return {
         "version": VERSION_MODELE,
-        "source_calibrage": "trafic-simule",
+        "source_calibrage": (
+            "trafic-simule" if n_simulees == len(vecteurs) else "trafic-simule+mesures"
+        ),
         "feature_names": list(FEATURE_NAMES),
         "moyennes": moyennes,
         "ecarts": ecarts,
@@ -156,6 +207,8 @@ def entrainer(
         "scaler_scale": [float(x) for x in normaliseur.scale_],
         "seuil": seuil,
         "n_fenetres": len(vecteurs),
+        "n_fenetres_simulees": n_simulees,
+        "n_fenetres_mesurees": len(vecteurs) - n_simulees,
         "n_estimateurs": n_estimateurs,
         "quantile_seuil": QUANTILE_SEUIL,
         "score_moyen": float(np.mean(scores)),

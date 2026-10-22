@@ -30,6 +30,7 @@ Garde-fous (ce qui empêche le remède d'être pire que le mal)
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import time
 import uuid
@@ -157,6 +158,14 @@ AUTO_ESCALADE = env_bool("AUTO_ESCALATE", True)
 #: une adresse confinée par erreur doit revenir vite, et la purge est sans
 #: effet tant qu'aucun blocage n'a expiré.
 EDGE_PURGE_SECONDS = env_int("EDGE_PURGE_SECONDS", 30)
+#: Duree pendant laquelle l'etat global reste sur le resultat du dernier incident
+#: avant de revenir a NOMINAL. La restitution n'est pas un etat permanent : une
+#: fois l'incident clos et la plateforme stable, l'etat courant de la plateforme
+#: est de nouveau « nominal ». Sans cette duree, le bandeau reste indefiniment
+#: sur « Retabli » alors que plus rien n'est en cours, et il annonce un etat passe
+#: comme s'il etait l'etat present. La duree vaut une fenetre d'observation, le
+#: temps que la prochaine analyse confirme le retour au repos.
+DELAI_RESTITUTION_SECONDS = env_int("INCIDENT_RESTITUTION_SECONDS", 60)
 #: Actions qui restent exécutées coupe-circuit ouvert. Le coupe-circuit existe
 #: pour arrêter une reprise automatique qui échoue, pas pour laisser une attaque
 #: détectée sans réponse : le confinement est réversible et borné dans le temps,
@@ -828,6 +837,27 @@ def _exiger_admin(jeton: str | None) -> None:
         raise forbidden("Jeton d'administration invalide ou absent.")
 
 
+def _age_secondes(horodatage: Any) -> float:
+    """Age en secondes d'une date de clôture, quelle que soit sa forme.
+
+    Un incident terminal sans date de clôture exploitable ne doit pas retenir
+    l'etat global indefiniment : dans ce cas l'age est declare infini, et la
+    plateforme reprend son etat courant.
+    """
+    if horodatage is None:
+        return float("inf")
+    if isinstance(horodatage, dt.datetime):
+        quand = horodatage
+    else:
+        try:
+            quand = dt.datetime.fromisoformat(str(horodatage))
+        except ValueError:
+            return float("inf")
+    if quand.tzinfo is None:
+        quand = quand.replace(tzinfo=dt.timezone.utc)
+    return max(0.0, time.time() - quand.timestamp())
+
+
 @app.get("/api/supervision/state", tags=["supervision"])
 async def etat_courant() -> dict[str, Any]:
     incident = None
@@ -846,10 +876,16 @@ async def etat_courant() -> dict[str, Any]:
         )
     if incident is None:
         etat = "NOMINAL"
-    elif incident["state"] == "RECOVERED":
-        etat = "RECOVERED"
-    elif incident["state"] == "FAILED":
-        etat = "FAILED"
+    elif incident["state"] in {"RECOVERED", "FAILED"}:
+        # Un incident clos decrit un evenement passe, pas l'etat present de la
+        # plateforme. Le bandeau reste sur le resultat le temps d'une fenetre
+        # d'observation, puis l'etat courant redevient « nominal ». Sans ce
+        # retour, un incident clos une fois reste affiche comme etat present
+        # jusqu'au prochain incident, et la salle d'operations annonce en
+        # permanence un etat qui n'existe plus.
+        etat = str(incident["state"])
+        if _age_secondes(incident.get("closed_at")) >= DELAI_RESTITUTION_SECONDS:
+            etat = "NOMINAL"
     else:
         etat = "INCIDENT"
     _purger_fenetre()

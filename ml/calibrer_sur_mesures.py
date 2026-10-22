@@ -46,11 +46,9 @@ sys.path.insert(0, os.path.join(RACINE, "services"))
 sys.path.insert(0, RACINE)
 
 from common.features import FEATURE_NAMES  # noqa: E402
+from ml.fenetrage import agressions_mesurees, resume_ecartees, trier  # noqa: E402
 from ml.profils_attaque import PROFILS, PROFILS_MODELE  # noqa: E402
-from ml.train import VERSION_MODELE  # noqa: E402
-
-#: Part de fenetres nominales toleree au-dessus du seuil.
-ALPHA_NOMINAL = 0.005
+from ml.train import ALPHA_NOMINAL, VERSION_MODELE, quantile_haut_nominal  # noqa: E402
 
 #: Marge relative minimale exigee entre le seuil et le profil d'attaque le plus bas.
 MARGE_RELATIVE_MINIMALE = 1.15
@@ -58,9 +56,23 @@ MARGE_RELATIVE_MINIMALE = 1.15
 #: En dessous de ce nombre de fenetres mesurees distinctes, on amorce avec le generateur.
 MINIMUM_MESURES = 30
 
+#: En dessous de ce nombre de fenetres nominales exploitables, on previent que le
+#: quantile haut n'est plus un quantile mais une statistique d'ordre isolee.
+MINIMUM_QUANTILE = 60
+
 
 def collecter(base, limite=300):
-    """Fenetres reellement observees, dans l'ordre des variables du modele."""
+    """Fenetres reellement observees, dans l'ordre des variables du modele.
+
+    L'historique d'un poste qui a deja servi contient autre chose que de la
+    normale : agressions passees, consultation du tableau de bord par
+    l'operateur, premieres fenetres de mise en route. Melangees au corpus
+    nominal, ces fenetres font grimper le quantile haut jusqu'au niveau des
+    profils d'attaque, et la calibration refuse alors un seuil qui serait en
+    realite discriminant. Le tri a donc lieu avant l'apprentissage, et ce qui a
+    ete ecarte est publie : un refus doit pouvoir etre attribue au corpus autant
+    qu'au modele.
+    """
     contexte = ssl.create_default_context()
     contexte.check_hostname = False
     contexte.verify_mode = ssl.CERT_NONE
@@ -69,13 +81,19 @@ def collecter(base, limite=300):
         headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0 (calibration AlphaPay)"},
     )
     with urllib.request.urlopen(requete, timeout=30, context=contexte) as reponse:
-        fenetres = json.loads(reponse.read().decode("utf-8", "replace")).get("windows") or []
+        brut = json.loads(reponse.read().decode("utf-8", "replace")).get("windows") or []
+    fenetres, ecartees, motifs = trier(brut)
+    agressions = agressions_mesurees(motifs)
     matrice = np.array(
         [[float((f.get("features") or {}).get(nom) or 0.0) for nom in FEATURE_NAMES] for f in fenetres],
         dtype=float,
     )
+    matrice_agression = np.array(
+        [[float((f.get("features") or {}).get(nom) or 0.0) for nom in FEATURE_NAMES] for f in agressions],
+        dtype=float,
+    )
     distincts = len({tuple(ligne) for ligne in matrice.tolist()}) if len(matrice) else 0
-    return matrice, distincts
+    return matrice, distincts, ecartees, len(brut), matrice_agression
 
 
 def amorcage(nombre=450):
@@ -96,21 +114,37 @@ def noter(modele, normaliseur, vecteurs):
     return np.array([-modele.decision_function(normaliseur.transform([v]))[0] for v in vecteurs], dtype=float)
 
 
+def quantile_haut(scores, alpha):
+    """Quantile haut du nominal, partage avec `ml.recalibrer`.
+
+    Le calcul vit dans `ml.train` pour que les deux chemins de calibration
+    retiennent exactement la meme statistique : deux definitions du « nominal
+    haut » donneraient deux seuils differents pour la meme plateforme.
+    """
+    return quantile_haut_nominal(scores, alpha)
+
+
 def placer_seuil(scores_nominaux, scores_attaques):
     """Place le seuil entre les deux bandes, ou refuse de publier un modele."""
-    haut = float(np.quantile(scores_nominaux, 1.0 - ALPHA_NOMINAL))
+    haut, tolerees = quantile_haut(scores_nominaux, ALPHA_NOMINAL)
     plus_basse = min(scores_attaques, key=lambda nom: scores_attaques[nom])
     bas = float(scores_attaques[plus_basse])
     rapport = {
         "score_nominal_haut": round(haut, 6),
         "score_attaque_bas": round(bas, 6),
         "attaque_la_plus_basse": plus_basse,
+        "fenetres_nominales": int(np.asarray(scores_nominaux).size),
+        "fenetres_tolerees_au_dessus": tolerees,
     }
     if bas <= haut:
         rapport["verdict"] = "recouvrement"
         rapport["message"] = (
             "les bandes nominale et d'attaque se recouvrent : aucun seuil ne peut "
-            "separer les deux, il faut revoir le jeu d'entrainement"
+            "separer les deux avec ce modele. Deux issues, dans cet ordre : "
+            "elargir le corpus nominal (faire tourner la plateforme dans ses "
+            "regimes courants avant de mesurer), ou garder le modele du "
+            "generateur et ne regler que le seuil sur les mesures "
+            "(ml/recalibrer.py)."
         )
         return None, rapport
     seuil = float(np.sqrt(haut * bas))
@@ -137,9 +171,19 @@ def principal() -> int:
     analyseur.add_argument("--ecrire", default=None, help="dossier ou ecrire le modele")
     args = analyseur.parse_args()
 
-    matrice, distincts = collecter(args.base)
+    matrice, distincts, ecartees, brut, matrice_agression = collecter(args.base)
     provenance = "mesures-plateforme"
+    print(f"fenetres lues      : {brut}")
+    print(f"fenetres ecartees  : {resume_ecartees(ecartees)}")
     print(f"fenetres mesurees  : {len(matrice)} ({distincts} vecteurs distincts)")
+    print(f"agressions mesurees: {len(matrice_agression)} fenetres portant la marque du banc")
+    if len(matrice) < MINIMUM_QUANTILE:
+        print(
+            f"avertissement      : moins de {MINIMUM_QUANTILE} fenetres nominales "
+            "exploitables ; le quantile haut se confond avec une statistique "
+            "d'ordre isolee. Faire tourner la plateforme plus longtemps avant de "
+            "calibrer, et de preference hors agression."
+        )
     if distincts < MINIMUM_MESURES:
         simule = amorcage()
         print(f"amorcage           : {len(simule)} fenetres simulees ajoutees, provenance declaree")
@@ -152,14 +196,23 @@ def principal() -> int:
         nom: float(noter(modele, normaliseur, [[float(profil.get(n, 0.0)) for n in FEATURE_NAMES]])[0])
         for nom, profil in PROFILS.items()
     }
+    # Une agression deja mesuree ici vaut mieux qu'un profil theorique : c'est la
+    # seule reference dont on sache qu'elle est atteignable sur cette plateforme.
+    # La placer dans le meme dictionnaire suffit a contraindre le seuil, puisque
+    # `placer_seuil` retient la plus faible des attaques.
+    if len(matrice_agression):
+        scores_attaques["REEL"] = float(np.min(noter(modele, normaliseur, matrice_agression)))
     seuil, rapport = placer_seuil(scores_nominaux, scores_attaques)
 
     print(f"bande nominale     : mediane {np.median(scores_nominaux):.4f}, maximum {scores_nominaux.max():.4f}")
     for nom, valeur in scores_attaques.items():
-        role = "detection du modele" if nom in PROFILS_MODELE else "porte par une politique"
+        if nom == "REEL":
+            role = "agression mesuree sur cette plateforme"
+        else:
+            role = "detection du modele" if nom in PROFILS_MODELE else "porte par une politique"
         print(f"  {nom:4s} score {valeur:7.4f}   ({role})")
     print(f"verdict            : {rapport['verdict']}")
-    for cle in ("seuil", "score_nominal_haut", "score_attaque_bas", "marge_relative", "marge_sur_nominal", "marge_sur_attaque", "message"):
+    for cle in ("seuil", "score_nominal_haut", "score_attaque_bas", "fenetres_nominales", "fenetres_tolerees_au_dessus", "marge_relative", "marge_sur_nominal", "marge_sur_attaque", "message"):
         if cle in rapport:
             print(f"  {cle:20s}: {rapport[cle]}")
 
@@ -193,6 +246,7 @@ def principal() -> int:
             "feature_names": list(FEATURE_NAMES),
             "n_fenetres": int(len(matrice)),
             "n_vecteurs_distincts": distincts,
+            "fenetres_ecartees": dict(ecartees),
             "calibre_le": datetime.now(timezone.utc).isoformat(),
         }
     )
