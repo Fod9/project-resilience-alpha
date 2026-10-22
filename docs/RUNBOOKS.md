@@ -35,6 +35,7 @@ passent par le préfixe public `/api/ops/` de la bordure, réécrit vers
 - **R5** : Réinitialisation complète
 - **R6** : Export des preuves pour le jury
 - **R7** : Sauvegarde et restauration du grand livre
+- **R8** : Migration de base ajoutée après coup
 
 Nota : l'exécution réelle des playbooks est activée par
 `DEMO_MODE=true` dans `.env` ; en `DEMO_MODE=false`, le moteur reste en
@@ -514,3 +515,38 @@ alerte `AlphaPayLedgerImbalance` (intégrité comptable).
    **Vérification** : l'instantané ou la sauvegarde est intègre ; la
    cohérence comptable est de nouveau attestée ; les soldes de référence
    sont restaurés.
+
+## R8 : Migration de base ajoutée après coup
+
+**Objectif** : rétablir une table créée par un script de migration ajouté alors
+que la base existait déjà, sans perdre de données.
+
+**Symptôme** : l'enregistrement d'un gabarit facial répond
+`503 face_schema_absent`. Le journal du service porte la cause exacte :
+
+```
+psycopg.errors.UndefinedTable: relation "auth.face_templates" does not exist
+```
+
+**Cause** : les scripts de `infra/db/` sont montés dans
+`docker-entrypoint-initdb.d` et ne sont joués qu'à l'initialisation d'un volume
+vide. Reconstruire les images ne rejoue pas les migrations.
+
+**Correction** :
+
+```bash
+docker exec -i alphaplat-postgres psql -U postgres -d alphapay < infra/db/04-face.sql
+```
+
+Le fichier est idempotent : le rejouer sur une base à jour n'affiche que des
+`NOTICE ... skipping` et ne touche aucune donnée.
+
+**Vérification** :
+
+```bash
+docker exec alphaplat-postgres psql -U postgres -d alphapay -c \
+  "SELECT to_regclass('auth.face_templates'), has_schema_privilege('svc_auth','public','USAGE');"
+```
+
+Deux `t` valent confirmation : la table existe, et le service d'authentification
+peut nommer le type `vector`, qui vit dans le schéma `public`.

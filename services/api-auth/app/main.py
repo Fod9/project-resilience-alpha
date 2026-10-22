@@ -40,6 +40,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from fastapi import Header, Request
+from psycopg import errors as psycopg_errors
 from pydantic import BaseModel, Field
 
 from common.app import build_app
@@ -560,6 +561,38 @@ async def profil(authorization: str | None = Header(default=None)) -> dict[str, 
 # message d'erreur, un journal ou un audit.
 
 
+def _schema_facial_absent() -> AppError:
+    """Erreur diagnosable quand la migration faciale n'a pas été appliquée.
+
+    `infra/db/04-face.sql` n'est joué qu'à l'initialisation d'un volume vide.
+    Sur une base créée avant son ajout, l'insertion échoue : sans cette
+    traduction, l'exploitant ne reçoit qu'une erreur interne et n'a aucun moyen
+    de savoir quoi faire.
+    """
+    return AppError(
+        503,
+        "face_schema_absent",
+        "Table des gabarits absente",
+        "La table auth.face_templates n'existe pas sur cette base. Appliquez "
+        "infra/db/04-face.sql sur la base en service, ou recréez le volume "
+        "(docker compose down -v puis up).",
+    )
+
+
+async def _gabarit_ecrire(requete: str, parametres: tuple[Any, ...]) -> int:
+    try:
+        return await execute(requete, parametres)
+    except psycopg_errors.UndefinedTable as erreur:
+        raise _schema_facial_absent() from erreur
+
+
+async def _gabarit_lire(requete: str, parametres: tuple[Any, ...]) -> Any:
+    try:
+        return await fetch_one(requete, parametres)
+    except psycopg_errors.UndefinedTable as erreur:
+        raise _schema_facial_absent() from erreur
+
+
 def _gestes_exiges() -> list[str]:
     """Gestes réclamés par la configuration, tels qu'ils sont journalisés."""
     gestes: list[str] = []
@@ -595,7 +628,7 @@ async def _journaliser_tentative_faciale(
     distance: float | None = None,
     challenge_ok: bool | None = None,
 ) -> None:
-    await execute(
+    await _gabarit_ecrire(
         "INSERT INTO auth.face_attempts "
         "(user_id, username, outcome, reason, distance, threshold, challenge_ok, source_ip) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::inet)",
@@ -724,7 +757,7 @@ async def enrolement_visage(
             str(exc),
         ) from exc
 
-    await execute(
+    await _gabarit_ecrire(
         "INSERT INTO auth.face_templates (user_id, descriptor, capture_count) "
         "VALUES (%s, %s::vector, %s) "
         "ON CONFLICT (user_id) DO UPDATE SET descriptor = EXCLUDED.descriptor, "
@@ -810,7 +843,7 @@ async def verifier_visage(charge: FaceVerifyRequest) -> TokenPair:
         exiger_rotation=FACE_REQUIRE_TURN,
     )
 
-    gabarit = await fetch_one(
+    gabarit = await _gabarit_lire(
         "SELECT descriptor::text AS descriptor FROM auth.face_templates WHERE user_id = %s",
         (ligne["id"],),
     )
@@ -960,7 +993,7 @@ async def statut_gabarit(
     if revendications.get("username") != username and revendications.get("role") != "admin":
         raise forbidden("Le statut d'un gabarit se consulte pour son propre compte.")
 
-    ligne = await fetch_one(
+    ligne = await _gabarit_lire(
         "SELECT t.capture_count, t.created_at, t.updated_at "
         "FROM auth.face_templates t JOIN auth.users u ON u.id = t.user_id "
         "WHERE u.username = %s",
@@ -991,7 +1024,7 @@ async def supprimer_gabarit(
     """Retire un gabarit : l'accès au tableau de bord redevient mot de passe seul."""
     set_route_label("/face/template")
     _exiger_admin(x_admin_token)
-    resultat = await execute(
+    resultat = await _gabarit_ecrire(
         "DELETE FROM auth.face_templates t USING auth.users u "
         "WHERE u.id = t.user_id AND u.username = %s",
         (username,),
