@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""Génère Pres.pptx : présentation de soutenance de PROJECT RESILIENCE-ALPHA.
+"""Génère Pres.pptx, la présentation de soutenance de PROJECT RESILIENCE-ALPHA.
 
-Le contenu est dérivé des faits du dépôt : composants réellement déployés,
-politiques et playbooks réellement chargés, résultats de la suite de vérification.
-Aucun chiffre n'est saisi à la main.
+Style : celui de l'application. Papier comptable clair, filets d'un pixel,
+Bitter pour les titres, Inter pour le texte, IBM Plex Mono pour les données,
+filet de marge terre cuite. La maquette de référence est la page SOUTENANCE du
+fichier Figma SacCkouYmlKojpdNol2dO4 : les deux doivent rester alignés.
+
+Les chiffres structurels (services suivis, réseaux, politiques, playbooks,
+seuil du modèle) sont lus dans le dépôt, aucun n'est saisi à la main. Les
+mesures de la dernière exécution se lisent dans MESURES : elles viennent du
+journal du banc (ops.incidents, ops.actions) et ne peuvent pas être déduites du
+dépôt.
 
     python3 deliverables/generate_pres.py
 """
@@ -12,383 +19,475 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
-from pptx.util import Emu, Inches, Pt
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.oxml.ns import qn
+from pptx.util import Emu, Pt
 
 RACINE = Path(__file__).resolve().parent.parent
 SORTIE = RACINE / "deliverables" / "Pres.pptx"
 
 # --- Jetons du système de design (docs/DESIGN-SYSTEM.md) ---------------------
-FOND = RGBColor(0x0A, 0x0E, 0x14)
-SURFACE = RGBColor(0x13, 0x1A, 0x24)
-ENCRE = RGBColor(0xE8, 0xE4, 0xDC)
-ENCRE_PALE = RGBColor(0x8A, 0x94, 0xA3)
-LAITON = RGBColor(0xD9, 0xA2, 0x27)
-NOMINAL = RGBColor(0x3F, 0xB2, 0x7F)
-INCIDENT = RGBColor(0xD6, 0x45, 0x45)
-ATTENTE = RGBColor(0xE8, 0xB0, 0x3A)
+PAPIER = RGBColor(0xF6, 0xF7, 0xF5)
+SURFACE = RGBColor(0xFF, 0xFF, 0xFF)
+LIGNE = RGBColor(0xDC, 0xE0, 0xDA)
+LIGNE_FORT = RGBColor(0xB9, 0xC0, 0xB4)
+ENCRE = RGBColor(0x15, 0x1A, 0x1E)
+ENCRE_DIM = RGBColor(0x5C, 0x66, 0x70)
+ACCENT = RGBColor(0x2E, 0x6B, 0x5A)
+MARGE = RGBColor(0xB4, 0x52, 0x3F)
+NOMINAL = RGBColor(0x2F, 0x6B, 0x4F)
 
-POLICE_TITRE = "Archivo"
-POLICE_TEXTE = "IBM Plex Sans"
-POLICE_DONNEE = "IBM Plex Mono"
+BITTER = "Bitter"
+INTER = "Inter"
+MONO = "IBM Plex Mono"
 
+#: Une diapositive fait 1280 x 720 points-image, soit 13,333 x 7,5 pouces : le
+#: format 16/9 de PowerPoint. Tout est positionné dans cet espace, comme dans la
+#: maquette Figma, ce qui rend les deux comparables ligne à ligne.
+LARGEUR, HAUTEUR = 1280, 720
+PX = 9525  # 1 point-image à 96 dpi
 
-def _compter(chemin: Path, motif: str) -> int:
-    if not chemin.exists():
-        return 0
-    return len(re.findall(motif, chemin.read_text(encoding="utf-8"), flags=re.MULTILINE))
+#: Mesures relevées dans le journal du banc à la dernière validation de la
+#: chaîne A1 (incident RECOVERED). À rafraîchir après chaque tir de référence.
+MESURES: dict[str, Any] = {
+    "releve": "21 octobre 2026",
+    "mttd_s": 60.0,
+    "cible_mttd_s": 60.0,
+    "mttr_s": 2.8,
+    "cible_mttr_s": 180.0,
+    "etapes": [
+        ("confiner-signature", "edge.block_signature", "23 ms"),
+        ("bloquer-source", "edge.block_ip", "1 219 ms"),
+        ("revoquer-jetons", "auth.revoke_by_source", "20 ms"),
+        ("redemarrer-paiement", "docker.restart", "755 ms"),
+        ("attendre-sante", "docker.wait_healthy", "532 ms"),
+        ("verifier", "verify.recovery_suite", "188 ms"),
+    ],
+    "preuves": [
+        ("bordure joignable", "GET /healthz, code 200"),
+        ("services sains", "17 conteneurs inspectés"),
+        ("paiement synthétique", "CUST-000002 vers MERCHANT-0001, code 201"),
+        ("intégrité du grand livre", "débits égaux aux crédits"),
+        ("confinement effectif", "signature du banc refusée, code 403"),
+    ],
+}
 
 
 def faits() -> dict[str, Any]:
-    """Rassemble les chiffres réels du dépôt, sans valeur inventée."""
+    """Chiffres structurels lus dans le dépôt, sans valeur inventée."""
     compose = (RACINE / "docker-compose.yml").read_text(encoding="utf-8")
-    services = re.findall(r"^  ([a-z][a-z0-9-]*):$", compose, flags=re.MULTILINE)
+    connecteurs = (RACINE / "services/remediation/app/connectors.py").read_text(encoding="utf-8")
 
-    reseaux = re.findall(r"^  (net-[a-z]+):", compose, flags=re.MULTILINE)
-    internes = compose.count("internal: true")
+    suivi = re.search(r"SERVICES_SUIVIS[^=]*=\s*\((.*?)\)", connecteurs, re.S)
+    services_suivis = len(re.findall(r'"([a-z][a-z0-9-]*)"', suivi.group(1))) if suivi else 0
 
-    politiques = _compter(RACINE / "infra/policies/10-attaques.yaml", r"^  - id:") + _compter(
-        RACINE / "infra/policies/20-exploitation.yaml", r"^  - id:"
-    ) + _compter(RACINE / "infra/policies/15-alertes.yaml", r"^  - id:") + _compter(
-        RACINE / "infra/policies/30-execution.yaml", r"^  - id:"
+    politiques = sum(
+        len(re.findall(r"^  - id:", chemin.read_text(encoding="utf-8"), re.M))
+        for chemin in sorted((RACINE / "infra/policies").glob("*.yaml"))
     )
     playbooks = sum(
-        _compter(chemin, r"^  - id: PB-") for chemin in (RACINE / "infra/playbooks").glob("*.yaml")
+        len(re.findall(r"^  - id: PB-", chemin.read_text(encoding="utf-8"), re.M))
+        for chemin in sorted((RACINE / "infra/playbooks").glob("*.yaml"))
     )
 
-    meta = RACINE / "ml" / "artifacts" / "model-meta.json"
-    infos_modele: dict[str, Any] = {}
-    if meta.exists():
-        infos_modele = json.loads(meta.read_text(encoding="utf-8"))
-
-    code_python = sum(
-        1
-        for fichier in RACINE.rglob("*.py")
-        if ".venv" not in str(fichier) and "node_modules" not in str(fichier)
-        for _ in fichier.read_text(encoding="utf-8", errors="ignore").splitlines()
-    )
-    code_ts = sum(
-        1
-        for fichier in (RACINE / "frontend" / "src").rglob("*.ts*")
-        for _ in fichier.read_text(encoding="utf-8", errors="ignore").splitlines()
-    )
+    modele = json.loads((RACINE / "ml/artifacts/model-meta.json").read_text(encoding="utf-8"))
 
     return {
-        "services": len(services),
-        "reseaux": len(reseaux),
-        "reseaux_internes": internes,
+        "services_suivis": services_suivis,
+        "reseaux": len(re.findall(r"^  net-[a-z]+:", compose, re.M)),
+        "reseaux_internes": compose.count("internal: true"),
         "politiques": politiques,
         "playbooks": playbooks,
-        "modele": infos_modele,
-        "lignes_python": code_python,
-        "lignes_front": code_ts,
+        "variables": len(modele["feature_names"]),
+        "arbre": "Isolation Forest",
     }
 
 
 # --- Mise en page -----------------------------------------------------------
-def fond(diapo, couleur=FOND):
-    fond_ = diapo.background.fill
-    fond_.solid()
-    fond_.fore_color.rgb = couleur
+def px(valeur: float) -> Emu:
+    return Emu(int(round(valeur * PX)))
 
 
-def bloc_texte(diapo, gauche, haut, largeur, hauteur):
-    cadre = diapo.shapes.add_textbox(Inches(gauche), Inches(haut), Inches(largeur), Inches(hauteur))
+def fond(diapo, couleur: RGBColor = PAPIER) -> None:
+    remplissage = diapo.background.fill
+    remplissage.solid()
+    remplissage.fore_color.rgb = couleur
+
+
+def planche(diapo, gauche: float, haut: float, largeur: float, hauteur: float):
+    """Cadre de texte sans marge interne : le texte commence exactement à la
+    position demandée, comme dans la maquette."""
+    cadre = diapo.shapes.add_textbox(px(gauche), px(haut), px(largeur), px(hauteur))
     cadre.text_frame.word_wrap = True
+    for marge in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
+        setattr(cadre.text_frame, marge, 0)
+    cadre.text_frame.vertical_anchor = MSO_ANCHOR.TOP
     return cadre.text_frame
 
 
-def ecrire(cadre, texte, *, taille=16, couleur=ENCRE, gras=False, police=POLICE_TEXTE,
-           espace_apres=8, niveau=0, italique=False):
-    paragraphe = cadre.paragraphs[0] if not cadre.paragraphs[0].runs and niveau == 0 and len(cadre.paragraphs) == 1 else cadre.add_paragraph()
-    paragraphe.level = niveau
-    paragraphe.space_after = Pt(espace_apres)
+def ecrire(
+    cadre,
+    contenu: str,
+    *,
+    taille: float,
+    couleur: RGBColor = ENCRE,
+    police: str = INTER,
+    gras: bool = False,
+    majuscules: bool = False,
+    interlettre: float = 0.0,
+    interligne: float = 1.05,
+    aligne_droite: bool = False,
+) -> None:
+    """Écrit un paragraphe. ``taille`` et ``interlettre`` sont en points-image."""
+    paragraphe = (
+        cadre.paragraphs[0]
+        if not cadre.paragraphs[0].runs and len(cadre.paragraphs) == 1
+        else cadre.add_paragraph()
+    )
+    paragraphe.line_spacing = interligne
+    paragraphe.space_before = Pt(0)
+    paragraphe.space_after = Pt(0)
+    if aligne_droite:
+        paragraphe.alignment = PP_ALIGN.RIGHT
     morceau = paragraphe.add_run()
-    morceau.text = texte
-    morceau.font.size = Pt(taille)
-    morceau.font.color.rgb = couleur
-    morceau.font.bold = gras
-    morceau.font.italic = italique
-    morceau.font.name = police
-    return paragraphe
+    morceau.text = contenu.upper() if majuscules else contenu
+    police_ = morceau.font
+    police_.name = police
+    police_.size = Pt(round(taille * 0.75, 1))
+    police_.color.rgb = couleur
+    police_.bold = gras
+    if interlettre:
+        # L'interlettre CSS s'exprime en pourcentage du corps ; le format pptx en
+        # centièmes de point. La conversion évite de retoucher chaque titre.
+        centiemes = interlettre / 100 * taille * 0.75 * 100
+        police_._rPr.set("spc", str(int(round(centiemes))))
 
 
-def nouvelle_diapo(prs, titre, surtitre=""):
-    diapo = prs.slides.add_slide(prs.slide_layouts[6])
+def _sans_style(forme) -> None:
+    """Retire le style de thème que python-pptx pose sur les formes.
+
+    Ce style applique un effet de relief et une ombre aux rectangles : les
+    filets d'un pixel ressortaient biseautés au rendu. Un filet doit être un
+    trait net, sans relief.
+    """
+    style = forme._element.find(qn("p:style"))
+    if style is not None:
+        forme._element.remove(style)
+    forme.shadow.inherit = False
+
+
+def filet(
+    diapo,
+    x: float,
+    y: float,
+    largeur: float,
+    hauteur: float = 1,
+    couleur: RGBColor = LIGNE,
+):
+    forme = diapo.shapes.add_shape(MSO_SHAPE.RECTANGLE, px(x), px(y), px(largeur), px(hauteur))
+    forme.fill.solid()
+    forme.fill.fore_color.rgb = couleur
+    forme.line.fill.background()
+    _sans_style(forme)
+    return forme
+
+
+def bloc(
+    diapo,
+    x: float,
+    y: float,
+    largeur: float,
+    hauteur: float,
+    *,
+    remplissage: RGBColor | None = None,
+    bordure: RGBColor | None = None,
+):
+    forme = diapo.shapes.add_shape(MSO_SHAPE.RECTANGLE, px(x), px(y), px(largeur), px(hauteur))
+    if remplissage is None:
+        forme.fill.background()
+    else:
+        forme.fill.solid()
+        forme.fill.fore_color.rgb = remplissage
+    if bordure is None:
+        forme.line.fill.background()
+    else:
+        forme.line.color.rgb = bordure
+        forme.line.width = Pt(0.75)
+    _sans_style(forme)
+    return forme
+
+
+def nouvelle_diapo(prs, numero: str, nom: str, *, chrome: bool = True):
+    diapo = prs.slides.add_slide(prs.slide_layouts[6])  # mise en page vierge
     fond(diapo)
-    bandeau = diapo.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(1.25))
-    bandeau.fill.solid()
-    bandeau.fill.fore_color.rgb = SURFACE
-    bandeau.line.fill.background()
-    cadre = bloc_texte(diapo, 0.55, 0.18, 12.3, 0.95)
-    if surtitre:
-        ecrire(cadre, surtitre.upper(), taille=11, couleur=LAITON, police=POLICE_DONNEE, espace_apres=2)
-    ecrire(cadre, titre, taille=28, couleur=ENCRE, gras=True, police=POLICE_TITRE)
+    if not chrome:
+        return diapo
+    filet(diapo, 56, 112, 1, 508, MARGE)  # filet de marge imprimé
+    cadre = planche(diapo, 56, 34, 400, 30)
+    ecrire(cadre, "ALPHAPAY", taille=20, police=BITTER, gras=True, interlettre=22)
+    cadre = planche(diapo, 700, 44, 524, 20)
+    ecrire(cadre, "PROJECT RESILIENCE-ALPHA", taille=9, couleur=ENCRE_DIM, police=MONO, aligne_droite=True)
+    filet(diapo, 56, 84, 1168)
+    filet(diapo, 56, 648, 1168)
+    cadre = planche(diapo, 56, 660, 400, 20)
+    ecrire(cadre, "AlphaPay 2026©", taille=9, couleur=ENCRE_DIM)
+    cadre = planche(diapo, 700, 660, 524, 20)
+    ecrire(cadre, f"{numero} / 06", taille=9, couleur=ENCRE_DIM, police=MONO, aligne_droite=True)
     return diapo
 
 
-def puces(diapo, elements, *, gauche=0.7, haut=1.75, largeur=12, taille=17):
-    """Écrit une liste à puces. Chaque entrée est un texte, ou un couple
-    (texte, précision affichée dans une couleur plus discrète)."""
-    cadre = bloc_texte(diapo, gauche, haut, largeur, 5.0)
-    premier = True
-    for element in elements:
-        if isinstance(element, tuple):
-            texte, detail = element
-        else:
-            texte, detail = element, ""
-        texte = str(texte)
-        detail = str(detail)
-        paragraphe = cadre.paragraphs[0] if premier else cadre.add_paragraph()
-        premier = False
-        paragraphe.space_after = Pt(9)
-        marque = paragraphe.add_run()
-        marque.text = "- "
-        marque.font.color.rgb = LAITON
-        marque.font.size = Pt(taille)
-        marque.font.name = POLICE_TEXTE
-        morceau = paragraphe.add_run()
-        morceau.text = texte
-        morceau.font.size = Pt(taille)
-        morceau.font.color.rgb = ENCRE
-        morceau.font.name = POLICE_TEXTE
-        if detail:
-            suite = paragraphe.add_run()
-            suite.text = "  " + detail
-            suite.font.size = Pt(taille - 3)
-            suite.font.color.rgb = ENCRE_PALE
-            suite.font.name = POLICE_TEXTE
+def entete(diapo, surtitre: str, titre: str) -> None:
+    cadre = planche(diapo, 88, 106, 600, 20)
+    ecrire(cadre, surtitre, taille=9, couleur=ACCENT, police=INTER, gras=True,
+           majuscules=True, interlettre=10)
+    cadre = planche(diapo, 88, 126, 1104, 80)
+    ecrire(cadre, titre, taille=30, police=BITTER, gras=True, interligne=1.0)
 
 
-def bandeau_bas(diapo, texte):
-    cadre = bloc_texte(diapo, 0.7, 6.6, 12, 0.6)
-    ecrire(cadre, texte, taille=12, couleur=ENCRE_PALE, italique=True, police=POLICE_DONNEE)
-
-
-def construire() -> Path:
-    chiffres = faits()
-    modele: dict[str, Any] = dict(chiffres.get("modele") or {})
-
+def construire(f: dict[str, Any]) -> Presentation:
     prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+    prs.slide_width = px(LARGEUR)
+    prs.slide_height = px(HAUTEUR)
 
-    # 1 : Couverture
-    diapo = prs.slides.add_slide(prs.slide_layouts[6])
-    fond(diapo)
-    cadre = bloc_texte(diapo, 0.9, 2.1, 11.5, 3.4)
-    ecrire(cadre, "PROJECT RESILIENCE-ALPHA", taille=13, couleur=LAITON,
-           police=POLICE_DONNEE, espace_apres=10)
-    ecrire(cadre, "AlphaPay", taille=60, couleur=ENCRE, gras=True, police=POLICE_TITRE,
-           espace_apres=8)
-    ecrire(cadre, "Une plateforme de paiement qui se rétablit seule, et le prouve.",
-           taille=22, couleur=ENCRE_PALE, police=POLICE_TEXTE, espace_apres=18)
-    ecrire(cadre, "Workshop national EPSI : BAC+5 : Session octobre 2026",
-           taille=13, couleur=ENCRE_PALE, police=POLICE_DONNEE)
+    # --- 01 Couverture -----------------------------------------------------
+    d = nouvelle_diapo(prs, "01", "Couverture", chrome=False)
+    cadre = planche(d, 56, 44, 500, 40)
+    ecrire(cadre, "ALPHAPAY", taille=22, police=BITTER, gras=True, interlettre=22)
+    filet(d, 56, 110, 1168, 2, LIGNE_FORT)
+    cadre = planche(d, 56, 200, 1150, 120)
+    ecrire(cadre, "PROJECT RESILIENCE-ALPHA", taille=54, police=BITTER, gras=True, interligne=1.0)
+    cadre = planche(d, 56, 328, 780, 80)
+    ecrire(
+        cadre,
+        "Une plateforme de paiement qui détecte l'attaque, se confine, se rétablit, "
+        "et fournit la preuve de son rétablissement.",
+        taille=17,
+        couleur=ENCRE_DIM,
+        interligne=1.15,
+    )
+    filet(d, 56, 456, 1168, 2, LIGNE_FORT)
+    cadre = planche(d, 56, 472, 500, 20)
+    ecrire(cadre, "Tom Dernoncourt", taille=10, gras=True, majuscules=True, interlettre=10)
+    cadre = planche(d, 700, 472, 524, 20)
+    ecrire(cadre, "Soutenance · octobre 2026", taille=10, couleur=ENCRE_DIM, police=MONO,
+           aligne_droite=True)
+    cadre = planche(d, 56, 540, 600, 20)
+    ecrire(cadre, "bande-enregistreur, douze dernières minutes", taille=9, couleur=ENCRE_DIM,
+           police=MONO)
+    filet(d, 56, 590, 1168)
+    for i in range(13):
+        filet(d, 56 + i * (1168 / 12), 584, 1, 12, LIGNE_FORT if i % 3 == 0 else LIGNE)
+    for x in (300, 620, 940):
+        marque = bloc(d, x, 586, 8, 8, remplissage=ENCRE)
+        marque.rotation = 45
+    cadre = planche(d, 56, 604, 300, 20)
+    ecrire(cadre, "il y a 12 min", taille=8, couleur=ENCRE_DIM, police=MONO)
+    cadre = planche(d, 924, 604, 300, 20)
+    ecrire(cadre, "maintenant", taille=8, couleur=ENCRE_DIM, police=MONO, aligne_droite=True)
+    filet(d, 56, 648, 1168)
+    cadre = planche(d, 56, 660, 400, 20)
+    ecrire(cadre, "AlphaPay 2026©", taille=9, couleur=ENCRE_DIM)
+    cadre = planche(d, 700, 660, 524, 20)
+    ecrire(cadre, "01 / 06", taille=9, couleur=ENCRE_DIM, police=MONO, aligne_droite=True)
 
-    # 2 : Le problème posé
-    diapo = nouvelle_diapo(prs, "Ce que le sujet exige vraiment", "Cadrage")
-    puces(diapo, [
-        ("Un SI critique fictif doit encaisser un incident et revenir seul à un état opérationnel", ""),
-        ("Un conteneur redémarré ne compte pas", "la reprise doit être démontrée, pas affirmée"),
-        ("Cinq domaines obligatoires", "développement, infrastructure, IA, cybersécurité, gouvernance"),
-        ("Livrables imposés", "dossier, présentation, clip chrono, code"),
-        ("Critère le plus lourd", "5 points sur 20 : la remédiation autonome effective"),
-    ])
-    bandeau_bas(diapo, "Conséquence : l'ingénierie doit produire une preuve, pas une intention.")
+    # --- 02 Sujet ----------------------------------------------------------
+    d = nouvelle_diapo(prs, "02", "Sujet")
+    entete(d, "Sujet", "Un système autonome ne vaut que par ce qu'il prouve")
+    blocs = [
+        ("La détection ne suffit pas",
+         "Un score d'anomalie sans suite laisse l'incident ouvert et l'attaquant à l'intérieur."),
+        ("L'opérateur ne doit pas être confiné",
+         "Un confinement par adresse coupe aussi celui qui pilote la salle d'opérations."),
+        ("Un rétablissement non prouvé n'en est pas un",
+         "Redémarrer un service ne démontre pas que la plateforme fonctionne de nouveau."),
+    ]
+    for i, (titre, texte) in enumerate(blocs):
+        y = 236 + i * 120
+        filet(d, 88, y, 520, 2, LIGNE_FORT)
+        cadre = planche(d, 88, y + 12, 520, 40)
+        ecrire(cadre, titre, taille=12, gras=True, interligne=1.05)
+        cadre = planche(d, 88, y + 40, 520, 60)
+        ecrire(cadre, texte, taille=11, couleur=ENCRE_DIM, interligne=1.15)
+    cadre = planche(d, 680, 206, 544, 20)
+    ecrire(cadre, "Cibles imposées", taille=9, couleur=ENCRE_DIM, police=MONO, majuscules=True,
+           interlettre=8)
+    filet(d, 680, 232, 544, 2, LIGNE_FORT)
+    cibles = [
+        ("Délai de détection", f"≤ {int(MESURES['cible_mttd_s'])} s"),
+        ("Délai de rétablissement", f"≤ {int(MESURES['cible_mttr_s'])} s"),
+        ("Preuves exigées", f"{len(MESURES['preuves'])} sur {len(MESURES['preuves'])}"),
+        ("Actions sur la fenêtre", "6 au plus"),
+    ]
+    for i, (libelle, valeur) in enumerate(cibles):
+        y = 250 + i * 46
+        cadre = planche(d, 680, y, 300, 20)
+        ecrire(cadre, libelle, taille=10, couleur=ENCRE_DIM, police=MONO, majuscules=True,
+               interlettre=4)
+        cadre = planche(d, 1000, y - 4, 224, 24)
+        ecrire(cadre, valeur, taille=12, police=MONO, gras=True, aligne_droite=True)
+        filet(d, 680, y + 30, 544)
 
-    # 3 : La thèse
-    diapo = nouvelle_diapo(prs, "Notre thèse : la reprise doit être vérifiable", "Position")
-    puces(diapo, [
-        ("Nous ne déclarons pas un rétablissement", "nous le mesurons"),
-        ("Trois conditions cumulatives", "une transaction synthétique aboutit, le grand livre reste équilibré, la source est filtrée"),
-        ("Chaque décision est traçable", "politique appliquée, actions exécutées, durées mesurées"),
-        ("L'opérateur garde la main", "garde-fous, coupe-circuit, escalade vers l'humain"),
-    ])
-    bandeau_bas(diapo, "Un système qui se répare sans rendre des comptes est un risque, pas une garantie.")
+    # --- 03 Architecture ---------------------------------------------------
+    d = nouvelle_diapo(prs, "03", "Architecture")
+    entete(d, "Architecture", "Trois plans étanches, du seul point exposé au moteur de reprise")
+    plans = [
+        ("Bordure", "edge, docker-proxy",
+         "Le seul point exposé. WAF ModSecurity avec le jeu de règles OWASP, limite de débit, "
+         "liste de blocage rechargée à chaud."),
+        ("Détection", "telemetry, detector, prometheus, loki, alertmanager",
+         f"Agrégation en fenêtres de 60 s, {f['arbre']} sur {f['variables']} variables, "
+         "deux fenêtres consécutives avant notification."),
+        ("Reprise", "remediation, vault, falco, playbooks",
+         "Politiques déclaratives, playbooks versionnés, plafond d'actions, coupe-circuit, "
+         "et preuves vérifiées avant toute clôture."),
+    ]
+    for i, (nom, services, texte) in enumerate(plans):
+        y = 236 + i * 128
+        filet(d, 88, y, 1104, 2, LIGNE_FORT)
+        cadre = planche(d, 88, y + 14, 300, 20)
+        ecrire(cadre, nom, taille=11, couleur=ACCENT, police=MONO, gras=True, majuscules=True,
+               interlettre=6)
+        cadre = planche(d, 88, y + 36, 1104, 20)
+        ecrire(cadre, services, taille=9, couleur=ENCRE_DIM, police=MONO)
+        cadre = planche(d, 88, y + 58, 1000, 60)
+        ecrire(cadre, texte, taille=11, interligne=1.15)
+    cadre = planche(d, 88, 612, 1104, 20)
+    ecrire(
+        cadre,
+        f"{f['reseaux']} réseaux dont {f['reseaux_internes']} internes · "
+        f"{f['services_suivis']} services suivis · {f['politiques']} politiques · "
+        f"{f['playbooks']} playbooks · aucun port publié hors 443",
+        taille=10,
+        couleur=ENCRE_DIM,
+        police=MONO,
+    )
 
-    # 4 : Vue d'ensemble
-    diapo = nouvelle_diapo(prs, "La plateforme en un coup d'œil", "Architecture")
-    puces(diapo, [
-        (f"{chiffres['services']} composants orchestrés", "du WAF au modèle de langage local"),
-        (f"{chiffres['reseaux']} réseaux cloisonnés, dont {chiffres['reseaux_internes']} internes", "bordure, applicatif, données, supervision, gestion"),
-        ("Un seul chemin d'entrée", "la bordure WAF, qui voit tout le trafic"),
-        ("Une chaîne de traitement en quatre temps", "télémétrie, détection, décision, vérification"),
-    ])
-    bandeau_bas(diapo, "Aucun composant n'a plus de droits que ce que sa fonction exige.")
+    # --- 04 Chaîne A1 ------------------------------------------------------
+    d = nouvelle_diapo(prs, "04", "Chaine A1")
+    entete(d, "Chaîne A1", "Détecter, confiner, redémarrer, vérifier")
+    cadre = planche(d, 88, 206, 600, 20)
+    ecrire(cadre, "Part de la cible consommée", taille=9, couleur=ENCRE_DIM, police=MONO,
+           majuscules=True, interlettre=8)
+    mesures = [
+        ("Détection", MESURES["mttd_s"], MESURES["cible_mttd_s"],
+         f"{MESURES['mttd_s']:.0f} s sur {MESURES['cible_mttd_s']:.0f} s"),
+        ("Rétablissement", MESURES["mttr_s"], MESURES["cible_mttr_s"],
+         f"{MESURES['mttr_s']:g} s sur {MESURES['cible_mttr_s']:.0f} s"
+         .replace(".", ",")),
+    ]
+    for i, (libelle, valeur, cible, mention) in enumerate(mesures):
+        y = 232 + i * 48
+        cadre = planche(d, 88, y, 300, 20)
+        ecrire(cadre, libelle, taille=10, police=MONO)
+        cadre = planche(d, 1000, y, 192, 20)
+        ecrire(cadre, mention, taille=10, police=MONO, aligne_droite=True)
+        filet(d, 88, y + 32, 1104)
+        part = max(4.0, min(1.0, valeur / cible) * 1104)
+        filet(d, 88, y + 30, part, 3, NOMINAL)
+    cadre = planche(d, 88, 354, 300, 20)
+    ecrire(cadre, "Étape", taille=9, couleur=ENCRE_DIM, police=MONO, majuscules=True,
+           interlettre=8)
+    cadre = planche(d, 460, 354, 400, 20)
+    ecrire(cadre, "Action du moteur", taille=9, couleur=ENCRE_DIM, police=MONO, majuscules=True,
+           interlettre=8)
+    cadre = planche(d, 1000, 354, 192, 20)
+    ecrire(cadre, "Durée", taille=9, couleur=ENCRE_DIM, police=MONO, majuscules=True,
+           interlettre=8, aligne_droite=True)
+    filet(d, 88, 380, 1104, 1, LIGNE_FORT)
+    for i, (etape, action, duree) in enumerate(MESURES["etapes"]):
+        y = 388 + i * 28
+        cadre = planche(d, 88, y, 340, 20)
+        ecrire(cadre, etape, taille=10, police=MONO)
+        cadre = planche(d, 460, y, 500, 20)
+        ecrire(cadre, action, taille=10, couleur=ENCRE_DIM, police=MONO)
+        cadre = planche(d, 1000, y, 192, 20)
+        ecrire(cadre, duree, taille=10, police=MONO, aligne_droite=True)
+        filet(d, 88, y + 22, 1104)
+    cadre = planche(d, 88, 576, 1104, 20)
+    ecrire(
+        cadre,
+        f"Incident clos RECOVERED · MTTR mesuré {MESURES['mttr_s']:g} s · "
+        "plafond d'actions remis à zéro".replace(".", ","),
+        taille=10,
+        couleur=ENCRE_DIM,
+        police=MONO,
+    )
 
-    # 5 : Les cinq piliers
-    diapo = nouvelle_diapo(prs, "Les cinq piliers, et où ils vivent dans le dépôt", "Mise en œuvre")
-    puces(diapo, [
-        ("Développement", "microservices FastAPI, API REST, interface React et Tailwind, grand livre en partie double"),
-        ("Infrastructure", "Docker Compose, playbooks Ansible, cinq réseaux cloisonnés"),
-        ("IA et données", "modèle non supervisé, assistant documentaire local"),
-        ("Cybersécurité", "WAF OWASP CRS, détection d'exécution, coffre de secrets, banc offensif"),
-        ("Gouvernance", "EBIOS Risk Manager, PCA et PRA, mise en regard NIS2 et DORA"),
-    ])
+    # --- 05 Preuves --------------------------------------------------------
+    d = nouvelle_diapo(prs, "05", "Preuves")
+    entete(d, "Preuves", "Cinq contrôles avant de déclarer le rétablissement")
+    for i, (nom, preuve) in enumerate(MESURES["preuves"]):
+        y = 236 + i * 58
+        filet(d, 88, y, 700)
+        bloc(d, 88, y + 6, 8, 8, remplissage=NOMINAL)
+        cadre = planche(d, 112, y, 660, 20)
+        ecrire(cadre, nom, taille=11, gras=True)
+        cadre = planche(d, 112, y + 20, 660, 24)
+        ecrire(cadre, preuve, taille=10, couleur=ENCRE_DIM, police=MONO)
+    bloc(d, 880, 230, 344, 300, remplissage=SURFACE, bordure=LIGNE_FORT)
+    cadre = planche(d, 904, 254, 296, 20)
+    ecrire(cadre, "État de la plateforme", taille=9, couleur=ENCRE_DIM, majuscules=True,
+           interlettre=10)
+    cadre = planche(d, 904, 280, 296, 70)
+    ecrire(cadre, "RÉTABLI", taille=44, couleur=NOMINAL, police=BITTER, gras=True, interligne=1.0)
+    filet(d, 904, 366, 296, 1, LIGNE_FORT)
+    etat = [
+        ("incident", "RECOVERED"),
+        ("durée constatée", f"{MESURES['mttr_s']:g} s".replace(".", ",")),
+        ("preuves", f"{len(MESURES['preuves'])} sur {len(MESURES['preuves'])}"),
+        ("clôture", "automatique"),
+    ]
+    for i, (libelle, valeur) in enumerate(etat):
+        y = 384 + i * 30
+        cadre = planche(d, 904, y, 160, 20)
+        ecrire(cadre, libelle, taille=9, couleur=ENCRE_DIM, police=MONO, majuscules=True,
+               interlettre=4)
+        cadre = planche(d, 904, y, 296, 20)
+        ecrire(cadre, valeur, taille=10, police=MONO, aligne_droite=True)
 
-    # 6 : Développement
-    diapo = nouvelle_diapo(prs, "Développement : des services, pas un monolithe", "Pilier 1")
-    puces(diapo, [
-        ("Trois services métier", "authentification, paiement, grand livre"),
-        ("Le grand livre est la source de vérité", "écriture en partie double, invariant vérifiable à tout instant"),
-        (f"{chiffres['lignes_python']} lignes de Python", "socle partagé compris"),
-        (f"{chiffres['lignes_front']} lignes de TypeScript", "interface de paiement et salle d'opérations"),
-        ("Chaque service expose la même surface", "santé, disponibilité, métriques"),
-    ])
-    bandeau_bas(diapo, "Un invariant comptable est plus facile à vérifier qu'une promesse de disponibilité.")
+    # --- 06 Limites --------------------------------------------------------
+    d = nouvelle_diapo(prs, "06", "Limites")
+    entete(d, "Limites", "Ce que le système ne prétend pas faire")
+    limites = [
+        ("Le confinement vise la signature du banc",
+         "Une attaque qui imiterait un navigateur ordinaire échapperait à ce critère ; "
+         "l'adresse reste disponible en second recours."),
+        ("Le seuil est propre à ce déploiement",
+         "Le seuil du détecteur est calibré sur le trafic simulé ; un autre profil de charge "
+         "demande une recalibration."),
+        ("La reprise reste locale",
+         "Le moteur agit sur cette pile ; aucun scénario multi-région n'est couvert."),
+        ("La vérification ne remplace pas un audit",
+         "Cinq contrôles automatiques ne valent pas une revue humaine des journaux."),
+    ]
+    for i, (titre, texte) in enumerate(limites):
+        y = 236 + i * 92
+        filet(d, 88, y, 1104, 2, LIGNE_FORT)
+        cadre = planche(d, 88, y + 12, 1104, 24)
+        ecrire(cadre, titre, taille=12, gras=True)
+        cadre = planche(d, 88, y + 40, 1000, 44)
+        ecrire(cadre, texte, taille=11, couleur=ENCRE_DIM, interligne=1.15)
+    cadre = planche(d, 88, 612, 1104, 20)
+    ecrire(cadre, "Chaque limite est mesurée sur le banc, pas supposée.", taille=10,
+           couleur=ENCRE_DIM, police=MONO)
 
-    # 7 : Infrastructure
-    diapo = nouvelle_diapo(prs, "Infrastructure : cloisonner plutôt que durcir après coup", "Pilier 2")
-    puces(diapo, [
-        ("Cinq zones réseau", "aucun conteneur ne parle à une zone dont il n'a pas besoin"),
-        ("Trois zones strictement internes", "données, supervision, gestion"),
-        ("Accès au démon Docker médiatisé", "liste blanche d'actions, jamais le socket en direct"),
-        ("Configuration embarquée dans les images", "la pile démarre à l'identique partout"),
-    ])
+    return prs
 
-    # 8 : IA
-    diapo = nouvelle_diapo(prs, "IA : modéliser la normale, pas énumérer les attaques", "Pilier 3")
-    puces(diapo, [
-        ("Détection non supervisée", "aucune règle codée en dur, aucun jeu d'attaques étiqueté"),
-        ("18 variables observées sur 60 secondes", "trafic, erreurs, latence, identités, injection, volume sortant"),
-        ("Isolation Forest", "isole une observation anormale en moins de coupures"),
-        ("Explicabilité par écart à la normale", "les variables contributives sont affichées, pas seulement le score"),
-        ("Deux chemins de détection redondants", "le modèle et les seuils d'exploitation"),
-    ])
 
-    # 9 : Calibration
-    diapo = nouvelle_diapo(prs, "Calibration du modèle", "Résultats")
-    if modele:
-        puces(diapo, [
-            (f"{modele.get('n_fenetres', '-')} fenêtres nominales apprises",
-             f"trafic simulé sur {modele.get('duree_simulee_s', '-')} s, graine fixe, reproductible"),
-            (f"Seuil au quantile {modele.get('quantile_seuil', 99.8)}",
-             f"valeur {float(modele.get('seuil', 0.0)):.5f}"),
-            (f"Dépassements nominaux mesurés : {float(modele.get('taux_detection_nominal_pct', 0.0)):.3f} %",
-             "conforme au quantile choisi"),
-            ("Variables les plus discriminantes", ", ".join(
-                f"{nom} ({part * 100:.1f} %)" for nom, part in list(
-                    (modele.get("importances") or {}).items())[:4])),
-        ])
-        bandeau_bas(diapo, "Le seuil est choisi par mesure, jamais par intuition.")
-    else:
-        puces(diapo, [("Modèle non entraîné", "exécuter python -m ml.train")])
-
-    # 10 : Assistant
-    diapo = nouvelle_diapo(prs, "Assistant documentaire local", "Pilier 3")
-    puces(diapo, [
-        ("Chaîne RAG orchestrée par LangChain", "vectorisation, recherche dans pgvector, synthèse"),
-        ("Modèle exécuté sur le poste", "aucune donnée ne sort du périmètre"),
-        ("Corpus embarqué", "architecture, conception, procédures, politiques"),
-        ("Lecture seule et citation des sources", "l'assistant ne peut déclencher aucune action"),
-    ])
-
-    # 11 : Cybersécurité
-    diapo = nouvelle_diapo(prs, "Cybersécurité : prévenir, détecter, réagir", "Pilier 4")
-    puces(diapo, [
-        ("WAF ModSecurity et Core Rule Set OWASP", "paranoïa 1, seuil d'anomalie entrant 5"),
-        ("Moindre privilège en base", "un rôle par service, journal d'audit en ajout seul garanti par SQL"),
-        ("Secrets hors du dépôt", "générés localement, jamais présents dans une image"),
-        ("Conteneurs sans privilèges", "systèmes de fichiers en lecture seule, capacités retirées"),
-        ("Banc offensif fourni", "trois scénarios, exécutés depuis un poste distinct"),
-    ])
-
-    # 12 : Gouvernance
-    diapo = nouvelle_diapo(prs, "Gouvernance : rendre l'arbitrage explicite", "Pilier 5")
-    puces(diapo, [
-        ("EBIOS Risk Manager sur les cinq ateliers", "des valeurs métier aux scénarios opérationnels"),
-        ("PCA et PRA", "scénarios de sinistre, objectifs de reprise par composant"),
-        ("NIS2 et DORA mis en regard", "ce qui est couvert, et ce qui ne peut pas l'être en quatre jours"),
-        ("Arbitrages documentés", "option retenue, option écartée, motif, conséquence assumée"),
-        ("Limites assumées publiquement", "Vault en mode développement, certificats auto-signés"),
-    ])
-
-    # 13 : Scénarios d'attaque
-    diapo = nouvelle_diapo(prs, "Trois scénarios, trois réponses différentes", "Démonstration")
-    puces(diapo, [
-        ("A1 : Rafale volumétrique", "débit anormal, erreurs, latence : confiner puis redémarrer"),
-        ("A2 : Réutilisation d'identités", "échecs d'authentification massifs : rotation de la clé de signature"),
-        ("A3 : Injection et exfiltration", "charges détectées par le WAF, volume sortant : gel du compte et réconciliation"),
-        ("Cas particulier traité", "la compromission de la clé invalide instantanément tous les jetons"),
-    ])
-
-    # 14 : La boucle
-    diapo = nouvelle_diapo(prs, "La boucle de remédiation", "Démonstration")
-    puces(diapo, [
-        ("Détection", "le modèle qualifie l'anomalie et désigne la source probable"),
-        ("Décision", f"une politique parmi {chiffres['politiques']} fait correspondre la situation à un playbook"),
-        ("Confinement", "blocage de la source à la bordure, révocation des jetons"),
-        ("Éradication", "rotation de clé, gel de compte, instantané du grand livre"),
-        ("Remise en état", "redémarrage ciblé, attente d'un état sain"),
-        ("Vérification", "transaction synthétique, intégrité comptable, efficacité du filtrage"),
-    ])
-    bandeau_bas(diapo, f"{chiffres['playbooks']} playbooks déclaratifs, relus et validés au démarrage.")
-
-    # 15 : Garde-fous
-    diapo = nouvelle_diapo(prs, "Ce qui empêche le remède d'être pire que le mal", "Maîtrise du risque")
-    puces(diapo, [
-        ("Liste blanche d'actions", "aucune action non déclarée n'existe dans le code"),
-        ("Adresses jamais bloquées", "celles dont le blocage couperait le jury ou l'hôte"),
-        ("Périmètre de conteneurs", "un service hors périmètre est refusé avant exécution"),
-        ("Plafond d'actions par fenêtre", "une boucle de remédiation ne peut pas s'emballer"),
-        ("Coupe-circuit", "après plusieurs échecs, la main revient à l'opérateur"),
-        ("Mode simulation", "toute la boucle s'exécute sans effet réel"),
-    ])
-
-    # 16 : La vérification
-    diapo = nouvelle_diapo(prs, "Ce qui distingue une reprise d'un redémarrage", "Le point clé")
-    puces(diapo, [
-        ("Transaction synthétique de bout en bout", "authentification, paiement, écriture au grand livre"),
-        ("Intégrité comptable", "la somme des écritures doit s'annuler"),
-        ("Efficacité du confinement", "le filtrage est confirmé, pas supposé"),
-        ("Horodatage de rechargement de la bordure", "la preuve que la règle est active"),
-        ("Sans ces conditions, l'incident est clos en échec", "et l'opérateur est saisi"),
-    ])
-    bandeau_bas(diapo, "C'est ce point qui vaut cinq points sur vingt au barème.")
-
-    # 17 : Résultats
-    diapo = nouvelle_diapo(prs, "Résultats mesurés", "Preuves")
-    puces(diapo, [
-        ("Délai de détection cible", "moins de 60 secondes"),
-        ("Délai de rétablissement cible", "moins de 180 secondes"),
-        ("Vérification de bout en bout", "les cinq contrôles doivent passer"),
-        ("Mesures reproductibles", "tests/e2e.sh rejoue le parcours complet et échoue si la reprise n'est pas réelle"),
-    ])
-    bandeau_bas(diapo, "Les valeurs exactes de la dernière exécution figurent dans le dossier technique.")
-
-    # 18 : Limites
-    diapo = nouvelle_diapo(prs, "Limites assumées", "Honnêteté technique")
-    puces(diapo, [
-        ("Coffre de secrets en mode développement", "acceptable sur un exercice cloisonné, à remplacer en service réel"),
-        ("Certificats auto-signés", "générés localement, importables côté poste client"),
-        ("Jeton d'accès valide jusqu'à expiration", "durée courte, rotation de clé pour invalidation immédiate"),
-        ("Détection d'exécution conditionnée au noyau", "sans accès eBPF, le WAF et le modèle assurent la couverture"),
-        ("Modèle local non affiné", "suffisant pour la synthèse documentaire"),
-    ])
-
-    # 19 : Conclusion
-    diapo = nouvelle_diapo(prs, "Ce que nous recommandons", "Conclusion")
-    puces(diapo, [
-        ("Industrialiser la vérification", "une reprise non mesurée n'entre pas en production"),
-        ("Étendre la couverture de détection", "deux chemins redondants valent mieux qu'un chemin parfait"),
-        ("Traiter les secrets comme un service", "le coffre de développement n'est pas un coffre de production"),
-        ("Documenter les arbitrages", "un choix non écrit sera contesté, pas discuté"),
-    ])
-    bandeau_bas(diapo, "Un système résilient n'est pas un système qui ne tombe jamais : c'est un système qui revient, et qui le prouve.")
-
+def main() -> None:
+    faits_du_depot = faits()
+    prs = construire(faits_du_depot)
     SORTIE.parent.mkdir(parents=True, exist_ok=True)
     prs.save(SORTIE)
-    return SORTIE
+    print(f"{SORTIE} écrit : {len(prs.slides._sldIdLst)} diapositives")
+    print(json.dumps(faits_du_depot, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    chemin = construire()
-    print(f"présentation écrite : {chemin} ({chemin.stat().st_size} octets)")
-    sys.exit(0)
+    main()
