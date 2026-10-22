@@ -79,22 +79,47 @@ def metier(fenetre):
     return int(valeur or 0)
 
 
+MODELES_CONNUS = (
+    "/models/model.joblib",
+    "/app/artifacts/model.joblib",
+)
+
+
+def charger(chemin: str):
+    """Charge le modele demande, ou le cherche aux emplacements connus.
+
+    `/models` est le volume ou la calibration ecrit ; il est vide tant qu'aucune
+    recalibration n'a tourne, et le detecteur retombe alors sur l'artefact
+    embarque dans l'image. Confondre les deux, c'est croire qu'on verifie le
+    modele recalibre alors qu'on lit celui du depot.
+    """
+    candidats = [chemin] if chemin else list(MODELES_CONNUS)
+    for candidat in candidats:
+        try:
+            return candidat, joblib.load(candidat)
+        except FileNotFoundError:
+            continue
+    raise SystemExit(
+        "aucun modele trouve. Cherche : %s" % ", ".join(candidats)
+    )
+
+
 def main() -> int:
     analyseur = argparse.ArgumentParser(description="Verifie le modele en place.")
-    analyseur.add_argument("--modele", default="/models/model.joblib")
+    analyseur.add_argument("--modele", default=None, help="chemin du modele ; cherche /models puis /app/artifacts")
     analyseur.add_argument("--base", default="http://127.0.0.1/api/telemetry")
     analyseur.add_argument("--detecteur", default="http://127.0.0.1/api/detector")
     analyseur.add_argument("--limite", type=int, default=360)
     args = analyseur.parse_args()
 
-    paquet = joblib.load(args.modele)
+    chemin, paquet = charger(args.modele)
     modele = paquet["modele"]
     scaler = paquet["scaler"]
     noms = list(paquet.get("feature_names") or [])
     seuil = float(paquet["seuil"])
 
     print("=== modele charge depuis le fichier")
-    print("  fichier      : %s" % args.modele)
+    print("  fichier      : %s" % chemin)
     print("  version      : %s" % paquet.get("version"))
     print("  origine      : %s" % paquet.get("source_calibrage"))
     print("  seuil        : %.6f" % seuil)
