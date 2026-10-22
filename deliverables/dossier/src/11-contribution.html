@@ -1,0 +1,52 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 11</span>Contribution de chacun</h1>
+
+  <p class="chapeau">Cinq personnes, cinq domaines, une seule plateforme. Le tableau indique
+  pour chaque contribution les pièces du dépôt où elle se vérifie.</p>
+
+  <table class="donnees">
+    <thead><tr><th style="width:40mm">Membre</th><th style="width:52mm">Contribution</th><th>Où elle se vérifie</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">Tom Dernoncourt</td>
+        <td>Développement de l'interface web et des services backend</td>
+        <td>Interface de paiement et salle d'opérations, services d'authentification, de paiement, de grand livre, de télémétrie, de détection et de remédiation, contrats d'API et tests de bout en bout</td>
+      </tr>
+      <tr>
+        <td class="mono">Sandra SINI</td>
+        <td>Mise en place du monitoring : Prometheus, Grafana, Loki</td>
+        <td>Collecte des métriques et des journaux, quatre tableaux de bord, règles d'alerte du second chemin de détection, routage des alertes</td>
+      </tr>
+      <tr>
+        <td class="mono">Melchior Delesclue</td>
+        <td>Entraînement du modèle de machine learning et création des données</td>
+        <td>Contrat des 18 variables, génération du trafic nominal, entraînement de la forêt d'isolation, calibration du seuil sur les mesures réelles, outillage de vérification de la séparation</td>
+      </tr>
+      <tr>
+        <td class="mono">Lina Aderkichi</td>
+        <td>Mise en place du WAF et des protections de sécurité</td>
+        <td>Bordure Nginx et WAF ModSecurity avec OWASP CRS, limites de débit, en-têtes de sécurité, durcissement des conteneurs, coffre de secrets</td>
+      </tr>
+      <tr>
+        <td class="mono">Martin CASH</td>
+        <td>Architecture applicative, plan de reprise et schémas</td>
+        <td>Composition des services et cloisonnement en cinq réseaux, plans de continuité et de reprise, analyse de risques, documents d'exploitation et schémas du présent dossier</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Comment le travail a été tenu ensemble</h2>
+  <ul>
+    <li><strong>Des contrats avant des composants.</strong> Le contrat des 18 variables est partagé entre la télémétrie et l'entraînement ; les politiques et playbooks sont des fichiers déclaratifs versionnés, et non du code dispersé.</li>
+    <li><strong>Une seule définition de l'état.</strong> La salle d'opérations, la supervision et le moteur de remédiation lisent le même état exposé par l'API de supervision : aucun indicateur n'est écrit en dur dans l'interface.</li>
+    <li><strong>Des preuves plutôt que des affirmations.</strong> Chaque action du moteur est journalisée avec la preuve qui l'accompagne, et le dossier n'avance que des valeurs relevées.</li>
+  </ul>
+
+  <div class="encadre">
+    <p class="etiquette">Ce que la plateforme démontre</p>
+    <p>Un système d'information critique peut encaisser une attaque, la détecter sans règle
+    écrite, s'en confiner tout seul, revenir à un état opérationnel et le prouver, sans
+    qu'un humain intervienne. Le seul point de la boucle qui reste humain est celui qui
+    touche à l'argent d'un client : la levée d'un gel de compte.</p>
+  </div>
+</div>

@@ -1,0 +1,37 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 03</span>Rôle des composants</h1>
+
+  <p class="chapeau">Les libellés de la colonne « affiché » sont ceux que la salle
+  d'opérations présente à l'écran : le dossier et la plateforme nomment les choses de la
+  même façon.</p>
+
+  <table class="donnees">
+    <thead><tr><th style="width:36mm">Composant</th><th style="width:34mm">Affiché</th><th>Rôle</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">edge</td><td>WAF et bordure</td><td>Nginx, WAF ModSecurity v3 et OWASP CRS 4 en mode bloquant, terminaison TLS, limites de débit par adresse et par route, en-têtes de sécurité. Relit la liste de blocage et publie le témoin de rechargement.</td></tr>
+      <tr><td class="mono">web</td><td>Interface React</td><td>Parcours client de paiement et salle d'opérations : état global, jalons de l'incident, preuves, délais.</td></tr>
+      <tr><td class="mono">api-auth</td><td>Authentification</td><td>Jetons RS256 de 15 minutes, rafraîchissement révocable, cinq rôles, verrouillage des comptes, reconnaissance faciale, journal d'audit en ajout seul.</td></tr>
+      <tr><td class="mono">api-payment</td><td>Orchestration paiement</td><td>Contrôle des limites, idempotence de la demande, appel au grand livre, retour du statut.</td></tr>
+      <tr><td class="mono">api-ledger</td><td>Grand livre partie double</td><td>Comptes, écritures en deux jambes, invariant comptable vérifiable, instantanés et restauration, gel et réconciliation.</td></tr>
+      <tr><td class="mono">postgres</td><td>Base</td><td>PostgreSQL avec extension vectorielle : comptes, écritures, incidents, actions, preuves, journaux d'audit.</td></tr>
+      <tr><td class="mono">telemetry</td><td>Agrégation des journaux</td><td>Lit le journal structuré de la bordure et des services, agrège une fenêtre glissante de 60 s et produit les 18 variables observées.</td></tr>
+      <tr><td class="mono">detector</td><td>Modèle Isolation Forest</td><td>Normalise le vecteur, calcule un score d'anomalie, le compare au seuil calibré et signale l'adresse d'origine pressentie.</td></tr>
+      <tr><td class="mono">remediation</td><td>Moteur de reprise</td><td>Sélectionne une politique, exécute le playbook, applique les garde-fous, puis exige les cinq preuves avant de déclarer le rétablissement.</td></tr>
+      <tr><td class="mono">assistant</td><td>Assistant documentaire</td><td>Questionnement en lecture seule sur la documentation du dépôt, via le modèle local. Sans capacité d'action.</td></tr>
+      <tr><td class="mono">ollama</td><td>Modèle local</td><td>Inférence du modèle de langage embarqué. Aucune donnée ne quitte le poste hôte.</td></tr>
+      <tr><td class="mono">prometheus</td><td>Métriques</td><td>Collecte des compteurs et jauges des services, évalue onze règles d'alerte formant le second chemin de détection.</td></tr>
+      <tr><td class="mono">alertmanager</td><td>Routage d'alertes</td><td>Regroupe les alertes Prometheus et les pousse au moteur de remédiation par webhook signé.</td></tr>
+      <tr><td class="mono">loki</td><td>Journaux centralisés</td><td>Stockage et interrogation des journaux de tous les services, avec champs structurés.</td></tr>
+      <tr><td class="mono">promtail</td><td>Collecte des journaux</td><td>Lit les journaux des conteneurs et les pousse vers Loki.</td></tr>
+      <tr><td class="mono">grafana</td><td>Tableaux de bord</td><td>Quatre tableaux : vue d'ensemble, détection et reprise, sécurité, métier.</td></tr>
+      <tr><td class="mono">falco</td><td>Détection d'exécution</td><td>Observe les appels système des conteneurs : shell, écriture dans un binaire système, connexion sortante inattendue.</td></tr>
+      <tr><td class="mono">falcosidekick</td><td>Réaction runtime</td><td>Achemine les événements Falco vers les journaux et vers le moteur de remédiation.</td></tr>
+      <tr><td class="mono">vault</td><td>Coffre de secrets</td><td>Distribution des secrets aux services au démarrage, depuis des dépôts chiffrés du dépôt.</td></tr>
+      <tr><td class="mono">docker-proxy</td><td>Accès au démon</td><td>Proxy restreint du socket Docker, exposé au seul moteur de remédiation, qui en a besoin pour redémarrer un service.</td></tr>
+      <tr><td class="mono">init-perms, vault-seed, ollama-init</td><td>non affichés</td><td>Tâches éphémères de démarrage : droits des volumes, scellement du coffre et distribution des secrets, chargement du modèle de langage.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="note">17 de ces conteneurs sont suivis en permanence par le moteur de
+  remédiation ; c'est cette liste qui alimente la preuve « services sains ».</p>
+</div>

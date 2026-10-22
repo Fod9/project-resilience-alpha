@@ -1,0 +1,69 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 10</span>PCA, PRA et gouvernance</h1>
+
+  <p class="chapeau">Le plan de continuité décrit ce qui reste disponible pendant l'incident ;
+  le plan de reprise décrit comment l'état nominal est retrouvé et prouvé. Les deux sont
+  bornés par des objectifs chiffrés par composant.</p>
+
+  <div class="duo">
+    <div>
+      <p class="etiquette-bloc">Objectifs de reprise</p>
+      <table class="donnees">
+        <thead><tr><th>Composant</th><th style="width:15mm">RTO</th><th style="width:13mm">RPO</th></tr></thead>
+        <tbody>
+          <tr class="ligne-valeur"><td>Bordure (WAF)</td><td class="n">180 s</td><td class="n">nul</td></tr>
+          <tr class="ligne-valeur"><td>Authentification</td><td class="n">180 s</td><td class="n">nul</td></tr>
+          <tr class="ligne-valeur"><td>Paiement</td><td class="n">180 s</td><td class="n">nul</td></tr>
+          <tr class="ligne-valeur"><td>Grand livre</td><td class="n">180 s</td><td class="n">nul</td></tr>
+          <tr><td>Détecteur</td><td class="n">300 s</td><td class="n">nul</td></tr>
+          <tr><td>Supervision</td><td class="n">300 s</td><td class="n">nul</td></tr>
+          <tr><td>Moteur de remédiation</td><td class="n">300 s</td><td class="n">nul</td></tr>
+          <tr><td>Salle d'opérations</td><td class="n">24 h</td><td class="n">24 h</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Les quatre objectifs de 180 s sont ceux de la chaîne critique. Les 300 s
+      marquent une reprise en mode dégradé, assurée par l'autre chemin de détection. La salle
+      d'opérations n'est pas bloquante : l'exploitation s'appuie sur l'API et les journaux.
+      Aucun RPO n'est requis : les états persistants vivent sur des volumes dédiés, avec
+      instantanés du grand livre avant toute manipulation.</p>
+    </div>
+    <div>
+      <p class="etiquette-bloc">Six principes de continuité</p>
+      <ol>
+        <li><strong>Continuité d'observation d'abord.</strong> Les deux chemins de détection sont indépendants : perdre l'un ne neutralise pas la boucle.</li>
+        <li><strong>Donnée avant disponibilité.</strong> En cas de doute comptable, l'état fautif est photographié avant toute écriture, puis les soldes sont recalculés depuis le journal des jambes, jamais corrigés à la main.</li>
+        <li><strong>Confinement avant remise en service.</strong> Redémarrer sans couper la source reviendrait à réadmettre l'attaque.</li>
+        <li><strong>Reprise prouvée, pas supposée.</strong> Deux tentatives au plus, puis la main passe à un opérateur avec le diagnostic complet.</li>
+        <li><strong>Retour sans perte.</strong> Les conteneurs sont remplaçables, les données se restaurent selon les procédures d'exploitation.</li>
+        <li><strong>Gouvernance de l'automatisation.</strong> Le dispositif réparateur est lui-même borné : c'est la condition d'acceptabilité d'une reprise autonome.</li>
+      </ol>
+      <p class="etiquette-bloc" style="margin-top:2.5mm;">Retour à la normale et rôles</p>
+      <p>La clôture survient quand l'état global redevient nominal ; la salle d'opérations
+      conserve la trace complète. Une règle de blocage expire d'elle-même à son échéance ; un
+      compte gelé reste gelé jusqu'à décision humaine, seul point de la boucle qui l'exige.
+      Trois rôles d'exploitation : opérateur de permanence, ingénieur sécurité, responsable de
+      plateforme.</p>
+    </div>
+  </div>
+
+  <h2>Mise en regard réglementaire</h2>
+  <div class="duo">
+    <div class="encadre">
+      <p class="etiquette">NIS2, règlement (UE) 2022/2555</p>
+      <p>La matière technique des articles 21 et 23 est couverte : analyse de risques,
+      politiques de sécurité, procédures de traitement des incidents, continuité, secrets,
+      approvisionnement au niveau des images. Les dimensions organisationnelles, formation,
+      assurance, notification dans les délais et audits périodiques, ne peuvent pas être
+      établies par un exercice de quatre jours : elles sont listées comme telles, sans être
+      présentées comme couvertes.</p>
+    </div>
+    <div class="encadre">
+      <p class="etiquette">DORA, règlement (UE) 2022/2554</p>
+      <p>Sur le périmètre technique, le dispositif fournit l'inventaire par conteneur, réseau
+      et volume, l'évaluation des risques, les plans de continuité et de reprise, la tolérance
+      à la défaillance d'une chaîne de détection, et des preuves auditables de rétablissement.
+      Le banc offensif borné est l'équivalent miniature d'un exercice reproductible ; un test
+      d'intrusion complet, non annoncé, sort du cadre du sprint.</p>
+    </div>
+  </div>
+</div>

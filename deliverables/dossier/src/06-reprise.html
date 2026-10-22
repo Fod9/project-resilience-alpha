@@ -1,0 +1,60 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 06</span>Reprise autonome</h1>
+
+  <p class="chapeau">Un conteneur redémarré n'est pas un service rétabli. La plateforme ne
+  déclare un rétablissement qu'après avoir prouvé, par le chemin public, que le service
+  répond de bout en bout, que le grand livre reste équilibré et que la source est filtrée.</p>
+
+  <div class="duo-etroit">
+    <figure class="moyenne" style="margin-top:0;">
+      <!--SVG:reprise-->
+      <figcaption><b>Figure 4.</b> Cycle de vie d'un incident. Source :
+      <span class="mono">services/remediation/app/main.py</span>.</figcaption>
+    </figure>
+    <div>
+      <p class="etiquette-bloc">Ce que fait chaque phase</p>
+      <table class="donnees">
+        <tbody>
+          <tr><td class="mono">DETECTING</td><td>situation reconnue, politique sélectionnée</td></tr>
+          <tr><td class="mono">CONTAINING</td><td>attaque isolée : blocage à la bordure, révocation des jetons émis depuis la source</td></tr>
+          <tr><td class="mono">ERADICATING</td><td>cause traitée : rotation de la clé de signature, gel des comptes concernés</td></tr>
+          <tr><td class="mono">RECOVERING</td><td>service remis en état : redémarrage contrôlé, réconciliation du grand livre</td></tr>
+          <tr><td class="mono">VERIFYING</td><td>cinq preuves indépendantes exigées, toutes par le chemin public</td></tr>
+          <tr><td class="mono">RECOVERED</td><td>rétablissement prononcé et consigné ; sinon échec déclaré et escalade à un opérateur</td></tr>
+        </tbody>
+      </table>
+      <p class="note">L'ordre des phases n'est pas décoratif : redémarrer un service avant
+      d'avoir coupé la source reviendrait à réadmettre l'attaque. La structure des playbooks
+      l'impose.</p>
+    </div>
+  </div>
+
+  <div class="duo-etroit">
+    <div>
+      <p class="etiquette-bloc">Le blocage arrive réellement à la bordure</p>
+      <p>Le moteur n'accède pas au conteneur de bordure : il écrit la règle dans un volume
+      partagé. Un surveillant de la bordure détecte le changement, recharge la configuration
+      et publie un témoin horodaté (empreinte de la liste, résultat du rechargement) que le
+      moteur relit. Une règle n'est considérée active que si le rechargement a abouti : un
+      fichier écrit n'est jamais confondu avec une protection effective.</p>
+      <figure class="haute" style="margin-bottom:0;">
+        <!--SVG:preuve-->
+        <figcaption><b>Figure 5.</b> Les cinq preuves, obtenues par le chemin public. Source :
+        <span class="mono">verification.py</span>.</figcaption>
+      </figure>
+    </div>
+    <div>
+      <p class="etiquette-bloc">Garde-fous du remède</p>
+      <table class="donnees">
+        <tbody>
+          <tr><td class="mono">Couvre-feu</td><td>six actions automatiques au plus par fenêtre de 300 s : un moteur qui s'emballe est un déni de service</td></tr>
+          <tr><td class="mono">Coupe-circuit</td><td>trois échecs consécutifs suspendent la reprise et déclenchent l'escalade : un service dégradé avec un humain prévenu vaut mieux qu'une boucle destructrice</td></tr>
+          <tr><td class="mono">Repos</td><td>une même politique ne se redéclenche pas indéfiniment sur une situation persistante</td></tr>
+          <tr><td class="mono">Liste blanche</td><td>poste hôte, postes d'encadrement et réseau d'administration ne sont jamais bloqués ; le refus est journalisé</td></tr>
+          <tr><td class="mono">Expiration</td><td>tout blocage est réversible et porte une durée de validité, 900 s par défaut</td></tr>
+          <tr><td class="mono">Mode simulé</td><td>actif par défaut ; l'état réel ou simulé est affiché en permanence dans la salle d'opérations</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

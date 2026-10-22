@@ -1,0 +1,56 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 09</span>Analyse des risques</h1>
+
+  <p class="chapeau">Méthode EBIOS Risk Manager, en deux temps : un socle (valeurs métier,
+  événements redoutés, sources de risque, scénarios stratégiques) puis un volet opérationnel
+  (scénarios d'incident et matrice de risques).</p>
+
+  <div class="duo">
+    <div class="encadre">
+      <p class="etiquette">Événements redoutés</p>
+      <p><strong>ER1</strong> indisponibilité du paiement (volume hostile saturant la
+      capacité) &middot; <strong>ER2</strong> indépendance d'identité compromise &middot;
+      <strong>ER3</strong> compromission d'intégrité des données (injection, écriture non
+      autorisée, exfiltration) &middot; <strong>ER4</strong> altération du grand livre
+      &middot; <strong>ER5</strong> perte d'observation.</p>
+      <p class="etiquette" style="margin-top:2mm;">Scénarios stratégiques</p>
+      <p><strong>SS1</strong> saturation et déni de service &middot; <strong>SS2</strong>
+      usurpation d'identité de masse &middot; <strong>SS3</strong> compromission applicative
+      &middot; <strong>SS4</strong> dégradation silencieuse &middot; <strong>SS5</strong>
+      aveuglement &middot; <strong>SS6</strong> dérive de sécurité.</p>
+    </div>
+    <div class="encadre">
+      <p class="etiquette">Sources de risque</p>
+      <p><strong>SR1</strong> attaquant externe automatisé contre la bordure exposée
+      &middot; <strong>SR2</strong> défaut applicatif (fuite, blocage, déséquilibre
+      comptable) &middot; <strong>SR3</strong> compromission d'un conteneur interne &middot;
+      <strong>SR4</strong> défaillance de la chaîne de détection &middot; <strong>SR5</strong>
+      erreur du dispositif de remédiation &middot; <strong>SR6</strong> faiblesse d'hygiène
+      (durcissement incomplet, secret mal distribué, dérive de configuration).</p>
+      <p class="etiquette" style="margin-top:2mm;">Lecture du socle</p>
+      <p>Deux valeurs métier dominent : l'intégrité du grand livre et la confiance dans
+      l'identité. C'est ce qui a placé la donnée avant la disponibilité dans la suite du
+      projet.</p>
+    </div>
+  </div>
+
+  <h2>Matrice de risques</h2>
+  <p>Probabilité et gravité sur une échelle de 1 à 4 ; le niveau est le produit des deux. Les
+  niveaux 6 et plus exigent une mesure de réduction, 8 et plus une mesure prioritaire.</p>
+
+  <table class="donnees">
+    <thead><tr><th style="width:9mm">Réf.</th><th>Risque</th><th style="width:8mm">P</th><th style="width:8mm">G</th><th style="width:11mm">Niv.</th><th style="width:66mm">Mesure associée</th></tr></thead>
+    <tbody>
+      <tr class="ligne-valeur"><td class="mono">R1</td><td>Rafale volumétrique (A1)</td><td class="n">3</td><td class="n">3</td><td class="n">9</td><td>WAF et limitation de débit, détecteur d'anomalie, politique dédiée, second chemin par alertes</td></tr>
+      <tr class="ligne-valeur"><td class="mono">R2</td><td>Bourrage d'identifiants (A2)</td><td class="n">3</td><td class="n">3</td><td class="n">9</td><td>Surveillance des échecs d'authentification, rotation de clé, verrouillage temporaire des comptes</td></tr>
+      <tr class="ligne-valeur"><td class="mono">R3</td><td>Injection et exfiltration (A3)</td><td class="n">2</td><td class="n">4</td><td class="n">8</td><td>WAF bloquant, gel du compte exposé, réconciliation comptable, détection runtime</td></tr>
+      <tr class="ligne-valeur"><td class="mono">R4</td><td>Compromission de la clé de signature</td><td class="n">2</td><td class="n">4</td><td class="n">8</td><td>Rotation automatique ; les jetons signés par une clé compromise sont rejetés</td></tr>
+      <tr class="ligne-valeur"><td class="mono">R5</td><td>Déséquilibre du grand livre (O2)</td><td class="n">2</td><td class="n">4</td><td class="n">8</td><td>Journal d'audit en ajout seul garanti par les privilèges SQL, recalcul depuis le journal des jambes</td></tr>
+      <tr class="ligne-valeur"><td class="mono">R7</td><td>Exécution malveillante en conteneur (O3)</td><td class="n">2</td><td class="n">4</td><td class="n">8</td><td>Conteneurs durcis, quarantaine réseau déclenchée par Falco</td></tr>
+      <tr><td class="mono">R6</td><td>Perte de disponibilité (O1)</td><td class="n">3</td><td class="n">2</td><td class="n">6</td><td>Alertes de disponibilité, redémarrage contrôlé suivi de la suite de vérification</td></tr>
+      <tr><td class="mono">R8</td><td>Défaillance du détecteur</td><td class="n">2</td><td class="n">3</td><td class="n">6</td><td>Second chemin de détection par seuils d'exploitation, indépendant du modèle</td></tr>
+      <tr><td class="mono">R9</td><td>Erreur du dispositif de remédiation</td><td class="n">2</td><td class="n">3</td><td class="n">6</td><td>Couvre-feu, liste blanche, expiration obligatoire, mode simulé par défaut, coupe-circuit</td></tr>
+      <tr><td class="mono">R10</td><td>Exfiltration de secrets</td><td class="n">2</td><td class="n">3</td><td class="n">6</td><td>Secrets chiffrés, coffre, interdiction des secrets versionnés, rotation après incident</td></tr>
+    </tbody>
+  </table>
+</div>

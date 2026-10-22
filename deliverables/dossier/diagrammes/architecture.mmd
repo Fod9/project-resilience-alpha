@@ -1,0 +1,56 @@
+%% Plan de la plateforme AlphaPay : 23 services repartis sur 5 reseaux isoles.
+%% Source : docker-compose.yml (services, reseaux, depends_on).
+flowchart TB
+    classDef bord fill:#FBF1D9,stroke:#D9A227,stroke-width:1.6px,color:#0F1520
+    classDef app fill:#F6F3EC,stroke:#9A927F,color:#0F1520
+    classDef serv fill:#E4DED1,stroke:#9A927F,color:#0F1520
+    classDef obs fill:#EDE9E0,stroke:#8C97A8,color:#0F1520
+    classDef mgmt fill:#F6F3EC,stroke:#C0392B,stroke-dasharray:3 2,color:#0F1520
+    classDef ext fill:#0F1520,stroke:#0F1520,color:#EDE9E0
+
+    POSTE(["Poste client"]):::ext
+
+    subgraph APPZ["APPLICATION · net-app"]
+        direction TB
+        WEB["web · React"]:::app
+        AUTH["api-auth"]:::app
+        PAY["api-payment"]:::app
+        LEDGER["api-ledger"]:::app
+        TELE["telemetry"]:::app
+        DET["detector"]:::app
+        REM["remediation"]:::app
+        ASSIST["assistant + ollama"]:::app
+        WEB --> AUTH
+        WEB --> PAY --> LEDGER
+        WEB --> TELE --> DET --> REM
+    end
+
+    subgraph DATAZ["DONNEES · net-data"]
+        PG[("postgres + pgvector")]:::serv
+    end
+
+    subgraph OBSZ["OBSERVABILITE · net-obs"]
+        direction TB
+        PROM["prometheus + alertmanager"]:::obs
+        LOKI["loki + promtail"]:::obs
+        GRAF["grafana"]:::obs
+        FALCO["falco + sidekick"]:::obs
+    end
+
+    subgraph MGMTZ["ADMINISTRATION · net-mgmt"]
+        direction TB
+        VAULT["vault · secrets scelles"]:::mgmt
+        DPROXY["docker-proxy · API filtree"]:::mgmt
+    end
+
+    EDGE_S["edge · NGINX, ModSecurity<br/>TLS et WAF, port 443<br/>BORDURE net-edge, point d'entree unique"]:::bord
+
+    POSTE --> EDGE_S
+    EDGE_S --> WEB
+    LEDGER --> PG
+    TELE --> PG
+    REM -->|"bloque la source,<br/>reecrit la bordure"| EDGE_S
+    REM --> DPROXY
+    AUTH --> VAULT
+    APPZ -.->|"metriques et journaux"| PROM
+    APPZ -.-> LOKI

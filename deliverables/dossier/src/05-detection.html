@@ -1,0 +1,73 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 05</span>Détection</h1>
+
+  <p class="chapeau">Aucune règle n'intervient dans la décision. Les seuils de latence et de
+  taux d'erreur présents ailleurs dans la pile sont des règles d'exploitation : le jury peut
+  les désactiver, la détection continue de fonctionner.</p>
+
+  <div class="duo-etroit">
+    <figure class="moyenne" style="margin-top:0;">
+      <!--SVG:detection-->
+      <figcaption><b>Figure 3.</b> Chaîne de détection et double signalement. Sources :
+      <span class="mono">services/detector/app/main.py</span>,
+      <span class="mono">services/telemetry</span>.</figcaption>
+    </figure>
+    <div>
+      <h2>Le contrat de variables, partagé</h2>
+      <p>La télémétrie et l'entraînement lisent le même contrat de 18 variables
+      (<span class="mono">services/common/features.py</span>). S'ils divergeaient, le modèle
+      noterait un vecteur que la production ne produit jamais.</p>
+      <ol class="variables">
+        <li class="mono">requests_per_second</li>
+        <li class="mono">error_ratio</li>
+        <li class="mono">latency_p95_ms</li>
+        <li class="mono">latency_p99_ms</li>
+        <li class="mono">unique_source_ips</li>
+        <li class="mono">source_ip_entropy</li>
+        <li class="mono">auth_failure_ratio</li>
+        <li class="mono">auth_attempts_per_identity</li>
+        <li class="mono">unique_identities</li>
+        <li class="mono">injection_token_ratio</li>
+        <li class="mono">xss_token_ratio</li>
+        <li class="mono">avg_payload_bytes</li>
+        <li class="mono">payload_bytes_stddev</li>
+        <li class="mono">endpoint_entropy</li>
+        <li class="mono">requests_per_token</li>
+        <li class="mono">outgoing_bytes_ratio</li>
+        <li class="mono">new_source_ip_ratio</li>
+        <li class="mono">waf_block_ratio</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>Le modèle réellement en place</h2>
+  <p>Le seuil n'est pas choisi à l'œil : il est calibré sur des mesures, et le modèle en
+  place est reconstruit sur les variables qui séparent effectivement les bandes observées.
+  Le fichier <span class="mono">ml/artifacts/model-meta.json</span> consigne ces valeurs.</p>
+
+  <div class="chiffres">
+    <div><span class="v">256</span><span class="l">arbres, forêt d'isolation</span></div>
+    <div><span class="v">99,8</span><span class="l">centile du seuil</span></div>
+    <div><span class="v">0,062</span><span class="l">seuil retenu</span></div>
+    <div><span class="v">2,39</span><span class="l">rapport de séparation</span></div>
+    <div><span class="v">18</span><span class="l">variables observées</span></div>
+  </div>
+
+  <table class="donnees">
+    <thead><tr><th style="width:46mm">Élément</th><th>Valeur consignée</th></tr></thead>
+    <tbody>
+      <tr><td>Version du modèle</td><td class="mono">isolation-forest-trafic-reel</td></tr>
+      <tr><td>Source du calibrage</td><td>trafic réel mesuré sur la plateforme, complété par du trafic simulé (570 fenêtres : 360 simulées, 210 mesurées, dont 30 réelles et 4 en agression)</td></tr>
+      <tr><td>Séparation mesurée</td><td class="mono">error_ratio</td> : minimum en attaque 0,398 contre maximum nominal 0,167, soit un rapport de 2,39</tr>
+      <tr><td>Tolérance</td><td>1 fenêtre au-dessus du seuil avant anomalie : un dépassement isolé ne déclenche rien</td></tr>
+      <tr><td>Taux de fausses alertes</td><td>3,3 % des fenêtres nominales, mesuré sur le corpus de calibrage</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Pourquoi un seul signalement ne suffit pas</h2>
+  <p>Le même constat est publié de deux façons indépendantes : une métrique Prometheus
+  couverte par une règle d'alerte, et une notification directe signée vers le moteur de
+  remédiation. Si l'un des deux chemins tombe, l'autre continue d'alimenter la reprise. La
+  redondance est volontairement dissymétrique : seul le chemin modèle sait quelle adresse
+  bloquer.</p>
+</div>

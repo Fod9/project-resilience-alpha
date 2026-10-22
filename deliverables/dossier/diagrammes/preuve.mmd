@@ -1,0 +1,33 @@
+%% Suite de verification : cinq preuves independantes, obtenues par le chemin public.
+%% Source : services/remediation/app/verification.py.
+flowchart TB
+    classDef ctl fill:#F6F3EC,stroke:#9A927F,color:#0F1520
+    classDef mur fill:#E4DED1,stroke:#8C97A8,color:#0F1520
+    classDef ok fill:#E3F0E9,stroke:#2E8B62,stroke-width:1.6px,color:#0F1520
+    classDef ko fill:#FBE3E0,stroke:#C0392B,stroke-width:1.6px,color:#0F1520
+    classDef big fill:#EDE9E0,stroke:#0F1520,stroke-width:2px,color:#0F1520
+
+    V["VERIFYING<br/>le service vient d'etre remis en etat"]:::big
+    MUR["chemin public uniquement :<br/>celui qu'emprunte un client<br/>aucun raccourci interne"]:::mur
+
+    C1["edge_reachable<br/>la bordure repond"]:::ctl
+    C2["services_healthy<br/>les trois services applicatifs<br/>se declarent sains"]:::ctl
+    C3["synthetic_payment<br/>un paiement reel est accepte<br/>de bout en bout"]:::ctl
+    C4["ledger_integrity<br/>l'invariant comptable tient"]:::ctl
+    C5["containment_effective<br/>la source figure dans la liste appliquee<br/>par la bordure, rechargement confirme"]:::ctl
+
+    OK["RECOVERED<br/>service retabli, prouve<br/>sans intervention humaine"]:::ok
+    KO["FAILED<br/>incident laisse ouvert<br/>escalade humaine engagee"]:::ko
+
+    V --> MUR
+    MUR --> C1
+    MUR --> C2
+    MUR --> C3
+    MUR --> C4
+    MUR --> C5
+    C1 --> OK
+    C2 --> OK
+    C3 --> OK
+    C4 --> OK
+    C5 --> OK
+    C1 -.->|"une seule preuve<br/>manquante suffit"| KO

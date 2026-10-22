@@ -1,0 +1,37 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 08</span>Sécurité</h1>
+
+  <p class="chapeau">Les mesures sont organisées par couche, et distinguent la prévention, la
+  détection et la réaction. La bordure est le seul composant exposé ; tout le reste est
+  interne.</p>
+
+  <table class="donnees">
+    <thead><tr><th style="width:32mm">Couche</th><th style="width:22mm">Visée</th><th>Mesure</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="4">Bordure</td><td>Prévention</td><td>WAF ModSecurity v3 avec OWASP CRS 4, paranoïa 1, mode bloquant, seuil d'anomalie entrant de 5 : les charges d'injection et de XSS sont rejetées avant d'atteindre les services.</td></tr>
+      <tr><td>Prévention</td><td>Limites de débit par adresse et par route, durcissables dynamiquement par le moteur de remédiation.</td></tr>
+      <tr><td>Prévention</td><td>En-têtes de sécurité (HSTS, CSP strict, X-Frame-Options), certificat TLS et redirection HTTP vers HTTPS.</td></tr>
+      <tr><td>Réaction</td><td>Liste de blocage dynamique relue par la bordure, avec témoin de rechargement horodaté vérifié par le moteur.</td></tr>
+
+      <tr><td rowspan="5">Applicatif</td><td>Prévention</td><td>Jetons RS256 de 15 minutes, jetons de rafraîchissement révocables et journalisés, verrouillage temporaire des comptes.</td></tr>
+      <tr><td>Prévention</td><td>Cinq rôles distincts (client, service, opérateur, auditeur, administrateur) ; chaque API n'accepte que les rôles nécessaires.</td></tr>
+      <tr><td>Prévention</td><td>Idempotence obligatoire à la création d'un paiement : une même demande produit au plus un effet.</td></tr>
+      <tr><td>Prévention</td><td>Moindre privilège côté données : un rôle PostgreSQL par service ; la table d'audit de l'authentification est en ajout seul, sans droit de mise à jour ni de suppression.</td></tr>
+      <tr><td>Prévention</td><td>Conteneurs durcis : images minimales, utilisateur non privilégié, système de fichiers racine en lecture seule, abandon de tous les privilèges, aucune nouvelle élévation, limites de mémoire, de processeur et de processus, aucun port publié hors bordure.</td></tr>
+
+      <tr><td rowspan="3">Détection</td><td>Détection</td><td>Modèle d'anomalie non supervisé sur les 18 variables, fenêtre glissante de 60 secondes, seuil calibré sur des mesures réelles. Le signalement porte l'adresse d'origine pressentie, ce qui rend le confinement possible.</td></tr>
+      <tr><td>Détection</td><td>Onze règles d'alerte Prometheus formant le second chemin, indépendant du modèle : anomalie, injection, exfiltration, service indisponible, erreurs, latence, déséquilibre comptable, échec de vérification, authentification, révocations, blocage WAF.</td></tr>
+      <tr><td>Détection</td><td>Supervision runtime par Falco : shell dans un conteneur, écriture dans un binaire système, connexion sortante inattendue.</td></tr>
+
+      <tr><td rowspan="4">Réaction</td><td>Réaction</td><td>Douze politiques déclaratives et huit playbooks, dont chaque étape est rattachée à une phase visible dans la salle d'opérations.</td></tr>
+      <tr><td>Prévention</td><td>Couvre-feu de six actions par fenêtre de 300 secondes, liste blanche d'adresses non bloquables, durée de validité obligatoire sur toute action réversible.</td></tr>
+      <tr><td>Prévention</td><td>Mode simulé actif par défaut ; trois échecs consécutifs déclenchent le coupe-circuit et l'escalade.</td></tr>
+      <tr><td>Audit</td><td>Toute action, y compris refusée, est consignée dans le journal opérationnel et poussée dans le journal centralisé avec son identifiant de suivi.</td></tr>
+
+      <tr><td rowspan="2">Secrets</td><td>Prévention</td><td>Secrets du dépôt chiffrés avec sops et age (clé privée non versionnée) ; coffre alimenté au démarrage ; injection par variables d'environnement, jamais en arguments de ligne de commande.</td></tr>
+      <tr><td>Réaction</td><td>Rotation des secrets exposés après incident.</td></tr>
+
+      <tr><td>Observation</td><td>Détection</td><td>Collecte centralisée des journaux des services, du journal de bordure du WAF et du journal des rechargements, avec champs structurés ; quatre tableaux de bord et une salle d'opérations en temps réel.</td></tr>
+    </tbody>
+  </table>
+</div>

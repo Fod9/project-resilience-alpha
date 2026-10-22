@@ -1,0 +1,48 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 02</span>Architecture et flux</h1>
+
+  <p class="chapeau">23 services, cinq réseaux séparés, un seul point d'entrée exposé sur le
+  poste hôte. La bordure est le seul composant qui parle au monde extérieur.</p>
+
+  <figure>
+    <!--SVG:architecture-->
+    <figcaption><b>Figure 1.</b> Plan de la plateforme. Les bandes sont les cinq réseaux
+    isolés. Le trait laiton marque la boucle de reprise : le moteur écrit une règle dans le
+    volume partagé, la bordure la recharge et publie un témoin que le moteur relit. Source :
+    <span class="mono">docker-compose.yml</span>.</figcaption>
+  </figure>
+
+  <div class="duo">
+    <div>
+      <p class="etiquette-bloc">Les cinq réseaux</p>
+      <table class="donnees">
+        <tbody>
+          <tr><td class="mono">net-edge</td><td>Bordure, unique point d'entrée publié</td></tr>
+          <tr><td class="mono">net-app</td><td>Services applicatifs et modèles</td></tr>
+          <tr><td class="mono">net-data</td><td>PostgreSQL et son extension vectorielle</td></tr>
+          <tr><td class="mono">net-obs</td><td>Supervision, journaux, alertes, runtime</td></tr>
+          <tr><td class="mono">net-mgmt</td><td>Secrets et accès au démon Docker</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Les trois derniers sont déclarés internes : aucune route sortante. La
+      bordure est le seul service présent à la fois sur son réseau et sur le réseau
+      applicatif.</p>
+    </div>
+    <div>
+      <p class="etiquette-bloc">Flux nominal</p>
+      <figure class="petite" style="margin-top:0;">
+        <!--SVG:flux-paiement-->
+        <figcaption><b>Figure 2.</b> Parcours d'un paiement et branche de vérification.
+        Sources : <span class="mono">api-payment</span>,
+        <span class="mono">api-ledger</span>.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <h2>Trois flux à ne pas confondre</h2>
+  <ul>
+    <li><strong>Flux métier.</strong> Le jeton vient de l'authentification, la demande est orchestrée par le service de paiement, le grand livre écrit les deux jambes de l'écriture. Une même demande produit au plus un effet, par idempotence.</li>
+    <li><strong>Flux de détection.</strong> La télémétrie agrège un journal structuré de la bordure et des services ; le détecteur en tire un score d'anomalie et le compare à un seuil calibré.</li>
+    <li><strong>Flux de reprise.</strong> Le signalement qualifié et signé arrive au moteur, qui choisit une politique, exécute un playbook, puis vérifie le rétablissement par le chemin public avant de clore.</li>
+  </ul>
+</div>

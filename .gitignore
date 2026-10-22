@@ -12,6 +12,10 @@ deliverables/*.mp4
 deliverables/*.pptx
 deliverables/*.pdf
 !deliverables/.gitkeep
+# Artefacts de rendu du dossier (schemas Mermaid, HTML assemble, apercus)
+deliverables/dossier/build/
+deliverables/dossier/dossier.html
+deliverables/dossier/dossier-inline.html
 
 # Modèles entraînés. Le fichier `.joblib` est versionné, malgré sa taille : sans
 # lui, un clone neuf construit une image de détecteur sans aucun modèle, et le

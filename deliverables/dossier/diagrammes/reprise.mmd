@@ -1,0 +1,13 @@
+%% Cycle de vie d'un incident dans le moteur de remediation autonome.
+%% Source : services/remediation/app/main.py (docstring du module).
+stateDiagram-v2
+    direction TB
+    [*] --> DETECTING
+    DETECTING --> CONTAINING : situation reconnue,<br/>politique selectionnee
+    CONTAINING --> ERADICATING : attaque isolee
+    ERADICATING --> RECOVERING : cause traitee
+    RECOVERING --> VERIFYING : service remis en etat
+    VERIFYING --> RECOVERED : cinq preuves sur cinq
+    VERIFYING --> FAILED : une preuve manquante
+    RECOVERED --> [*]
+    FAILED --> [*]

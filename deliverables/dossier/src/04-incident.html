@@ -1,0 +1,63 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 04</span>Nature de l'incident</h1>
+
+  <p class="chapeau">L'incident est rejoué par un banc offensif borné et versionné au dépôt
+  (<span class="mono">redteam/alpha_redteam.py</span>). Il produit trois scénarios d'attaque
+  nommés et trois défaillances ordinaires, tous traités par la même boucle.</p>
+
+  <table class="donnees">
+    <thead><tr><th style="width:12mm">Réf.</th><th style="width:44mm">Nature</th><th>Déroulement observé</th><th>Réponse du moteur</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">A1</td>
+        <td>Déni de service applicatif</td>
+        <td>Rafale de requêtes très au-dessus de la pointe légitime (120 requêtes par seconde visées, 75 secondes), proportion d'erreurs élevée, latence en pic.</td>
+        <td>Blocage de l'adresse source à la bordure, révocation des jetons émis depuis elle, redémarrage du service de paiement, preuve de bout en bout.</td>
+      </tr>
+      <tr>
+        <td class="mono">A2</td>
+        <td>Bourrage d'identifiants</td>
+        <td>Échecs d'authentification massifs depuis une même origine, essais sur de nombreuses identités distinctes.</td>
+        <td>Blocage de l'adresse source, révocation des jetons, rotation de la clé de signature, instantané du grand livre, redémarrage du service d'authentification.</td>
+      </tr>
+      <tr>
+        <td class="mono">A3</td>
+        <td>Injection applicative et tentative d'exfiltration</td>
+        <td>Charges utiles SQL et XSS bloquées par le WAF, volume sortant anormal.</td>
+        <td>Blocage de l'adresse source, instantané du grand livre, gel du compte exposé, réconciliation comptable, preuve de bout en bout.</td>
+      </tr>
+      <tr>
+        <td class="mono">O1</td>
+        <td>Service applicatif indisponible</td>
+        <td>Conteneur hors ligne, sondes en échec.</td>
+        <td>Redémarrage contrôlé, puis suite de vérification complète.</td>
+      </tr>
+      <tr>
+        <td class="mono">O2</td>
+        <td>Invariant comptable rompu</td>
+        <td>Déséquilibre du grand livre détecté par la supervision.</td>
+        <td>Instantané de l'état fautif avant toute écriture, puis recalcul depuis le journal des jambes. Aucun solde n'est écrit à la main.</td>
+      </tr>
+      <tr>
+        <td class="mono">O3</td>
+        <td>Exécution suspecte dans un conteneur</td>
+        <td>Shell ou écriture dans un binaire système, vu par Falco.</td>
+        <td>Quarantaine réseau du conteneur concerné.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Un incident qui se déclare lui-même</h2>
+  <p>Le banc offensif annonce le premier octet de l'attaque au moteur de remédiation, par un
+  appel signé. Cette déclaration est ce qui rend le délai de détection honnête : il est
+  mesuré depuis le début réel de l'attaque, et non depuis l'instant où le détecteur a
+  compris. Sans ce marquage, un incident détecté en fin de fenêtre d'agrégation pourrait
+  afficher un délai flatteur tout en ayant laissé l'attaque durer.</p>
+
+  <h2>Ce que le banc s'interdit</h2>
+  <ul>
+    <li>Il ne cible jamais une adresse hors du périmètre autorisé.</li>
+    <li>Sa durée et son volume sont plafonnés : c'est un exercice borné, pas un test de charge.</li>
+    <li>Il ne contourne pas la bordure : il l'attaque de face, comme le ferait un attaquant externe.</li>
+  </ul>
+</div>

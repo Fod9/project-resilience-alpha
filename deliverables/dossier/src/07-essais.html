@@ -1,0 +1,73 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 07</span>Résultats des essais</h1>
+
+  <p class="chapeau">Trois scripts sont versionnés au dépôt. Le test de bout en bout rejoue
+  ce que le jury demandera et échoue si la reprise n'est pas réelle : aucune étape n'est
+  facultative.</p>
+
+  <table class="donnees">
+    <tbody>
+      <tr><td class="mono" style="width:44mm">tests/preflight.sh</td><td>cohérence de l'environnement avant démarrage : ressources, ports, secrets générés, prérequis du sujet</td></tr>
+      <tr><td class="mono">tests/e2e.sh</td><td>parcours complet et reprise autonome ; c'est le test qui doit passer avant la soutenance</td></tr>
+      <tr><td class="mono">tests/edge_smoke.sh</td><td>bordure seule : la pile peut démarrer en mode dégradé si la bordure répond</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Protocole du test de bout en bout</h2>
+  <ol>
+    <li>bordure joignable, puis lecture de l'état avant incident et transaction nominale avec un jeton réel ;</li>
+    <li>contrôle de l'intégrité comptable, puis attaque A1 pendant 75 secondes, avec déclaration signée du premier octet ;</li>
+    <li>attente du rétablissement sans aucune intervention : la boucle interroge l'état global pendant 240 secondes au plus, puis lit le détail de l'incident et ses preuves ;</li>
+    <li>nouvelle transaction après reprise, puis contrôle final de l'intégrité comptable.</li>
+  </ol>
+
+  <h2>Relevé du tir de référence</h2>
+  <p>Chaîne A1, incident clos en rétablissement, relevé le 21 octobre 2026.</p>
+
+  <div class="duo">
+    <div>
+      <table class="donnees">
+        <thead><tr><th>Grandeur</th><th style="width:18mm">Mesuré</th><th style="width:16mm">Cible</th></tr></thead>
+        <tbody>
+          <tr class="ligne-valeur"><td>Délai de détection</td><td class="n">60,0 s</td><td class="n">60 s</td></tr>
+          <tr class="ligne-valeur"><td>Délai de remise en état</td><td class="n">2,8 s</td><td class="n">180 s</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Le délai de détection est mesuré depuis le premier octet de l'attaque,
+      pas depuis l'instant où le détecteur a compris. Le délai de remise en état couvre les
+      six actions, du confinement à la vérification.</p>
+    </div>
+    <div>
+      <table class="donnees">
+        <thead><tr><th>Action de remédiation</th><th style="width:18mm">Durée</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">confiner-signature</td><td class="n">23 ms</td></tr>
+          <tr><td class="mono">bloquer-source</td><td class="n">1 219 ms</td></tr>
+          <tr><td class="mono">révoquer-jetons</td><td class="n">20 ms</td></tr>
+          <tr><td class="mono">redémarrer-paiement</td><td class="n">755 ms</td></tr>
+          <tr><td class="mono">attendre-santé</td><td class="n">532 ms</td></tr>
+          <tr><td class="mono">vérifier</td><td class="n">188 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="duo">
+    <div class="encadre succes">
+      <p class="etiquette">Démontré par ce tir</p>
+      <ul>
+        <li>la boucle complète se referme sans intervention humaine sur A1 ;</li>
+        <li>le confinement est vérifié depuis la source, et non supposé ;</li>
+        <li>les cinq preuves passent, dont un paiement réel accepté et un grand livre équilibré avant, pendant et après l'incident.</li>
+      </ul>
+    </div>
+    <div class="encadre alarme">
+      <p class="etiquette">Limites</p>
+      <ul>
+        <li>un seul tir de référence est consigné : les valeurs sont à rafraîchir après chaque nouveau tir ;</li>
+        <li>le relevé porte sur A1 ; A2 et A3 ont été joués sans relevé horodaté conservé ;</li>
+        <li>la reprise sur sinistre prolongé ou sur perte de plusieurs composants n'est pas testée.</li>
+      </ul>
+    </div>
+  </div>
+</div>

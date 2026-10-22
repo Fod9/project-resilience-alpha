@@ -1,0 +1,243 @@
+/* ============================================================================
+   Dossier d'ingenierie et de gouvernance - Project Resilience-Alpha (AlphaPay)
+   Workshop national EPSI BAC+5 - Session octobre 2026 - Groupe 1
+   Charte reprise de docs/DESIGN-SYSTEM.md (tokens du projet).
+   Rendu : HTML + Chromium print-to-pdf (A4).
+   ========================================================================== */
+
+@font-face { font-family: 'Archivo'; src: url('polices/Archivo-var.ttf'); font-weight: 100 900; font-stretch: 62% 125%; font-display: block; }
+@font-face { font-family: 'Plex Sans'; src: url('polices/IBMPlexSans-var.ttf'); font-weight: 100 700; font-stretch: 75% 110%; font-display: block; }
+@font-face { font-family: 'Plex Mono'; src: url('polices/IBMPlexMono-Regular.ttf'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'Plex Mono'; src: url('polices/IBMPlexMono-Medium.ttf'); font-weight: 500; font-display: block; }
+@font-face { font-family: 'Plex Mono'; src: url('polices/IBMPlexMono-SemiBold.ttf'); font-weight: 600; font-display: block; }
+
+:root {
+  --encre:      #0F1520;   /* corps de texte */
+  --encre-doux: #3A4658;   /* libelles */
+  --encre-faible:#6B7688;  /* meta, horodatages */
+  --laiton:     #A87B12;   /* accent lisible sur fond clair */
+  --laiton-vif: #D9A227;   /* filets, touches */
+  --os:         #EDE9E0;   /* fond de page */
+  --os-clair:   #F6F3EC;   /* surfaces */
+  --filet:      #C9C2B4;
+  --filet-fort: #9A927F;
+  --nominal:    #2E8B62;
+  --degrade:    #B8860B;
+  --incident:   #C0392B;
+  --retabli:    #3F7FB5;
+  --ml:         #6F52C4;
+}
+
+/* Chaque section est une feuille A4 explicite : les marges de page sont a zero
+   et la mise en page est portee par .feuille. Chrome headless ne sait pas
+   positionner un element fixe dans la marge de @page, d'ou ce choix. */
+@page { size: A4; margin: 0; }
+
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; padding: 0;
+  background: var(--os);
+  color: var(--encre);
+  font-family: 'Plex Sans', 'DejaVu Sans', sans-serif;
+  font-size: 9.2pt;
+  line-height: 1.38;
+  hyphens: none;
+}
+p { margin: 0 0 5pt 0; }
+strong { font-weight: 600; color: var(--encre); }
+code, .mono { font-family: 'Plex Mono', 'DejaVu Sans Mono', monospace; font-size: 8.6pt; }
+code { background: rgba(15,21,32,0.055); padding: 0.5pt 2.5pt; border-radius: 2px; }
+a { color: var(--laiton); text-decoration: none; }
+
+/* --- feuille, en-tete et pied --- */
+.feuille {
+  width: 210mm; height: 296.4mm; box-sizing: border-box;
+  padding: 13mm 14mm 11mm 14mm;
+  page-break-after: always; break-after: page;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.feuille:last-child { page-break-after: auto; break-after: auto; }
+.feuille .corps { flex: 1 1 auto; min-height: 0; }
+.entete {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  border-bottom: 0.6pt solid var(--laiton-vif); padding-bottom: 1.6mm;
+  margin-bottom: 6mm;
+}
+.entete .marque {
+  font-family: 'Archivo'; font-weight: 800; font-stretch: 125%;
+  font-size: 11pt; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.entete .ref {
+  font-family: 'Plex Mono'; font-size: 7.4pt; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--encre-faible);
+}
+.pied {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border-top: 0.6pt solid var(--filet); padding-top: 1.4mm; margin-top: 4mm;
+  font-family: 'Plex Mono'; font-size: 7.2pt; color: var(--encre-faible);
+  letter-spacing: 0.04em;
+}
+
+/* --- structure --- */
+.section { page-break-inside: auto; }
+h1.titre-section {
+  font-family: 'Archivo'; font-weight: 800; font-stretch: 118%;
+  font-size: 14pt; letter-spacing: 0.02em; line-height: 1.1;
+  margin: 0 0 2.2mm 0; padding-top: 2mm; border-top: 1.3pt solid var(--encre);
+  text-transform: none;
+}
+h1.titre-section .num {
+  display: block; font-family: 'Plex Mono'; font-size: 8pt; font-weight: 500;
+  letter-spacing: 0.16em; color: var(--laiton); text-transform: uppercase;
+  margin-bottom: 1.2mm;
+}
+h2 {
+  font-family: 'Archivo'; font-weight: 700; font-stretch: 110%;
+  font-size: 9.8pt; letter-spacing: 0.03em; text-transform: uppercase;
+  margin: 4.2mm 0 1.6mm 0; padding-bottom: 0.9mm;
+  border-bottom: 0.6pt solid var(--filet);
+}
+h3 { font-family: 'Plex Sans'; font-weight: 600; font-size: 9.8pt; margin: 4mm 0 1.4mm 0; }
+.chapeau { color: var(--encre-doux); font-size: 9.6pt; margin-bottom: 2.8mm; }
+ul, ol { margin: 0 0 5pt 0; padding-left: 5mm; }
+li { margin-bottom: 1.6pt; }
+
+/* --- page de garde --- */
+.garde { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.garde .bloc-haut { border-bottom: 1.4pt solid var(--encre); padding-bottom: 3mm; }
+.garde .commanditaire {
+  font-family: 'Plex Mono'; font-size: 7.6pt; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--encre-faible);
+}
+.garde h1 {
+  font-family: 'Archivo'; font-weight: 800; font-stretch: 122%;
+  font-size: 33pt; line-height: 1.02; letter-spacing: 0.005em;
+  margin: 22mm 0 0 0; text-transform: uppercase;
+}
+.garde .sous-titre {
+  font-size: 12.4pt; color: var(--encre-doux); margin-top: 5mm; line-height: 1.4;
+  max-width: 150mm;
+}
+.garde .objet {
+  margin-top: 9mm; padding: 4mm 5mm; background: var(--os-clair);
+  border-left: 2.2pt solid var(--laiton-vif);
+}
+.garde .objet .t {
+  font-family: 'Plex Mono'; font-size: 7.4pt; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--encre-faible); margin-bottom: 1.6mm;
+}
+.garde .bas { margin-top: auto; }
+.garde table.equipe { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+.garde table.equipe td { padding: 1.9mm 0; border-top: 0.6pt solid var(--filet); vertical-align: top; }
+.garde table.equipe td.nom { font-family: 'Archivo'; font-weight: 600; font-stretch: 108%; font-size: 9.6pt; width: 52mm; }
+.garde table.equipe td.role { color: var(--encre-doux); font-size: 9.4pt; }
+.garde .groupe {
+  font-family: 'Plex Mono'; font-size: 8pt; letter-spacing: 0.1em;
+  color: var(--laiton); text-transform: uppercase; margin-top: 5mm;
+}
+
+/* --- tableaux --- */
+table.donnees { width: 100%; border-collapse: collapse; margin: 1.6mm 0 3mm 0; font-size: 8.3pt; }
+table.donnees thead th {
+  font-family: 'Plex Mono'; font-size: 7.2pt; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--encre-faible); text-align: left;
+  padding: 0 2.4mm 1.5mm 0; border-bottom: 0.9pt solid var(--filet-fort);
+}
+table.donnees td { padding: 1.1mm 2.2mm 1.1mm 0; border-bottom: 0.5pt solid var(--filet); vertical-align: top; }
+table.donnees td.mono, table.donnees td .mono { font-family: 'Plex Mono'; font-size: 8.5pt; }
+table.donnees td.n { text-align: right; font-family: 'Plex Mono'; font-size: 8.5pt; white-space: nowrap; }
+table.donnees tr.ligne-valeur td { background: rgba(168,123,18,0.06); }
+table.donnees .sous { color: var(--encre-faible); font-size: 8.2pt; display: block; }
+
+/* --- encadres --- */
+.encadre {
+  background: var(--os-clair); border: 0.6pt solid var(--filet);
+  border-left: 2pt solid var(--laiton-vif); padding: 3.2mm 4mm; margin: 3mm 0 4mm 0;
+}
+.encadre.alarme { border-left-color: var(--incident); }
+.encadre.succes { border-left-color: var(--nominal); }
+.encadre .etiquette {
+  font-family: 'Plex Mono'; font-size: 7.2pt; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--encre-faible); margin-bottom: 1.4mm;
+}
+.duo { display: flex; gap: 4mm; }
+.duo > * { flex: 1; }
+
+/* --- pastilles d'etat --- */
+.pastille { font-family: 'Plex Mono'; font-size: 7.6pt; text-transform: uppercase; letter-spacing: 0.08em; }
+.pastille::before { content: '\25CF'; margin-right: 1.3mm; }
+.p-nominal { color: var(--nominal); }
+.p-degrade { color: var(--degrade); }
+.p-incident { color: var(--incident); }
+.p-retabli { color: var(--retabli); }
+.p-ml { color: var(--ml); }
+
+/* --- chiffres cles --- */
+.chiffres { display: flex; gap: 3.5mm; margin: 3mm 0 5mm 0; }
+.chiffres > div {
+  flex: 1; border-top: 1.2pt solid var(--encre); padding-top: 2mm;
+}
+.chiffres .v {
+  font-family: 'Plex Mono'; font-weight: 500; font-size: 17pt; letter-spacing: -0.01em;
+  display: block; line-height: 1.1;
+}
+.chiffres .l {
+  font-family: 'Plex Mono'; font-size: 6.9pt; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--encre-faible); display: block; margin-top: 1.2mm;
+}
+.v-nominal { color: var(--nominal); } .v-incident { color: var(--incident); }
+.v-laiton { color: var(--laiton); } .v-ml { color: var(--ml); }
+
+/* --- complements --- */
+.garde .marque-ligne { display: flex; align-items: center; gap: 5mm; }
+.garde .symbole { width: 15mm; height: 15mm; display: block; }
+.garde .marque-g {
+  display: block; font-family: 'Archivo'; font-weight: 800; font-stretch: 125%;
+  font-size: 19pt; letter-spacing: 0.14em; color: var(--encre); line-height: 1;
+  text-transform: uppercase;
+}
+.etiquette-bloc {
+  display: block; font-family: 'Plex Mono'; font-size: 7.4pt; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--laiton); margin: 3.6mm 0 1.5mm 0;
+}
+.note { color: var(--encre-faible); font-size: 8.6pt; margin: 1.5mm 0 3mm 0; }
+ol.variables {
+  columns: 2; column-gap: 7mm; margin: 0; padding-left: 4.5mm;
+  font-family: 'Plex Mono'; font-size: 7.6pt; color: var(--encre-doux);
+}
+ol.variables li { break-inside: avoid; margin-bottom: 0.8mm; }
+table.donnees td[rowspan] {
+  font-family: 'Archivo'; font-weight: 600; font-size: 9pt; letter-spacing: 0.02em;
+  border-bottom: 0.8pt solid var(--filet-fort); vertical-align: top;
+}
+
+/* --- diagrammes --- */
+figure { margin: 3mm 0 4.5mm 0; page-break-inside: avoid; }
+figure svg { max-width: 100%; max-height: 100mm; width: auto; height: auto; display: block; margin: 0 auto; }
+figure.moyenne svg { max-height: 76mm; }
+figure.haute svg { max-height: 68mm; }
+figure.petite svg { max-height: 56mm; }
+figure { margin: 2.2mm 0 3.4mm 0; }
+figure img { width: 100%; height: auto; display: block; }
+/* Deux blocs cote a cote : schema et commentaire, ou deux tableaux. */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; align-items: start; }
+.duo-etroit { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 7mm; align-items: start; }
+figcaption {
+  font-family: 'Plex Mono'; font-size: 7.2pt; color: var(--encre-faible);
+  letter-spacing: 0.04em; margin-top: 1.8mm; padding-top: 1.2mm;
+  border-top: 0.5pt solid var(--filet);
+}
+figcaption b { font-family: 'Plex Sans'; font-weight: 600; color: var(--encre-doux); }
+
+/* --- machine a etats --- */
+.etapes { display: flex; gap: 2mm; margin: 3mm 0 4mm 0; }
+.etapes > div {
+  flex: 1; border: 0.6pt solid var(--filet); background: var(--os-clair);
+  padding: 2.4mm 2.6mm; border-top: 1.8pt solid var(--filet-fort);
+}
+.etapes > div.on { border-top-color: var(--nominal); }
+.etapes .n { font-family: 'Plex Mono'; font-size: 7pt; color: var(--laiton); letter-spacing: 0.1em; }
+.etapes .t { font-family: 'Archivo'; font-weight: 700; font-stretch: 108%; font-size: 8.4pt; text-transform: uppercase; margin: 0.8mm 0 1.2mm 0; }
+.etapes .d { font-size: 8pt; color: var(--encre-doux); line-height: 1.34; }
+
+.eviter { page-break-inside: avoid; }

@@ -1,0 +1,24 @@
+%% Chaine de detection : de la bordure au signalement double.
+%% Sources : services/common/features.py, services/detector/app/main.py.
+flowchart TB
+    classDef src fill:#E4DED1,stroke:#9A927F,color:#0F1520
+    classDef step fill:#F6F3EC,stroke:#9A927F,color:#0F1520
+    classDef ana fill:#FBF1D9,stroke:#D9A227,stroke-width:1.6px,color:#0F1520
+    classDef sig fill:#FBE3E0,stroke:#C0392B,color:#0F1520
+    classDef out fill:#F6F3EC,stroke:#0F1520,stroke-width:2px,color:#0F1520
+
+    J["journal de bordure<br/>NGINX et ModSecurity CRS"]:::src
+    T["telemetry<br/>fenetre glissante, 18 variables"]:::src
+    N["normalisation<br/>moyenne et ecart-type du nominal"]:::step
+    M["IsolationForest<br/>256 estimateurs"]:::ana
+    S["score d'anomalie<br/>compare au seuil : quantile 99,8"]:::ana
+    K["fenetres consecutives au-dessus du seuil"]:::step
+    A["anomalie confirmee"]:::sig
+    P["metrique Prometheus<br/>alphapay_anomaly_anomalous"]:::step
+    AM["alertmanager"]:::step
+    N2["notification signee HMAC"]:::step
+    R["moteur de remediation"]:::out
+
+    J --> T --> N --> M --> S --> K --> A
+    A --> P --> AM --> R
+    A --> N2 --> R

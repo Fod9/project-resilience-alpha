@@ -1,0 +1,27 @@
+%% Parcours de paiement nominal et branche de verification.
+%% Sources : services/api-payment/app/main.py, services/api-ledger/app/main.py.
+sequenceDiagram
+    autonumber
+    participant C as Poste client
+    participant E as edge (WAF, TLS)
+    participant W as web (React)
+    participant A as api-auth
+    participant P as api-payment
+    participant L as api-ledger
+    participant D as postgres
+
+    C->>E: HTTPS 443
+    E->>W: requete filtree
+    W->>A: POST /token
+    A-->>W: jeton signe (JWT, JWKS)
+    W->>A: POST /face/verify (si politique forte)
+    A-->>W: jeton de session
+    W->>P: POST /payments
+    P->>P: controles de plafond (GET /limits)
+    P->>L: POST /transactions
+    L->>D: ecriture partie double, une transaction
+    L-->>P: transaction inscrite, grand livre equilibre
+    P-->>W: 201, recu
+    W-->>C: confirmation de paiement
+    Note over P,L: chaque appel alimente la telemetrie
+    L->>L: GET /integrity (controle d'equilibre)

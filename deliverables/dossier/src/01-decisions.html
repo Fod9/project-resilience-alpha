@@ -1,0 +1,70 @@
+<div class="section">
+  <h1 class="titre-section"><span class="num">Section 01</span>Décisions structurantes</h1>
+
+  <p class="chapeau">Le projet tient sur une thèse : un système critique ne peut pas déclarer
+  un rétablissement, il doit le prouver. Chaque décision ci-dessous en découle et a été
+  consignée au dépôt, dans <span class="mono">docs/GOUVERNANCE.md</span>, sous la forme
+  retenu, écarté, motif, conséquence assumée.</p>
+
+  <table class="donnees">
+    <thead><tr><th style="width:30mm">Décision</th><th>Retenu</th><th>Écarté</th><th>Motif et conséquence assumée</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">A1</td>
+        <td>Détection non supervisée : forêt d'isolation sur les 18 variables observées, fenêtre de 60 s, seuil au 99,8e centile du trafic nominal.</td>
+        <td>Classifieur supervisé entraîné sur des attaques réelles.</td>
+        <td>Aucun corpus d'attaques réelles n'existe en quatre jours ; le non supervisé borne les faux positifs. Conséquence : le modèle signale l'écart à la norme sans comprendre l'attaque, la qualification revient aux politiques.</td>
+      </tr>
+      <tr>
+        <td class="mono">A2</td>
+        <td>Deux chemins de détection de capacités inégales : le chemin modèle identifie l'adresse d'origine, le chemin d'alertes Prometheus remet en état sans confiner.</td>
+        <td>Un chemin unique, ou deux chemins équivalents.</td>
+        <td>La tolérance à la panne exige la redondance. Conséquence assumée : si seul le chemin d'alertes subsiste, le service est rétabli mais la source n'est pas coupée.</td>
+      </tr>
+      <tr>
+        <td class="mono">A3</td>
+        <td>Rotation de la clé de signature RS256 pour invalider tous les jetons d'un coup.</td>
+        <td>Révocation jeton par jeton.</td>
+        <td>On ne sait pas quels jetons ont été volés. Conséquence : tous les clients sont déconnectés, pas seulement l'attaquant.</td>
+      </tr>
+      <tr>
+        <td class="mono">A4</td>
+        <td>Coffre de secrets en mode développement, alimenté au démarrage depuis des dépôts chiffrés.</td>
+        <td>Coffre haute disponibilité de production.</td>
+        <td>Quatre jours ne permettent pas de dimensionner un coffre de production. Conséquence : les secrets ne survivraient pas au conteneur du coffre, à lever en production.</td>
+      </tr>
+      <tr>
+        <td class="mono">A5</td>
+        <td>Blocage d'adresse par fichier de bordure relu, avec témoin de rechargement horodaté.</td>
+        <td>Accès privilégié du moteur au conteneur de bordure.</td>
+        <td>La bordure reste hermétique aux composants internes, et un fichier écrit n'est jamais confondu avec une règle appliquée. Conséquence : quelques secondes de propagation, comptées dans les cibles.</td>
+      </tr>
+      <tr>
+        <td class="mono">A6</td>
+        <td>Journal d'audit de l'authentification en ajout seul, garanti par les privilèges SQL.</td>
+        <td>Contrainte applicative, ou droit de suppression réservé à un administrateur.</td>
+        <td>Une contrainte dans le code est contournable si le code est compromis ; un droit SQL absent ne l'est pas. Conséquence : la table croît sans borne.</td>
+      </tr>
+      <tr>
+        <td class="mono">A7</td>
+        <td>Gel du compte exposé et recalcul des soldes depuis le journal des jambes.</td>
+        <td>Correction automatique des soldes incohérents.</td>
+        <td>Écrire un solde sans jugement humain serait une action irréversible de trop. Conséquence : le compte reste gelé jusqu'à décision humaine, seul point de la boucle qui l'exige.</td>
+      </tr>
+      <tr>
+        <td class="mono">A8</td>
+        <td>Assistant documentaire local, en lecture seule, non affiné, sans accès aux données opérationnelles.</td>
+        <td>Affinement sur corpus, ou accès direct à l'exploitation.</td>
+        <td>L'affinement coûte plus qu'un sprint et l'accès élargirait la surface d'attaque. Conséquence : l'assistant est un aide-mémoire, jamais une source de décision.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Trois décisions d'architecture qui commandent le reste</h2>
+  <ul>
+    <li><strong>Un seul point d'entrée.</strong> Seule la bordure publie des ports sur le poste hôte ; les 22 autres services ne sont joignables que par les réseaux internes. Un service applicatif n'est donc jamais exposé directement.</li>
+    <li><strong>Cinq réseaux séparés, dont trois internes.</strong> La bordure, l'application, les données, l'observation et l'administration sont cloisonnés ; un conteneur compromis ne voit que son segment.</li>
+    <li><strong>Le remède est lui-même borné.</strong> Le moteur de remédiation est soumis à un couvre-feu, à un coupe-circuit, à une liste blanche d'adresses et à une durée de validité obligatoire. C'est la condition d'acceptabilité d'une reprise autonome.</li>
+    <li><strong>Détection et exploitation séparées.</strong> Les seuils d'alerte Prometheus ne participent pas à la décision du détecteur : le jury peut les désactiver, la détection continue de fonctionner.</li>
+  </ul>
+</div>
