@@ -28,6 +28,11 @@ COPY ml/synthetic.py      /app/ml/synthetic.py
 COPY ml/train.py          /app/ml/train.py
 COPY ml/recalibrer.py     /app/ml/recalibrer.py
 COPY ml/profils_attaque.py /app/ml/profils_attaque.py
+# La calibration sur mesures et sa verification sont embarquees : elles doivent
+# pouvoir tourner sur la plateforme elle-meme, depuis le conteneur, sans dépendre
+# d'une installation Python sur le poste hôte.
+COPY ml/calibrer_sur_mesures.py /app/ml/calibrer_sur_mesures.py
+COPY ml/verifier_separation.py  /app/ml/verifier_separation.py
 COPY ml/artifacts         /app/artifacts
 
 RUN groupadd --gid 10001 app \
