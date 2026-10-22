@@ -101,8 +101,17 @@ def principal() -> int:
 
     nominales = vecteurs_nominaux()
     scores_nominaux = np.array([score(v) for v in nominales])
+    import hashlib
+
+    empreinte = hashlib.sha256(open(chemin_modele, "rb").read()).hexdigest()[:16]
+    print(f"artefact          : {chemin_modele}")
+    print(f"empreinte         : {empreinte}  (a comparer entre deux postes)")
     print(f"modele            : {meta.get('version')} (source {meta.get('source_calibrage')})")
+    print(f"calibre le        : {meta.get('calibre_le') or 'non declare'}")
     print(f"seuil             : {seuil:.4f}")
+    for cle in ("score_nominal_haut", "score_attaque_bas", "marge_relative"):
+        if meta.get(cle) is not None:
+            print(f"{cle:18s}: {meta[cle]}")
     print(f"normale apprise   : {len(scores_nominaux)} fenetres, median {np.median(scores_nominaux):.4f}, max {scores_nominaux.max():.4f}")
 
     observees = fenetres_observees(base)
