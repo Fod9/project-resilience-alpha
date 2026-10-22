@@ -40,6 +40,13 @@ CHEMINS = (
     ("/api/ledger/integrity", 0.04),
 )
 
+#: Probabilite par pas de temps d'entrer en periode de repos. Un pas vaut 0,25 s :
+#: la plateforme bascule au repos en moyenne une fois par minute, puis y reste de
+#: 45 a 240 secondes. C'est le regime reel d'un poste de demonstration, et il doit
+#: figurer dans la normale apprise : sans lui, une plateforme au repos est
+#: declaree anormale des son demarrage.
+ENTREE_EN_REPOS = 0.004
+
 #: Adresses clientes du réseau de démonstration (192.168.137.0/24).
 ADRESSES = tuple(f"192.168.137.{dernier}" for dernier in range(30, 60))
 
@@ -151,8 +158,18 @@ def flux_normal(
     evenements: list[Evenement] = []
     instant = 0.0
     budget = 0.0
+    repos_jusqua = 0.0
     while instant < duree_secondes:
-        charge = _charge_de_l_heure(instant) * rng.uniform(0.85, 1.15)
+        # Une plateforme de demonstration passe l'essentiel de son temps au repos :
+        # entre deux essais, aucune requete n'est emise. Ce regime doit figurer
+        # dans la normale apprise. Sans lui, une plateforme au repos produit un
+        # vecteur eloigne du nominal, le detecteur la declare anormale des son
+        # demarrage, et la seule facon de faire taire cette alerte est de monter
+        # le seuil au-dessus des profils d'attaque, ce qui desarme le detecteur.
+        if instant >= repos_jusqua and rng.random() < ENTREE_EN_REPOS:
+            repos_jusqua = instant + rng.uniform(45.0, 240.0)
+        au_repos = instant < repos_jusqua
+        charge = 0.0 if au_repos else _charge_de_l_heure(instant) * rng.uniform(0.85, 1.15)
         # Population d'adresses et activite d'authentification suivent la charge :
         # une plateforme peu sollicitee n'a qu'un client et n'authentifie presque
         # personne. Les tirer a taux fixe par pas de temps garantissait des

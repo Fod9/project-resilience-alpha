@@ -148,6 +148,7 @@ def entrainer(
 
     return {
         "version": VERSION_MODELE,
+        "source_calibrage": "trafic-simule",
         "feature_names": list(FEATURE_NAMES),
         "moyennes": moyennes,
         "ecarts": ecarts,
