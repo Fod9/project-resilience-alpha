@@ -355,7 +355,8 @@ def _fenetre_actions_ouverte(action: str) -> bool:
     _purger_fenetre()
     if action in ACTIONS_TOUJOURS_PERMISES:
         return True
-    return len(_etat["actions_recentes"]) < MAX_ACTIONS_PAR_FENETRE
+    bornees = [entree for entree in _etat["actions_recentes"] if entree.get("compte")]
+    return len(bornees) < MAX_ACTIONS_PAR_FENETRE
 
 
 def _purger_fenetre() -> None:
@@ -368,14 +369,29 @@ def _purger_fenetre() -> None:
     """
     maintenant = time.time()
     _etat["actions_recentes"] = [
-        t for t in _etat["actions_recentes"] if maintenant - t < FENETRE_ACTIONS
+        entree
+        for entree in _etat["actions_recentes"]
+        if maintenant - float(entree.get("ts") or 0.0) < FENETRE_ACTIONS
     ]
 
 
 def _enregistrer_action(action: str) -> None:
-    if action in ACTIONS_TOUJOURS_PERMISES:
-        return
-    _etat["actions_recentes"].append(time.time())
+    """Consigne une action exécutée, en disant si elle consomme le plafond.
+
+    Le confinement ne consomme pas le plafond (il est idempotent et réversible,
+    le refuser laisserait une attaque détectée sans réponse), mais il doit
+    figurer dans ce que la salle d'opérations affiche. Compter seulement les
+    actions bornées faisait afficher « 2 / 6 » après un playbook qui en avait
+    exécuté six : le chiffre était juste au regard du plafond et faux au regard
+    de ce qui s'était passé.
+    """
+    _etat["actions_recentes"].append(
+        {
+            "ts": time.time(),
+            "action": action,
+            "compte": action not in ACTIONS_TOUJOURS_PERMISES,
+        }
+    )
 
 
 # =============================================================================
@@ -940,7 +956,11 @@ async def etat_courant() -> dict[str, Any]:
         "dry_run": connecteurs.dry_run,
         "consecutive_failures": _etat["echecs_consecutifs"],
         "actions_in_window": len(_etat["actions_recentes"]),
+        "actions_bounded_in_window": len(
+            [entree for entree in _etat["actions_recentes"] if entree.get("compte")]
+        ),
         "action_limit": MAX_ACTIONS_PAR_FENETRE,
+        "actions_window_seconds": FENETRE_ACTIONS,
         "incident": dict(incident) if incident else None,
         "targets": {"mttd_seconds": MTTD_TARGET, "mttr_seconds": MTTR_TARGET},
         # Le registre est exposé ici plutôt que figé dans l'interface : une

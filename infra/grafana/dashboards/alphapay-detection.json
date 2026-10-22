@@ -35,7 +35,7 @@
         },
         {
           "expr": "max(alphapay_anomaly_threshold)",
-          "refId": "A",
+          "refId": "B",
           "datasource": {
             "type": "prometheus",
             "uid": "alphapay-prometheus"
@@ -44,7 +44,7 @@
         },
         {
           "expr": "max(alphapay_anomaly_score_max)",
-          "refId": "A",
+          "refId": "C",
           "datasource": {
             "type": "prometheus",
             "uid": "alphapay-prometheus"
@@ -257,7 +257,7 @@
         },
         {
           "expr": "max(alphapay_feature_value{feature=\"xss_token_ratio\"})",
-          "refId": "A",
+          "refId": "B",
           "datasource": {
             "type": "prometheus",
             "uid": "alphapay-prometheus"
@@ -266,7 +266,7 @@
         },
         {
           "expr": "max(alphapay_feature_value{feature=\"waf_block_ratio\"})",
-          "refId": "A",
+          "refId": "C",
           "datasource": {
             "type": "prometheus",
             "uid": "alphapay-prometheus"
@@ -323,7 +323,7 @@
         },
         {
           "expr": "max(alphapay_feature_value{feature=\"auth_attempts_per_identity\"})",
-          "refId": "A",
+          "refId": "B",
           "datasource": {
             "type": "prometheus",
             "uid": "alphapay-prometheus"
@@ -332,7 +332,7 @@
         },
         {
           "expr": "max(alphapay_feature_value{feature=\"auth_failure_ratio\"})",
-          "refId": "A",
+          "refId": "C",
           "datasource": {
             "type": "prometheus",
             "uid": "alphapay-prometheus"

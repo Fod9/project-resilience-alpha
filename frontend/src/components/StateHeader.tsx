@@ -69,7 +69,12 @@ export default function StateHeader({
           />
           <Mesure
             libelle="Actions sur la fenêtre"
-            valeur={`${etat?.actions_in_window ?? 0} / ${etat?.action_limit ?? "?"}`}
+            valeur={`${etat?.actions_in_window ?? 0}`}
+            precision={
+              etat
+                ? `dont ${etat.actions_bounded_in_window ?? etat.actions_in_window} au plafond de ${etat.action_limit}`
+                : undefined
+            }
           />
         </div>
 
@@ -118,16 +123,23 @@ export default function StateHeader({
 function Mesure({
   libelle,
   valeur,
+  precision,
   accent,
 }: {
   libelle: string;
   valeur: string;
+  precision?: string;
   accent?: string;
 }) {
   return (
     <div>
       <div className="etiquette mb-1">{libelle}</div>
       <div className={`tabular text-2xl ${accent ?? "text-ink"}`}>{valeur}</div>
+      {precision ? (
+        <div className="font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-dim">
+          {precision}
+        </div>
+      ) : null}
     </div>
   );
 }

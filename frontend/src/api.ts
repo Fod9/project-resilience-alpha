@@ -98,8 +98,15 @@ export interface EtatSupervision {
   suspended: boolean;
   dry_run: boolean;
   consecutive_failures: number;
+  /** Toutes les actions exécutées sur la fenêtre glissante, confinement
+   *  compris : c'est ce que l'opérateur veut voir. */
   actions_in_window: number;
+  /** Celles qui consomment le plafond anti-emballement. Le confinement en est
+   *  exclu par construction : il est idempotent et réversible, et le refuser
+   *  laisserait une attaque détectée sans réponse. */
+  actions_bounded_in_window?: number;
   action_limit: number;
+  actions_window_seconds?: number;
   incident: Incident | null;
   targets: { mttd_seconds: number; mttr_seconds: number };
   /** Contenu réellement chargé par le moteur : politiques, playbooks et
@@ -185,6 +192,20 @@ export interface DescriptionModele {
   rules_used: boolean;
 }
 
+/** Une fenêtre déjà notée par le détecteur. C'est de cet historique que vient
+ *  la bande de score : la chronologie d'incident ne contient que les fenêtres
+ *  d'un incident, et se vide dès qu'il est clos. */
+export interface FenetreScore {
+  detected_at: string;
+  window_start: string;
+  window_end: string;
+  score: number;
+  threshold: number;
+  exceedance: number;
+  anomalous: boolean;
+  consecutive_windows: number;
+}
+
 export interface Politique {
   id: string;
   title: string;
@@ -241,6 +262,8 @@ export const api = {
   politiques: () => autorise.lire<{ policies: Politique[] }>("/api/supervision/policies"),
   fenetre: () => autorise.lire<FenetreVariables>("/api/telemetry/features/current"),
   detection: () => autorise.lire<RapportDetection>("/api/detector/score/current"),
+  historiqueScores: () =>
+    autorise.lire<{ windows: FenetreScore[] }>("/api/detector/score/history"),
   modele: () => autorise.lire<DescriptionModele>("/api/detector/model"),
   assistant: (question: string) =>
     autorise.ecrire<ReponseAssistant>(

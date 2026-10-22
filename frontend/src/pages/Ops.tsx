@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, type DetailIncident, type FenetreVariables, type RapportDetection } from "../api";
+import { api, type DetailIncident, type FenetreScore, type FenetreVariables, type RapportDetection } from "../api";
 import { useSonde } from "../hooks";
 import AssistantPanel from "../components/AssistantPanel";
 import { BandesMesures, PlaybookPanel } from "../components/MetricBands";
@@ -23,6 +23,11 @@ export default function Ops() {
   const services = useSonde(api.services, 5000);
   const fenetre = useSonde<FenetreVariables>(api.fenetre, 5000);
   const detection = useSonde<RapportDetection>(api.detection, 5000);
+  // L'historique de notation du detecteur, et non la chronologie d'incident :
+  // celle-ci ne contient que les evenements d'un incident, donc la bande de
+  // score se vidait des que l'incident etait clos, alors que le bandeau
+  // annonce les trente dernieres fenetres notees.
+  const scores = useSonde<{ windows: FenetreScore[] }>(api.historiqueScores, 5000);
   const chronologie = useSonde(api.chronologie, 5000);
 
   const [detail, setDetail] = useState<DetailIncident | null>(null);
@@ -55,13 +60,11 @@ export default function Ops() {
 
   const points = useMemo(
     () =>
-      (chronologie.donnees?.events ?? [])
-        .filter((evenement) => evenement.kind === "state.changed" || evenement.source === "detector")
-        .map((evenement) => Number((evenement.payload as { score?: number })?.score ?? 0))
-        .filter((valeur) => valeur > 0)
-        .slice(0, 30)
-        .reverse(),
-    [chronologie.donnees],
+      (scores.donnees?.windows ?? [])
+        .map((fenetre) => Number(fenetre.score))
+        .filter((valeur) => Number.isFinite(valeur))
+        .slice(-30),
+    [scores.donnees],
   );
 
   const scoreCourant = useMemo(
@@ -75,7 +78,11 @@ export default function Ops() {
   // services s'initialisent pendant une a deux minutes : le tableau de bord doit
   // le dire clairement au lieu d'afficher une erreur rouge devant le jury.
   const indisponible =
-    etat.indisponible || detection.indisponible || fenetre.indisponible || chronologie.indisponible;
+    etat.indisponible ||
+    detection.indisponible ||
+    scores.indisponible ||
+    fenetre.indisponible ||
+    chronologie.indisponible;
   const messageEtat = indisponible
     ? "Plateforme en cours de démarrage : les services s'initialisent, cette vue se remplira d'elle-même."
     : etat.erreur;
