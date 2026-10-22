@@ -86,19 +86,7 @@ print('  fenetres %d | rps min %.2f max %.2f ecart-type %.3f' % (len(w), min(r),
 "
 
 # -----------------------------------------------------------------------------
-titre "3. Recalibrage du modele"
-sonde alphaplat-detector "
-import sys
-sys.argv = ['x', 'http://telemetry:8000', '/models']
-from ml import recalibrer
-recalibrer.main()
-" 2>&1 | grep -E "seuil|score nominal|depassements" || echec "recalibrage impossible"
-
-$COMPOSE restart detector >/dev/null 2>&1
-sleep 30
-
-# -----------------------------------------------------------------------------
-titre "4. Le repos est-il sous le seuil ?"
+titre "3. Le repos est-il sous le seuil ?"
 sonde alphaplat-detector "
 import urllib.request, json
 d = json.load(urllib.request.urlopen('http://127.0.0.1:8000/score/current', timeout=10))
@@ -106,7 +94,7 @@ print('  score %.4f | seuil %.4f | anomalie %s' % (d.get('score') or 0, d.get('t
 "
 
 # -----------------------------------------------------------------------------
-titre "5. Attaque A1 depuis un conteneur distinct"
+titre "4. Attaque A1 depuis un conteneur distinct"
 HMAC=$(grep -E "^HMAC_SECRET=" "$RACINE/.env" | cut -d= -f2)
 docker rm -f alphaplat-demo-attaquant >/dev/null 2>&1
 docker run --rm --name alphaplat-demo-attaquant --memory 768m \
@@ -117,20 +105,38 @@ docker rm -f alphaplat-demo-attaquant >/dev/null 2>&1
 sleep 25
 
 # -----------------------------------------------------------------------------
-titre "6. Le seuil est-il franchi ?"
+titre "5. Recalibrage du modele sur les mesures"
+# L'ordre compte : la calibration choisit ses variables et place son seuil sur
+# les bandes *mesurees*, dont l'agression vient d'etre rejouee. Recalibrer avant
+# l'attaque revient a demander au modele de se juger sur des profils theoriques,
+# ce que la version precedente faisait, et c'est ce qui laissait publier un seuil
+# que rien ne franchissait.
+bash "$RACINE/scripts/recalibrer-detecteur.sh" 2>&1 | \
+    grep -E "variables|retenues|seuil|score nominal|attaque la plus faible|marge|fenetres apprises|arme|silencieux" || true
+sleep 10
+
+# -----------------------------------------------------------------------------
+titre "6. Le seuil est-il franchi par l'attaque mesuree ?"
 sonde alphaplat-detector "
 import json, urllib.request, joblib, numpy as np
-from common.features import FEATURE_NAMES
 a = joblib.load('/models/model.joblib')
 m, s, seuil = a['modele'], a['scaler'], float(a['seuil'])
+noms = list(a['feature_names'])
 d = json.load(urllib.request.urlopen('http://telemetry:8000/features/history?limit=400', timeout=25))
 w = [f for f in (d.get('windows') or []) if f.get('features')]
-X = np.array([[float(f['features'].get(k, 0)) for k in FEATURE_NAMES] for f in w])
+att = [f for f in w if (f.get('diagnostics') or {}).get('agents_offensifs')]
+X = np.array([[float(f['features'].get(k, 0)) for k in noms] for f in w])
 sc = -m.decision_function(s.transform(X))
-au_dessus = int((sc > seuil).sum())
+print('  variables du modele : %s' % ', '.join(noms))
 print('  seuil %.5f | score max %.5f' % (seuil, float(sc.max())))
-print('  AU-DESSUS DU SEUIL : %d / %d' % (au_dessus, len(w)))
-print('  VERDICT :', 'le modele a detecte l attaque' if au_dessus else 'NON DETECTEE')
+if att:
+    XA = np.array([[float(f['features'].get(k, 0)) for k in noms] for f in att])
+    sa = -m.decision_function(s.transform(XA))
+    print('  agressions mesurees : %d fenetres, score min %.5f, au-dessus du seuil %d'
+          % (len(att), float(sa.min()), int((sa > seuil).sum())))
+    print('  VERDICT :', 'le modele a detecte l attaque' if (sa > seuil).all() else 'DETECTION PARTIELLE')
+else:
+    print('  VERDICT : aucune agression mesuree dans l historique')
 "
 
 titre "7. Incidents enregistres"

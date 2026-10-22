@@ -299,13 +299,20 @@ def _importances_permutation(
 
 
 def ecrire_artefacts(artefact: dict[str, Any], dossier: str) -> tuple[str, str]:
-    """Sérialise le modèle et ses métadonnées lisibles."""
+    """Sérialise le modèle et ses métadonnées lisibles.
+
+    L'écriture passe par un fichier temporaire puis un `os.replace` : un
+    artefact ecrit directement a sa place finale peut etre tronque si le
+    processus est interrompu, et un modele tronque ne se distingue pas d'un
+    modele valide avant d'etre charge. Un remplacement est atomique.
+    """
     import joblib
 
     os.makedirs(dossier, exist_ok=True)
     chemin_modele = os.path.join(dossier, "model.joblib")
     chemin_meta = os.path.join(dossier, "model-meta.json")
 
+    temporaire = f"{chemin_modele}.partiel"
     joblib.dump(
         {
             "version": artefact["version"],
@@ -316,12 +323,15 @@ def ecrire_artefacts(artefact: dict[str, Any], dossier: str) -> tuple[str, str]:
             "moyennes": artefact["moyennes"],
             "ecarts": artefact["ecarts"],
         },
-        chemin_modele,
+        temporaire,
         compress=3,
     )
+    os.replace(temporaire, chemin_modele)
     meta = {cle: valeur for cle, valeur in artefact.items() if cle not in {"modele", "scaler"}}
-    with open(chemin_meta, "w", encoding="utf-8") as fichier:
+    temporaire_meta = f"{chemin_meta}.partiel"
+    with open(temporaire_meta, "w", encoding="utf-8") as fichier:
         json.dump(meta, fichier, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(temporaire_meta, chemin_meta)
     return chemin_modele, chemin_meta
 
 

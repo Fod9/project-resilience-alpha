@@ -205,11 +205,45 @@ def _charger_modele() -> None:
         (CHEMIN_MODELE, CHEMIN_META),
     ):
         if os.path.isfile(chemin_modele):
-            paquet = joblib.load(chemin_modele)
+            # Un artefact illisible ne doit pas empecher le service de demarrer.
+            #
+            # Cas observe : une recalibration refusee n'ecrit rien dans son
+            # dossier de sortie, mais un `cat source > /models/model.joblib` cree
+            # quand meme la cible, vide. Le detecteur partait alors en boucle de
+            # redemarrage sur un EOFError, sans jamais se rabattre sur
+            # l'artefact embarque. Un modele de zéro octet est un cas normal,
+            # pas une panne fatale : on le signale et on essaie le suivant.
+            try:
+                paquet = joblib.load(chemin_modele)
+            except Exception as erreur:  # noqa: BLE001
+                events.warn(
+                    "detector.model.unreadable",
+                    message="artefact illisible, essai de l'emplacement suivant",
+                    source=chemin_modele,
+                    taille=os.path.getsize(chemin_modele),
+                    error=f"{type(erreur).__name__}: {erreur}",
+                )
+                continue
+            if not isinstance(paquet, dict) or "modele" not in paquet:
+                events.warn(
+                    "detector.model.invalid",
+                    message="artefact sans modele exploitable, essai du suivant",
+                    source=chemin_modele,
+                )
+                continue
             meta = {}
             if os.path.isfile(chemin_meta):
-                with open(chemin_meta, encoding="utf-8") as fichier:
-                    meta = json.load(fichier)
+                try:
+                    with open(chemin_meta, encoding="utf-8") as fichier:
+                        meta = json.load(fichier)
+                except ValueError as erreur:
+                    events.warn(
+                        "detector.model.meta_invalid",
+                        message="metadonnees illisibles, seuil verifie sans elles",
+                        source=chemin_meta,
+                        error=str(erreur),
+                    )
+                    meta = {}
             _etat["modele"] = paquet
             _etat["meta"] = meta
             seuil, verdict = _seuil_separable(paquet, meta)
