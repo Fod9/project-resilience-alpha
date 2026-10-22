@@ -25,6 +25,7 @@ Choix et limites assumés
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import os
@@ -37,7 +38,7 @@ from pydantic import BaseModel, Field
 
 from common.app import build_app
 from common.config import env_float, env_int, env_str
-from common.db import execute, fetch_all, fetch_one
+from common.db import execute, fetch_all, fetch_one, transaction
 from common.errors import AppError, bad_request, forbidden
 from common.security import verify_admin_token
 from common.tracing import set_route_label
@@ -210,29 +211,53 @@ async def ingerer_corpus() -> dict[str, Any]:
             continue
         if existant is not None:
             await execute("DELETE FROM rag.documents WHERE id = %s", (existant["id"],))
-        document_id = await fetch_one(
-            "INSERT INTO rag.documents (source, title, doc_type, sha256) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (source, os.path.basename(source), _type_document(source), empreinte),
-        )
         blocs = _decouper(contenu)
+        # Les incorporations sont calculees AVANT la transaction, et hors de la
+        # boucle d'evenements.
+        #
+        # Deux raisons, apprises a l'usage. `embed_query` est un appel HTTP
+        # bloquant : execute dans la boucle, il gelait tout le service pendant
+        # l'ingestion, jusqu'au controle de sante, et l'operateur n'avait plus
+        # ni /status ni /ask pour suivre l'avancement. Et la ligne du document
+        # etait ecrite avant ses blocs, chacun dans sa propre transaction : une
+        # interruption laissait un document dont l'empreinte etait deja
+        # enregistree avec une partie seulement de ses blocs, et une relance le
+        # sautait, laissant un corpus silencieusement incomplet.
+        prets = []
         for ordinal, bloc in enumerate(blocs):
-            vecteur = _vecteur(bloc["content"])
-            await execute(
-                "INSERT INTO rag.chunks "
-                "(document_id, ordinal, heading, content, tokens, embedding) "
-                "VALUES (%s, %s, %s, %s, %s, %s::vector)",
-                (
-                    document_id["id"],
-                    ordinal,
-                    bloc["heading"],
-                    bloc["content"],
-                    len(bloc["content"]) // 4,
-                    json.dumps(vecteur),
-                ),
-            )
+            vecteur = await asyncio.to_thread(_vecteur, bloc["content"])
+            prets.append((ordinal, bloc, vecteur))
+        async with transaction() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "INSERT INTO rag.documents (source, title, doc_type, sha256) "
+                    "VALUES (%s, %s, %s, %s) RETURNING id",
+                    (source, os.path.basename(source), _type_document(source), empreinte),
+                )
+                ligne = await cur.fetchone()
+                document_id = ligne["id"]
+                for ordinal, bloc, vecteur in prets:
+                    await cur.execute(
+                        "INSERT INTO rag.chunks "
+                        "(document_id, ordinal, heading, content, tokens, embedding) "
+                        "VALUES (%s, %s, %s, %s, %s, %s::vector)",
+                        (
+                            document_id,
+                            ordinal,
+                            bloc["heading"],
+                            bloc["content"],
+                            len(bloc["content"]) // 4,
+                            json.dumps(vecteur),
+                        ),
+                    )
         nouveaux += 1
         blocs_total += len(blocs)
+        events.emit(
+            "assistant.corpus.document",
+            source=source,
+            chunks=len(blocs),
+            scanned=len(fichiers),
+        )
     events.emit(
         "assistant.corpus.ingested",
         documents=nouveaux,
@@ -260,7 +285,10 @@ def _type_document(source: str) -> str:
 
 
 async def rechercher(question: str, k: int = TOP_K) -> list[dict[str, Any]]:
-    vecteur = _vecteur(question)
+    # Hors de la boucle d'evenements : l'incorporation est un appel HTTP
+    # bloquant, et la faire ici gelait le service pour toute la duree de
+    # l'appel, y compris son controle de sante.
+    vecteur = await asyncio.to_thread(_vecteur, question)
     lignes = await fetch_all(
         "SELECT d.source, c.heading, c.content, "
         "       1 - (c.embedding <=> %s::vector) AS similarite, c.embedding "
