@@ -176,13 +176,6 @@ function Coquille({ etat, children }: { etat: string; children: ReactNode }) {
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)_520px] gap-20 px-11 py-14">
         {children}
       </div>
-
-      <footer className="shrink-0 border-t border-line px-11 py-5">
-        <div className="flex justify-between font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-ink-dim">
-          <span>Jetons signés RS256 par api-auth</span>
-          <span>Chaque tentative est inscrite au journal d'audit</span>
-        </div>
-      </footer>
     </div>
   );
 }
@@ -449,20 +442,6 @@ export default function Acces() {
         <h1 className="font-display text-[2.75rem] font-bold leading-[1.15]">
           Accès au tableau de bord
         </h1>
-        <p className="max-w-[520px] font-sans text-[0.8125rem] leading-[1.6] text-ink-dim">
-          Deux moyens d'ouverture, un seul contrôleur. Le mot de passe est vérifié
-          par api-auth ; la reconnaissance faciale compare, côté serveur, le
-          descripteur calculé dans ce navigateur au gabarit enregistré du compte.
-          Aucune image ne quitte ce poste.
-        </p>
-        <ol className="flex flex-col gap-3 border-t border-line pt-6 font-mono text-[0.6875rem] uppercase tracking-[0.1em] text-ink-dim">
-          <li>01 Jeton d'accès signé RS256, renouvelable</li>
-          <li>
-            02 Verrouillage du compte après{" "}
-            {politique === null ? "un nombre configuré" : politique.max_failed_attempts} échecs
-          </li>
-          <li>03 Chaque tentative inscrite au journal d'audit</li>
-        </ol>
         {souciPolitique !== null ? (
           <p className="max-w-[520px] border-l-2 border-marge pl-4 font-sans text-xs text-marge">
             {souciPolitique}
@@ -607,18 +586,6 @@ export default function Acces() {
               ) : null}
             </div>
           ) : null}
-
-          <p className="font-mono text-[0.5625rem] leading-relaxed uppercase tracking-[0.12em] text-ink-dim">
-            {politique === null
-              ? "Seuil de comparaison lu sur le service"
-              : "Seuil cosinus " +
-                politique.threshold.toFixed(2) +
-                ", défi actif " +
-                politique.challenge_min_turn_deg.toFixed(0) +
-                " degrés, " +
-                politique.min_samples +
-                " captures d'enrôlement"}
-          </p>
         </div>
       </Panneau>
     </Coquille>
